@@ -10,5 +10,8 @@ CADICA assumes fMRIPrep has previously been run on the data and CADICA is writte
 # Example Walkthrough
 Will fill in later
 
+# Other Notes:
+MNI template that is used in fMRIPrep is provided. This can be utilized for more general analysis if you have warped to the same space, but do not have or want to use the subject specific segmentation.
+
 # Citations
 Publication in the works
