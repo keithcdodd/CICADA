@@ -2,6 +2,13 @@
 % This will label each component as signal or noise
 % there are a few options for this which are outlined and commented
 % throughout this code
+% This allows for automation, but also easy flexibility to examine results,
+% and adjust if desired given your data specifications. All methods should
+% greatly increase the signal to noise ratio of the data.
+
+% Suggested that with low selection criteria (higher likelihood of labeling noise as signal) to use aggressive denoising
+% after this. With high selection criteria (higher likelihood to label
+% signal as noise) to use non-aggressive denoising.
 
 clearvars
 
@@ -10,8 +17,8 @@ TR = 2; % in seconds
 numvolumes = 300; % how many TRs/samples
 cadicafol = '/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA';
 % similar syntax as in the 1_CADICA_MasksandICAs
-subjects = {'103'};
-sessions = {'01' '02'};
+subjects = {'109'};
+sessions = {'01'};
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -56,9 +63,9 @@ for j = 1:length(subjects)
        region_prop = region_array ./ sum(region_array, 2);
        region_prop(isnan(region_prop)) = 0; % convert potential NaN to 0
 
-       % Less aggressive (default): Based on what is most representative
+       % Less selective (default): Based on what is most representative
        represented_regions = region_prop == max(region_prop, [], 2);
-       % More aggressive alternative: region overlap must hit majority.
+       % More selective alternative: region overlap must hit majority.
        % e.g.:
        % represented_regions = region_prop > 0.5
 
@@ -76,7 +83,7 @@ for j = 1:length(subjects)
        ICs_CSF_dominant = ICs(CSF_indices);
        ICs_noregions_dominant = ICs(noregions_indices);
 
-       % (1e) Testing for more aggressive alternative so you can compare
+       % (1e) Testing for more selective alternative so you can compare
        GM_majority_indices = region_prop(:,2) > 0.5;
        ICs_GM_majority = ICs(GM_majority_indices);
        
@@ -131,9 +138,9 @@ for j = 1:length(subjects)
        frequency_array = [lowfreqICprop, BOLDfreqICprop, highfreqICprop];
        frequency_prop = frequency_array ./ sum(frequency_array, 2);
 
-       % Less aggressive (default): Based on what is most representative 
+       % Less selective (default): Based on what is most representative 
        represented_frequencies = frequency_prop == max(frequency_prop, [], 2);
-       % More aggressive alternative: BOLD power must hit majority. e.g.
+       % More selective alternative: BOLD power must hit majority. e.g.
        % represented_frequencies = frequency_prop > 0.5
 
        % (2d) Label what frequency range each IC focuses on, if any 
@@ -146,7 +153,7 @@ for j = 1:length(subjects)
        ICs_BOLDfreq_dominant = ICs(BOLDfreq_indices);
        ICs_highfreq_dominant = ICs(highfreq_indices);
 
-       % (2e) Testing for more aggressive alternative so you can compare
+       % (2e) Testing for more selective alternative so you can compare
        BOLD_majority_indices = frequency_prop(:,2) > 0.5;
        ICs_BOLD_majority = ICs(BOLD_majority_indices);
        
@@ -158,15 +165,14 @@ for j = 1:length(subjects)
        GM_BOLD_majority_indices = logical(GM_BOLD_prop > 0.5);
        ICs_GM_BOLD_majority = ICs(GM_BOLD_majority_indices);
 
-       % (3) Identify Highly Spikey time series data
-       %  If the std is more than the mean of the absolute values, then it is very spikey data (conservative approach). 
-       % We don't include the first few timepoints in case it is simply
-       % settling down - either delete first couple volumes or control for
-       % first few volumes in a GLM - "control for task effect"
-       spikey_indices = logical((std(abs(diff(ts(3:end,:)))) ./ mean(abs(diff(ts(3:end,:)))))' > 1);
+       % (3) Identify Highly Spikey time series data conservatively as an added safeguard
+       %  If the std is more than the mean of the absolute values, then it has significant spike(s) (conservative approach). 
+       spikey_indices = logical((std(abs(diff(ts))) ./ mean(abs(diff(ts))))' > 1);
        ICs_spikey = ICs(spikey_indices);
+       
 
        % (4) Identify ICs highly correlated to common confounds
+       % conservatively as an added safeguard
        % (4a) Grab confound information
        allconfounds = readtable('confounds_timeseries');
        confounds_general = allconfounds(:,{'global_signal','white_matter','csf', 'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'});
