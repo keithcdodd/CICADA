@@ -1,5 +1,5 @@
 # CADICA
-Comprehensive Automatic Denoising Independent Component Analysis for rs-fMRI. This will step-by-step perform an automated version of ICA denoising. This takes into account common strategies used in manual denoising, and thus will help clean up all types of physiologic and non-physiologic noise (including, but not limited to, motion).
+Comprehensive Automatic Denoising Independent Component Analysis for rs-fMRI
 
 # Installation
 CADICA requires FSL and matlab or octave (tested on matlab 2022a). Otherwise, this can be just be downloaded as a folder for the user. It is highly recommended that fMRIPrep has also been run on the data of interest ahead of time.
