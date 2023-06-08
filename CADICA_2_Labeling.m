@@ -15,14 +15,10 @@
 clearvars
 
 %%%%%%%%% set up that user may need to be adjust %%%%%%%%%%%%%%%%%%%
-
-%%%%% First, need to change a couple things depending on 1st or 2nd pass:
 workdirext = './'; % this is for first pass
 confoundext = './'; % for first pass
-%workdirext = 'cleaned'; % this is for second pass
-%confoundext = '../'; % for second pass
 
-%%%%% Everything Else:signa
+%%%%% Everything Else
 TR = 2; % in seconds
 numvolumes = 300; % how many TRs/samples
 cadicafol = '/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA';
@@ -51,7 +47,7 @@ for j = 1:length(subjects)
        currsessfol = ['ses-', sessions{k}];
        cd(currsessfol)
        cd(workdirext)
-       
+
        % (1) Check Spatial Map Overlap with ROIs
        % (1a) Approximate overlap with mean and numvoxels
 
@@ -112,7 +108,7 @@ for j = 1:length(subjects)
        Inbrain_ICnumvoxels = dlmread('ROIcalcs/Inbrain_ICnumvoxels.txt');
        Inbrain_ICsum = Inbrain_ICmean .* Inbrain_ICnumvoxels;
 
-       % Susceptibility 
+       % Susceptibility
        Suscept_ICmean = dlmread('ROIcalcs/Suscept_ICmean.txt');
        Suscept_ICnumvoxels = dlmread('ROIcalcs/Suscept_ICnumvoxels.txt');
        Suscept_ICsum = Suscept_ICmean .* Suscept_ICnumvoxels;
@@ -158,24 +154,24 @@ for j = 1:length(subjects)
        lowfreqIC = zeros(length(ICs), 1);
        highfreqIC = zeros(length(ICs), 1);
 
-       for i=1:length(ICs)   
+       for i=1:length(ICs)
            % grab time spectrum
            file=strcat('melodic/report/t', num2str(i), '.txt');
            ts(:,i)=dlmread(file);
-        
+
            % calculate power spectrum as evidenced in matlab tutorials
            t = ts(:,i);
            Y = fft(t);
            P2 = abs((Y.^2)/N); % power
            P1 = P2(1:N/2+1);
            f = F*(0:(N/2))/N; % to chart what frequencies we are at
-        
+
            % capture power range of full spectrum, low, BOLD spectrum, and high Hz
            f_all=trapz(P1);
            f_signal=trapz(P1((lower_phys_cutoff+1):(higher_phys_cutoff-1)));
            f_lowfreq=trapz(P1(1:lower_phys_cutoff));
            f_highfreq=trapz(P1((higher_phys_cutoff+1):length(f)));
-        
+
            % calculate proportions of each (low, BOLD spectrum, high)
            f_all_power(i) = f_all; % f_all is the same for all though
            BOLDfreqIC(i)=f_signal;
@@ -183,7 +179,7 @@ for j = 1:length(subjects)
            highfreqIC(i)=f_highfreq;
        end
 
-       % (2b) Calculate actual measured proportions. 
+       % (2b) Calculate actual measured proportions.
        lowfreqIC_prop = lowfreqIC ./ (lowfreqIC+BOLDfreqIC+highfreqIC);
        BOLDfreqIC_prop = BOLDfreqIC ./ (lowfreqIC+BOLDfreqIC+highfreqIC);
        highfreqIC_prop = highfreqIC ./ (lowfreqIC+BOLDfreqIC+highfreqIC);
@@ -215,7 +211,7 @@ for j = 1:length(subjects)
        GM_ICs = ICs(GM_indices);
 
        % CSF: high CSF, high high freq, low BOLD and low freq
-       CSF_indices = CSF_prop > median(CSF_prop) & highfreqIC_prop > median(highfreqIC_prop)... 
+       CSF_indices = CSF_prop > median(CSF_prop) & highfreqIC_prop > median(highfreqIC_prop)...
            & lowfreqIC_prop < median(lowfreqIC_prop) & BOLDfreqIC_prop < median(BOLDfreqIC_prop);
        CSF_ICs = ICs(CSF_indices);
 
@@ -237,18 +233,18 @@ for j = 1:length(subjects)
        ExtArt_indices = Edge_prop > median(Edge_prop) & BOLDfreqIC_prop > median(BOLDfreqIC_prop) ...
            & highfreqIC_prop < median(highfreqIC_prop) & CSF_indices == 0 & Suscept_indices == 0;
        ExtArt_ICs = ICs(ExtArt_indices);
-       
+
        % Sinus: not any of the above, but edge and BOLD freq, lower motion
        % corr
         Sinus_indices = Edge_prop > median(Edge_prop) & BOLDfreqIC_prop > median(BOLDfreqIC_prop) ...
            & rmsd_corr < median(rmsd_corr) & ExtArt_indices == 0 & CSF_indices == 0 & Suscept_indices == 0;
         Sinus_ICs = ICs(Sinus_indices);
-       
+
        % Motion: Edge, but not any of the others above
        Motion_indices = Edge_prop > median(Edge_prop) & CSF_prop < median(CSF_prop)...
            & CSF_indices == 0 & Suscept_indices == 0 & ExtArt_indices == 0 & Sinus_indices == 0;
        Motion_ICs = ICs(Motion_indices);
-       
+
        % internal arteries: CSF high, high freq high, but not any of the others
        IntArt_indices = CSF_prop > median(CSF_prop) & CSF_indices == 0 ...
            & Suscept_indices == 0 & highfreqIC_prop > median(highfreqIC_prop) ...
@@ -322,7 +318,7 @@ for j = 1:length(subjects)
        % (5c) Export variables later use in next steps (e.g., fsl_regfilt)
        writematrix(noise_ICs, 'Noise_dist_ICs.csv')
        writematrix(signal_ICs, 'Signal_dist_ICs.csv')
-        
+
        % and then make noise components if you want to do aggressive denoising like in CONN (regression)
        mixing_matrix = dlmread('./melodic/melodic_mix');
        noise_dist_covariates = mixing_matrix(:, noise_ICs);
@@ -336,9 +332,7 @@ end
 
 
 % Now, go ahead and compare results and labeling to the FSL outputs in
-% Melodic (check report) - you can likely just look at the close ICs. 
+% Melodic (check report) - you can likely just look at the close ICs.
 % You can open the related files too in fsleyes to
 % help see the decisions. We suggest overlaying fullvolICA_adj on the
 % mnitemplate
-
-
