@@ -11,9 +11,10 @@
 # curr subjects can be written as just the numbers as output in fMRIPrep. E.g. sub-102 is simply 102
 # e.g. (001 002 003)
 # 102 103 105 106 107 108 109 112 114 115 116 117 121 122 125 126 128 129 130 132 134 135 136 138 139 140 142 143 144 145 146 147 149 153 156 157 158 160 161 164 165 168 169 171 172 173 174 176 178 179 181 184 185 186 187
-currsubjids=(108)
+currsubjids=(102 103 105 106 107 108 109 112 114 115 116 117 121 122 125 126 128 129 130 132 134 135 136 138 139 140 142 143 144 145 146 147 149 153 156 157 158 160 161 164 165 168 169 171 172 173 174 176 178 179 181 184 185 186 187)
+#currsubjids=(102)
 # where your CADICA data is held following the first two scripts
-CADICAfol="/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA"
+CADICAfol="/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA_Updated"
 taskid="rest"
 CADICAfuncs="/Users/keithdodd/CADICA_MNI_github" # your folder containing the CADICA scripts and such
 sessids=(01) # session numbering 01 02
@@ -22,6 +23,7 @@ low_cutoff_period="125" # 125 second period. This equates to 1/100 - 0.008 Hz cu
 filt="nonaggressive" # nonaggressive or aggressive denoising, performed after selection. We suggest lowsel with aggressive, or medsel/highsel with nonaggressive.
 anatmaskdir=
 #################################################################################################################
+
 echo
 # Takes into account multiple sessions
 for l in "${currsubjids[@]}"
@@ -41,7 +43,7 @@ do
   cleanedfol="${sessiondir}/cleaned"
   cd ${cleanedfol}
 
-  funcfile="${sessiondir}/funcfile.nii.gz"
+  funcfile="${sessiondir}/bp_funcfile.nii.gz"
   funcmask="${sessiondir}/funcmask.nii.gz"
   melfol="${sessiondir}/melodic"
   anatmaskdir="${sessiondir}/anatmasks"
@@ -49,7 +51,7 @@ do
   # Anatomical Mask Import from before
   fslmaths "${anatmaskdir}/Edgeprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/EdgeOnly_mask.nii.gz"
   fslmaths "${anatmaskdir}/WMprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/WMOnly_mask.nii.gz"
-  fslmaths "${anatmaskdir}/WMprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/CSFOnly_mask.nii.gz"
+  fslmaths "${anatmaskdir}/CSFprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/CSFOnly_mask.nii.gz"
 
   Edgemask="${cleanedfol}/EdgeOnly_mask.nii.gz"
   WMmask="${cleanedfol}/WMOnly_mask.nii.gz"
@@ -84,24 +86,28 @@ do
 
   # Regress out CSF, WM, and Edge, calculate temporal mean ahead of time, and then demean when running since you did not include an intercept in the design matrix
   # might need to calculate temporal mean first as this may remove the temporal mean, and so you will add it back in (like you did for filtering after this)
-  fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
-  fsl_glm -i ${ICADenoised} -d "designregressors.mat" --demean --out_res="3r_${ICADenoised}"
-  fslmaths "3r_${ICADenoised}" -add temporalmean.nii.gz "3r_${ICADenoised}"
+  # fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
+  # fsl_glm -i ${ICADenoised} -d "designregressors.mat" --demean --out_res="3r_${ICADenoised}"
+  # fslmaths "3r_${ICADenoised}" -add temporalmean.nii.gz "3r_${ICADenoised}"
 
   # High pass filter (also detrends). sigma = 1 / (2*TR*cut_off_freq), and also re-add temporal mean that filter removes
   # E.G. 1/(2*2*0.008)=31.25 for sigma cut off. We have to be fancy in bash because its math is limited.
   # With a TR greater than 1.5s, we should likely only high pass filter.
   # low pass filtering not always recommended, especially for TR > 1.5s. FSL also does a poor job of low pass filtering. Could use AFNI.
-  high_sigma_cutoff_interim=$((${low_cutoff_period}00/(2*${TR})))
-  high_sigma_cutoff=$(echo "${high_sigma_cutoff_interim:0:2}.${high_sigma_cutoff_interim: -2}")
+  # high_sigma_cutoff_interim=$((${low_cutoff_period}00/(2*${TR})))
+  # high_sigma_cutoff=$(echo "${high_sigma_cutoff_interim:0:2}.${high_sigma_cutoff_interim: -2}")
 
-  echo "    Performing High Pass Filtering with Sigmas of ${high_sigma_cutoff} for Cut Off Period of ${low_cutoff_period} seconds"
-  fslmaths "3r_${ICADenoised}" -Tmean temporalmean.nii.gz
-  fslmaths "3r_${ICADenoised}" -bptf "${high_sigma_cutoff}" -1 -add temporalmean.nii.gz -mul ${funcmask} "hpf_3r_${ICADenoised}"
+  # echo "    Performing High Pass Filtering with Sigmas of ${high_sigma_cutoff} for Cut Off Period of ${low_cutoff_period} seconds"
+  # fslmaths "3r_${ICADenoised}" -Tmean temporalmean.nii.gz
+  # fslmaths "3r_${ICADenoised}" -bptf "${high_sigma_cutoff}" -1 -add temporalmean.nii.gz -mul ${funcmask} "hpf_3r_${ICADenoised}"
 
   # Smooth with 6mm -> 6 / 2.3548 =2.548 to get effective gaussian kernel sigma. Recommended (e.g., in AFNI) to smooth after filtering.
+  # echo "    Performing Smoothing With Gaussian 6mm kernel, with sigma of 2.548"
+  # fslmaths "hpf_3r_${ICADenoised}" -kernel gauss 2.548 -fmean -mul ${funcmask} "s_hpf_3r_${ICADenoised}"
+
+  # Smooth with 6mm -> 6 / 2.3548 =2.548 to get effective gaussian kernel sigma
   echo "    Performing Smoothing With Gaussian 6mm kernel, with sigma of 2.548"
-  fslmaths "hpf_3r_${ICADenoised}" -kernel gauss 2.548 -fmean -mul ${funcmask} "s_hpf_3r_${ICADenoised}"
+  fslmaths "${ICADenoised}" -kernel gauss 2.548 -fmean -mul ${funcmask} "s_${ICADenoised}"
 
   done
 done
