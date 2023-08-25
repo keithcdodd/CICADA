@@ -34,7 +34,7 @@ numvolumes = 300; % how many TRs/samples
 cadicafol = '/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA_Updated';
 % similar syntax as in the 1_CADICA_MasksandICAs
 % subjects = {'102' '103' '105' '106' '107' '108' '109' '112' '114' '115' '116' '117' '121' '122' '125' '126' '128' '129' '130' '132' '134' '135' '136' '138' '139' '140' '142' '143' '144' '145' '146' '147' '149' '153' '156' '157' '158' '160' '161' '164' '165' '168' '169' '171' '172' '173' '174' '176' '178' '179' '181' '184' '185' '186' '187'};
-subjects = {'103'};
+subjects = {'102'};
 sessions = {'01'};
 ROIs = {'GM' 'Edge' 'Transmedullary' 'CSF', 'Susceptibility', 'Outbrain'};
 freqs = {'lowfreq', 'BOLDfreq', 'higherfreq'};
@@ -311,11 +311,12 @@ for j = 1:length(subjects)
        close_IC_classification = classification_table(close_ICs', :);
 
        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-       close_IC_checker_updated_table = close_IC_checker;
-       %%%%% Update close IC checker updated TABLE variable above (e.g., check in fsleyes) and then rerun everything from below here
-       close_IC_checker_updated_array = table2array(close_IC_checker_updated_table);
+       close_IC_checker_updated_table = close_IC_checker
+       
+       %%%%% Update close IC checker updated array variable (e.g., check in fsleyes) and then rerun everything from below here
+       close_IC_checker_updated_array = table2array(close_IC_checker);
        noise_indices(close_IC_checker_updated_array(close_IC_checker_updated_array(:,2) == 0,1)) = 1;
-       noise_indices = logical(noise_indices);
+
 
        % Create final noise and signal ICs and indices, if GM_prop>0.5,
        % label as signal regardless
@@ -365,8 +366,7 @@ for j = 1:length(subjects)
 
        % save a matrix of relevant variables if you want to examine later!
        save('DecisionVariables.mat', 'ICs', 'classification_table',...
-           'eval_table', 'signal_ICs', 'noise_ICs', 'close_IC_checker', 'close_IC_checker_updated_table', ...
-           'feature_array', 'IC_exp_var', 'compare_cleaning')
+           'eval_table', 'signal_ICs', 'noise_ICs', 'close_IC_checker', 'close_IC_checker_updated_array', 'compare_cleaning')
     end
 end
 

@@ -32,10 +32,10 @@
 ######################### Variables to Change For Your Data As Needed #############################################
 # Naming of subject files is assumed to be like sub-001, sub-002, etc. (like in fMRIPrep). Therefore, you only need the numbers like 001, 002, 003 for currsubjids
 # e.g. (001 002 003)
-currsubjids=(102)
+currsubjids=(103)
 # currsubjids=(144)
 # where your data is held. Works well with fMRIPrep folder Structure. Should be like "data/sub-###/ses-##/func/"
-inputdata="/home/keithdodd/ExampleDataLocal/fmriprep"
+inputdata="/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/fmriprep"
 taskid="rest"
 funcmaskid="rest_space-MNI152NLin2009cAsym_desc-brain_mask.nii." # something specific in naming to the functional mask of interest
 funcfileid="rest_space-MNI152NLin2009cAsym_desc-preproc_bold.nii." # something specific in naming to the functional file of interest
@@ -48,8 +48,11 @@ CADICAfuncs="/Users/keithdodd/CADICA_MNI_github" # your folder containing the CA
 templatefol="${CADICAfuncs}/mni_icbm152_nlin_asym_09c" # Folder containing mni templates of interest. Included in the CADICA folder
 sessids=(01) # session numbering 01 02
 TR="2" # repetition time of scan in seconds
-CADICAfol="/home/keithdodd/ExampleDataLocal/CADICA_Updated" # Where you want the output to be stored
+CADICAfol="/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA_Updated" # Where you want the output to be stored
 low_cutoff_period="125" # 100 second period. This equates to 1/100 -> 0.008 Hz cut off frequency. Do period instead of HZ to help bash math which is limited.
+lowfreq_cutoff="0.008" # in Hz
+highfreq_cutoff="0.15" # in Hz
+blur="6" # mm gaussian blur
 #################################################################################################################
 
 # Takes into account multiple sessions
@@ -130,8 +133,14 @@ do
   find ${funcfol}/ -name "*${funcfileid}*" -exec cp '{}' ${sessiondir}/funcfile.nii.gz \;
   find ${funcfol}/ -name "*${confoundfileid}*" -exec cp '{}' ${sessiondir}/confounds_timeseries.csv \;
 
+  # Create a bandpassed and smoothed version of the functional file, in case you want to use that
+  fslmaths "${sessiondir}/funcfile.nii.gz" -Tmean temporalmean.nii.gz
+  3dTproject -input "${sessiondir}/funcfile.nii.gz" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${sessiondir}/funcmask.nii.gz" -blur "${blur}" -overwrite -prefix "s_bp_funcfile.nii.gz"
+  fslmaths "s_bp_funcfile.nii.gz" -add temporalmean.nii.gz "s_bp_funcfile.nii.gz"
+
   funcmask="${sessiondir}/funcmask.nii.gz" # func brain mask
-  funcfile="${sessiondir}/funcfile.nii.gz" # functional file
+  # funcfile="${sessiondir}/funcfile.nii.gz" # functional file
+  funcfile="${sessiondir}/s_bp_funcfile.nii.gz" # functional file
 
   # copy over session anatomical CSF, WM, GM masks
   find ${anatfol}/ -name "*${GM_anatfileid}*" -exec cp '{}' ${anatmaskdir}/GM_probseg.nii.gz \;
@@ -173,7 +182,7 @@ do
   fslmaths ${funcmask} -sub "${anatmaskdir}/eroded_smoothed_func.nii.gz" -thr 0 "${anatmaskdir}/Edge_prop.nii.gz"
   fslmaths "${anatmaskdir}/Edge_prop.nii.gz" -thr 0.67 -bin "${anatmaskdir}/Edge_prop_final.nii.gz"
   # fslmaths "${anatmaskdir}/Edgeprob_resam.nii.gz" -max "${anatmaskdir}/funcperimeter.nii.gz" -thr 0.5 -mul "${funcmask}" -bin "${anatmaskdir}/Edge_prop_final.nii.gz"
-  
+
   ### Calculate GM, WM, and CSF by subtracting out Edge (perimeter)
   fslmaths "${anatmaskdir}/GMprob_resam.nii.gz" -sub "${anatmaskdir}/Edge_prop_final.nii.gz" -sub "${anatmaskdir}/Susceptibilitymask_prop_final.nii.gz" -thr 0.5 -mul "${funcmask}" -bin "${anatmaskdir}/GM_prop_final.nii.gz"
   fslmaths "${anatmaskdir}/WMprob_resam.nii.gz" -sub "${anatmaskdir}/Edge_prop_final.nii.gz" -sub "${anatmaskdir}/Susceptibilitymask_prop_final.nii.gz" -thr 0.5 -mul "${funcmask}" -bin "${anatmaskdir}/WM_prop_final.nii.gz"
@@ -188,30 +197,31 @@ do
   fslmaths "${anatmaskdir}/WMCSF_boundary_init.nii.gz" -div "${maximumvalue}" -thr 0 "${anatmaskdir}/WMCSF_boundary_prop.nii.gz"
   fslmaths "${anatmaskdir}/WMCSF_boundary_prop.nii.gz" -thr 0.5 -bin "${anatmaskdir}/WMCSF_boundary_prop_final.nii.gz"
   rm ${anatmaskdir}/range.txt
-  
+
   fslmaths "${anatmaskdir}/GMprob_resam.nii.gz" -mul "${anatmaskdir}/CSFprob_resam.nii.gz" "${anatmaskdir}/GMCSF_boundary_init.nii.gz"
   fslstats "${anatmaskdir}/GMCSF_boundary_init.nii.gz" -R > ${anatmaskdir}/range.txt
   minimumvalue=$(awk '{print $1}' ${anatmaskdir}/range.txt)
   maximumvalue=$(awk '{print $2}' ${anatmaskdir}/range.txt)
   fslmaths "${anatmaskdir}/GMCSF_boundary_init.nii.gz" -div "${maximumvalue}" -thr 0.5 -bin "${anatmaskdir}/GMCSF_boundary_prop_final.nii.gz"
   rm ${anatmaskdir}/range.txt
-  
+
   fslmaths "${anatmaskdir}/GMprob_resam.nii.gz" -mul "${anatmaskdir}/WMprob_resam.nii.gz" "${anatmaskdir}/GMWM_boundary_init.nii.gz"
   fslstats "${anatmaskdir}/GMWM_boundary_init.nii.gz" -R > ${anatmaskdir}/range.txt
   minimumvalue=$(awk '{print $1}' ${anatmaskdir}/range.txt)
   maximumvalue=$(awk '{print $2}' ${anatmaskdir}/range.txt)
   fslmaths "${anatmaskdir}/GMWM_boundary_init.nii.gz" -div "${maximumvalue}" -thr 0.5 -bin "${anatmaskdir}/GMWM_boundary_prop_final.nii.gz"
   rm ${anatmaskdir}/range.txt
-  
+
   # Subependymal space can be the WMCSF boundary, but add on a layer of WM too
   fslmaths "${anatmaskdir}/WMCSF_boundary_prop_final.nii.gz" -dilM -mul "${anatmaskdir}/WM_prop_final.nii.gz" -thr 0.5 -bin "${anatmaskdir}/WMCSF_WMdilation.nii.gz"
   fslmaths "${anatmaskdir}/WMCSF_boundary_prop_final.nii.gz" -max "${anatmaskdir}/WMCSF_WMdilation.nii.gz" "${anatmaskdir}/Subepe_prop_final.nii.gz"
-  
-  
+
+
   ### Calculate Inbrain & Outbrain: funcmask outside of anatomical inbrain+CSF+WMCSF.
+  fslmaths "${funcmask}" -sub "${anatmaskdir}/anatmask_resam.nii.gz" -thr 0 -bin -dilD -bin -sub "${anatmaskdir}/Inbrainprob_resam.nii.gz" -thr 0.67 -bin -mul "${funcmask}" "${anatmaskdir}/OutbrainOnly_prop_final.nii.gz"
   fslmaths "${anatmaskdir}/Inbrainprob_resam.nii.gz" -sub "${anatmaskdir}/Edge_prop_final.nii.gz" -thr 0.5 -bin -mul "${funcmask}" "${anatmaskdir}/Inbrain_prop_final.nii.gz"
   fslmaths "${funcmask}" -sub "${anatmaskdir}/Inbrainprob_resam.nii.gz" -thr 0.5 -bin -mul "${funcmask}" "${anatmaskdir}/Outbrain_prop_final.nii.gz"
-  
+
   echo "  Functional Space Masks are Computed"
   # relabel these for easier future coding
   Anatmask_resam="${anatmaskdir}/anatmask_eroded_resam.nii.gz"
@@ -238,13 +248,14 @@ do
 
   # MELODIC SECTION
   # make session folder if we have not already
-  if [ ! -d "${sessiondir}/melodic" ]
+  if [ -d "${sessiondir}/melodic" ]
   then
-    mkdir melodic # make melodic folder to run melodic in
+    rm -rf melodic
   fi
+  mkdir melodic # make melodic folder to run melodic in
   melfol="${sessiondir}/melodic"
   # Run Melodic on next line! Default settings. Make sure TR is correct!
-  # melodic --in="${funcfile}" --outdir=${melfol} --mask="${funcmask}" --Ostats --nobet --mmthresh=0.5 --report --tr=${TR}
+  melodic --in="${funcfile}" --outdir=${melfol} --mask="${funcmask}" --Ostats --nobet --mmthresh=0.5 --report --tr=${TR}
 
   # Merge the probability maps and threshold maps which may prove useful later
   probmapnames="$(ls ${melfol}/stats/probmap_* | sort -V)"
@@ -262,10 +273,11 @@ do
 
   # I would create a new folder in session folder first to do all this
   clusterfol="${sessiondir}/clustering"
-  if [ ! -d "${clusterfol}" ]
+  if [ -d "${clusterfol}" ]
   then
-    mkdir "${clusterfol}"
+    rm -rf ${clusterfol}
   fi
+  mkdir "${clusterfol}"
   cd ${clusterfol}
 
 
@@ -318,10 +330,11 @@ do
   fslmerge -t ${melfol}/ICclusterthresh_zstat.nii.gz ${clusterthresholdnames}
 
   cd ${sessiondir}
-  if [ ! -d "ROIcalcs" ]
+  if [ -d "ROIcalcs" ]
   then
-    mkdir "ROIcalcs"
+    rm -rf ROIcalcs
   fi
+  mkdir "ROIcalcs"
   ROIcalcfol="${sessiondir}/ROIcalcs"
 
   # grab explained variance percentage in case of use in weighting the Data
@@ -342,7 +355,7 @@ do
   fslstats -t "${ROIcalcfol}/fullvolICA_adj.nii.gz" -M -V > ${ROIcalcfol}/tmp.txt
   awk '{print $1}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/fullvolume_ICmean.txt
   awk '{print $2}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/fullvolume_ICnumvoxels.txt
-  
+
   calcfile="${ROIcalcfol}/fullvolICA_adj.nii.gz"
 
   # GM voxels
@@ -392,25 +405,25 @@ do
   fslstats -t "${ROIcalcfol}/SusceptICA_weighted.nii.gz" -M -V > ${ROIcalcfol}/tmp.txt
   awk '{print $1}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/Suscept_ICmean.txt
   awk '{print $2}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/Suscept_ICnumvoxels.txt
-  
+
   # WMCSF Boundary voxels
   fslmaths "${calcfile}" -mul "${WMCSFmask}" "${ROIcalcfol}/WMCSFICA_weighted.nii.gz"
   fslstats -t "${ROIcalcfol}/WMCSFICA_weighted.nii.gz" -M -V > ${ROIcalcfol}/tmp.txt
   awk '{print $1}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/WMCSF_ICmean.txt
   awk '{print $2}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/WMCSF_ICnumvoxels.txt
-  
+
   # GMCSF Boundary voxels
   fslmaths "${calcfile}" -mul "${GMCSFmask}" "${ROIcalcfol}/GMCSFICA_weighted.nii.gz"
   fslstats -t "${ROIcalcfol}/GMCSFICA_weighted.nii.gz" -M -V > ${ROIcalcfol}/tmp.txt
   awk '{print $1}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/GMCSF_ICmean.txt
   awk '{print $2}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/GMCSF_ICnumvoxels.txt
-  
+
   # GMWM Boundary voxels
   fslmaths "${calcfile}" -mul "${GMWMmask}" "${ROIcalcfol}/GMWMICA_weighted.nii.gz"
   fslstats -t "${ROIcalcfol}/GMWMICA_weighted.nii.gz" -M -V > ${ROIcalcfol}/tmp.txt
   awk '{print $1}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/GMWM_ICmean.txt
   awk '{print $2}' ${ROIcalcfol}/tmp.txt > ${ROIcalcfol}/GMWM_ICnumvoxels.txt
-  
+
 
   rm ${ROIcalcfol}/tmp.txt
   ###########################################################################################################

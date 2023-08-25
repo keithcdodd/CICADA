@@ -11,18 +11,17 @@
 # curr subjects can be written as just the numbers as output in fMRIPrep. E.g. sub-102 is simply 102
 # e.g. (001 002 003)
 # 102 103 105 106 107 108 109 112 114 115 116 117 121 122 125 126 128 129 130 132 134 135 136 138 139 140 142 143 144 145 146 147 149 153 156 157 158 160 161 164 165 168 169 171 172 173 174 176 178 179 181 184 185 186 187
-currsubjids=(102)
+currsubjids=(103)
 # where your CADICA data is held following the first two scripts
-CADICAfol="/home/keithdodd/ExampleDataLocal/CADICA_Updated"
+CADICAfol="/Volumes/VectoTec_VectoTech_Media_Rapid/AWESOME/Preproc_ICA_rest/derivatives/CADICA_Updated"
 taskid="rest"
-CADICAfuncs="/Users/keithdodd/CADICA_MNI_github" # your folder containing the CADICA scripts and such
+CADICAfuncs="/Users/keithdodd/GitHub/CADICA/Newer" # your folder containing the CADICA scripts and such
 sessids=(01) # session numbering 01 02
 TR="2" # repetition time of scan in seconds
 lowfreq_cutoff="0.008" # in Hz
 highfreq_cutoff="0.15" # in Hz
 blur="6" # mm gaussian blur
-filt="nonaggressive" # nonaggressive or aggressive denoising, performed after selection. We suggest lowsel with aggressive, or medsel/highsel with nonaggressive.
-GMatlas="/home/keithdodd/CADICA_local/Schaefer2018_300Parcels_Kong2022_17Networks_order_FSLMNI152_2mm.nii.gz"
+filt="nonaggressive" # nonaggressive or aggressive denoising, performed after selection. We suggest nonaggressive.
 #################################################################################################################
 echo
 # Takes into account multiple sessions
@@ -43,33 +42,35 @@ do
   cleanedfol="${sessiondir}/cleaned"
   cd ${cleanedfol}
 
-  funcfile="${sessiondir}/funcfile.nii.gz"
+  # funcfile="${sessiondir}/funcfile.nii.gz"
+  orig_funcfile="${sessiondir}/funcfile.nii.gz"
+  funcfile="${sessiondir}/s_bp_funcfile.nii.gz"
   funcmask="${sessiondir}/funcmask.nii.gz"
   melfol="${sessiondir}/melodic"
   anatmaskdir="${sessiondir}/anatmasks"
   anatprob="${anatmaskdir}/Anatprob_resam.nii.gz"
-  
+
   fslmaths "${anatprob}" -thr 0.5 -bin "${anatmaskdir}/anatmask_final.nii.gz"
-  
+
   anatmask="${anatmaskdir}/anatmask_final.nii.gz"
 
   # Anatomical Mask Import from before
-  fslmaths "${anatmaskdir}/Edge_prop.nii.gz" -sub "${anatmaskdir}/GMprob_resam.nii.gz" -thr 0.67 -bin "${cleanedfol}/Edge_selective_mask.nii.gz"
-  fslmaths "${anatmaskdir}/WMCSF_boundary_prop.nii.gz" -sub "${anatmaskdir}/GMprob_resam.nii.gz" -thr 0.67 -bin "${cleanedfol}/WMCSF_selective_mask.nii.gz"
-  fslmaths "${funcmask}" -sub "${anatprob}" -sub "${anatmaskdir}/Edge_prop.nii.gz" -thr 0.67 -bin "${cleanedfol}/Outbrain_noEdge_selective_mask.nii.gz"
-  fslmaths "${anatmaskdir}/WMprob_resam.nii.gz" -thr 0.67 -mul "${funcmask}" -bin "${cleanedfol}/WM_selective_mask.nii.gz"
-  fslmaths "${anatmaskdir}/CSFprob_resam.nii.gz" -thr 0.67 -mul "${funcmask}" -bin "${cleanedfol}/CSF_selective_mask.nii.gz"
+  fslmaths "${anatmaskdir}/Edge_prop.nii.gz" -sub "${anatmaskdir}/GMprob_resam.nii.gz" -thr 0.95 -bin "${cleanedfol}/Edge_selective_mask.nii.gz"
+  fslmaths "${anatmaskdir}/WMCSF_boundary_prop.nii.gz" -sub "${anatmaskdir}/GMprob_resam.nii.gz" -thr 0.95 -bin "${cleanedfol}/WMCSF_selective_mask.nii.gz"
+  fslmaths "${funcmask}" -sub "${anatprob}" -sub "${anatmaskdir}/Edge_prop.nii.gz" -thr 0.95 -bin "${cleanedfol}/Outbrain_noEdge_selective_mask.nii.gz"
+  fslmaths "${anatmaskdir}/WMprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/WM_selective_mask.nii.gz"
+  fslmaths "${anatmaskdir}/CSFprob_resam.nii.gz" -thr 0.95 -mul "${funcmask}" -bin "${cleanedfol}/CSF_selective_mask.nii.gz"
 
   Edgeselectivemask="${cleanedfol}/Edge_selective_mask.nii.gz"
   WMCSFselectivemask="${cleanedfol}/WMCSF_selective_mask.nii.gz"
   Outbrainselectivemask="${cleanedfol}/Outbrain_noEdge_selective_mask.nii.gz"
   WMselectivemask="${cleanedfol}/WM_selective_mask.nii.gz"
   CSFselectivemask="${cleanedfol}/CSF_selective_mask.nii.gz"
-  
+
   # Calculate generally selective masks too, in case you want them as regressors:
   fslmaths "${anatmaskdir}/Edge_prop.nii.gz" -thr 0.95 -bin "${cleanedfol}/Edge_selective_mask.nii.gz"
 
-  fslmaths "${anatmaskdir}/WMCSF_boundary_prop.nii.gz" -thr 0.67 -bin "${cleanedfol}/WMCSF_selective_prop_final.nii.gz"
+  fslmaths "${anatmaskdir}/WMCSF_boundary_prop.nii.gz" -thr 0.95 -bin "${cleanedfol}/WMCSF_selective_prop_final.nii.gz"
 
   Edgemask="${anatmaskdir}/Edge_prop_final.nii.gz"
   Subepemask="${anatmaskdir}/Subepe_prop_final.nii.gz"
@@ -81,11 +82,13 @@ do
     echo "    Performing Filtering with fsl_regfilt with ${filt} Denoising."
     fsl_regfilt -i ${funcfile} -f "$(cat ${sessiondir}/Noise_dist_ICs.csv)" \
     -d ${melfol}/melodic_mix -m ${funcmask} -a -o "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_agg_bold.nii.gz"
+    fslmaths "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_agg_bold.nii.gz" -mul ${anatmask} "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_agg_bold.nii.gz"
     ICADenoised="sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_agg_bold.nii.gz"
   else
     echo "    Performing Filtering with fsl_regfilt with ${filt} Denoising."
     fsl_regfilt -i ${funcfile} -f "$(cat ${sessiondir}/Noise_dist_ICs.csv)" \
     -d ${melfol}/melodic_mix -m ${funcmask} -o "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_nonagg_bold.nii.gz"
+    fslmaths "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_nonagg_bold.nii.gz" -mul ${anatmask} "sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_nonagg_bold.nii.gz"
     ICADenoised="sub-${l}_ses-${j}_task-${taskid}_space-MNI152NLin2009cAsym_desc-CADICA_nonagg_bold.nii.gz"
   fi
 
@@ -100,59 +103,47 @@ do
   fslmeants -i "${funcfile}" -o SubepeOnly_timeseries.txt -m "${WMCSFselectivemask}"
   fslmeants -i "${funcfile}" -o CSFOnly_timeseries.txt -m "${CSFselectivemask}"
   fslmeants -i "${funcfile}" -o OutbrainOnly_timeseries.txt -m "${Outbrainselectivemask}"
-  
+
 
   # Now combine ICA Denoised regressor files to make design matrix in text form
   paste Edge_timeseries.txt WM_timeseries.txt CSF_timeseries.txt > designregressorsICA.txt
-  
+
   # Also combine the funcfile regressors to test
   paste EdgeOnly_timeseries.txt SubepeOnly_timeseries.txt CSFOnly_timeseries.txt OutbrainOnly_timeseries.txt > designregressors.txt
-  
-  # Bandpass and blur only (main, best, and final version)
-  fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
-  3dTproject -input "${ICADenoised}" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_${ICADenoised}"
-  fslmaths "s_bp_${ICADenoised}" -add temporalmean.nii.gz -mul "${anatmask}" "s_bp_${ICADenoised}"
-  
-  : '
-  # Can compare to also regressing out CSF, WM, and Edge, calculate temporal mean ahead of time to add back in, also bandpass and blur
-  fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
-  3dTproject -input "${ICADenoised}" -ort designregressorsICA.txt -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_3r_${ICADenoised}"
-  fslmaths "s_bp_3r_${ICADenoised}" -add temporalmean.nii.gz -mul "s_bp_3r_${ICADenoised}"
-  
+
+  # compare to standard 9 Parameters
+  fslmaths "${funcfile}" -mul "${funcmask}" -Tmean temporalmean.nii.gz
+  3dTproject -input "${orig_funcfile}" -ort "${sessiondir}/9p_regressors.txt" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_9p_funcfile.nii.gz"
+  fslmaths "s_bp_9p_funcfile.nii.gz" -add temporalmean.nii.gz -mul "${funcmask}" "s_bp_9p_funcfile.nii.gz"
+
   # can compare to just regression of the 4 noise masks:
   fslmaths "${funcfile}" -mul "${funcmask}" -Tmean temporalmean.nii.gz
   3dTproject -input "${funcfile}" -ort "designregressors.txt" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_4r_funcfile.nii.gz"
   fslmaths "s_bp_4r_funcfile.nii.gz" -add temporalmean.nii.gz -mul "${funcmask}" "s_bp_4r_funcfile.nii.gz"
-  
-  # compare to standard 9 Parameters
-  fslmaths "${funcfile}" -mul "${funcmask}" -Tmean temporalmean.nii.gz
-  3dTproject -input "${funcfile}" -ort "${sessiondir}/9p_regressors.txt" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_9p_funcfile.nii.gz"
-  fslmaths "s_bp_9p_funcfile.nii.gz" -add temporalmean.nii.gz -mul "${funcmask}" "s_bp_9p_funcfile.nii.gz"
-  
+
+  :'
+  # Bandpass and blur only (main, best, and final version)
+  fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
+  3dTproject -input "${ICADenoised}" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_${ICADenoised}"
+  fslmaths "s_bp_${ICADenoised}" -add temporalmean.nii.gz -mul "${anatmask}" "s_bp_${ICADenoised}"
+
+
+  # Can compare to also regressing out CSF, WM, and Edge, calculate temporal mean ahead of time to add back in, also bandpass and blur
+  fslmaths "${ICADenoised}" -Tmean temporalmean.nii.gz
+  3dTproject -input "${ICADenoised}" -ort designregressorsICA.txt -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_3r_${ICADenoised}"
+  fslmaths "s_bp_3r_${ICADenoised}" -add temporalmean.nii.gz -mul "${anatmask}" "s_bp_3r_${ICADenoised}"
+
   # compare to just bandpass and smooth original data
   fslmaths "${funcfile}" -mul "${funcmask}" -Tmean temporalmean.nii.gz
   3dTproject -input "${funcfile}" -passband "${lowfreq_cutoff}" "${highfreq_cutoff}" -mask "${funcmask}" -blur "${blur}" -overwrite -prefix "s_bp_funcfile.nii.gz"
   fslmaths "s_bp_funcfile.nii.gz" -add temporalmean.nii.gz -mul "${funcmask}" "s_bp_funcfile.nii.gz"
   '
-  
+
   # Create a QC folder
   QCdir="${sessiondir}/QC"
   # rm -rf "${QCdir}"
   # mkdir "${QCdir}"
   # mkdir "${QCdir}/parctimeseries"
-  
-  
-  # resample atlas to space of the results so that we can select from functional mask
-  flirt -ref "${funcmask}" -in "${GMatlas}" -out "${QCdir}/GMatlas_resam.nii.gz" -usesqform -applyxfm -interp "nearestneighbour"
-  
-  # For QC, can compute the time series for each of the 300 parcellations. Can then run QC analysis through matlab. 
-  for m in {1..300}
-  do
-  	fslmaths "${QCdir}/GMatlas_resam.nii.gz" -thr "${m}" -uthr "${m}" -bin "${QCdir}/currparc.nii.gz"
-  	# fslmeants -i "${cleanedfol}/s_bp_${ICADenoised}" -o "${QCdir}/parctimeseries/ts_${m}parc_s_bp_ICADenoised.txt" -m "${QCdir}/currparc.nii.gz"
-  	fslmeants -i "${cleanedfol}/s_bp_9p_funcfile.nii.gz" -o "${QCdir}/parctimeseries/ts_${m}parc_s_bp_9p.txt" -m "${QCdir}/currparc.nii.gz"
-  	fslmeants -i "${cleanedfol}/s_bp_4r_funcfile.nii.gz" -o "${QCdir}/parctimeseries/ts_${m}parc_s_bp_4r.txt" -m "${QCdir}/currparc.nii.gz"
-  done
 
   done
 done
