@@ -1,0 +1,13 @@
+From the atlas generated for "Amyloid-Beta and Tau pathologies relate to distinctive brain dysconnectomics in preclinical autosomal dominant alzhemer's disease"
+
+Was found on NITRC Neuroimaging Tools & Resources Collaboratory website under "Resting State Networks cortical and subcortical atlas"
+
+It is 3mm resolution. Mapping the networks:
+
+1 - Medial Visual
+2 - Sensory Motor
+3 - Dorsal Attention
+4 - Ventral Attention
+5 - FrontoParietal
+6 - Default Mode Network
+7 - Subcortical
