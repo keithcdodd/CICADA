@@ -18,7 +18,7 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, subj_id, ses_id, task_na
 % you can supply that here
 
 % Now check for non-necessary variables
-if ~exist('compare_file', 'var') || ~ischar(compare_file)
+if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file=[];
 elseif ~isfile(compare_file)
     fprintf(['Compare file not found at ', compare_file, '\n'])
@@ -27,14 +27,14 @@ end
 
 % if task_events_file does not exist, make it empty array [], 'x' would
 % work too given how I wrote the scripts.
-if ~exist('task_events_file', 'var') || ~ischar(task_events_file)
+if ~exist('task_events_file', 'var') || ~ischar(task_events_file) || isempty(task_events_file)
     task_events_file=[]; 
 elseif ~isfile(task_events_file)
     fprintf(['Task events file not found at ', task_events_file, '\n'])
     return
 end
 
-if ~exist('mel_fol', 'var') || ~ischar(mel_fol)
+if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
     mel_fol=[]; % will end up using default
 elseif ~isfolder(mel_fol)
     fprintf(['MELODIC folder not found at ', mel_fol, '\n'])
@@ -65,7 +65,6 @@ else
     % and now grab from best anat folder
     % Note, if you use a different structural other than T1w, you may need
     % to change that below
-    fprintf(['fmriprep_anat_dir is ', fmriprep_anat_dir, '\n'])
     cd(fmriprep_anat_dir)
     anatfile_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
     anatfile = [anatfile_info.folder, '/', anatfile_info.name];

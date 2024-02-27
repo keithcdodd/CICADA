@@ -14,7 +14,7 @@ echo
 usage(){
 >&2 cat << EOF
 Usage: `basename $0` -o /cicada_dir/sub_id/ses_id/task_id -F funcfile.nii.gz -f funcmask.nii.gz -C confoundsfile.csv -A anatfile.nii.gz -a anatmask.nii.gz -g gm_prob.nii.gz -w wm_prob.nii.gz -c csf_prob.nii.gz
-  [ -o input : (necessary) output_dir: where to put the outputs, typically cicada_dir/sub_id/sess_id/task_id. Make it two levels deeper than subject_id folder! ]
+  [ -o input : (necessary) output_dir: where to put the outputs, should be cicada_dir/sub_id/sess_id/task_id. Make it two levels deeper than subject_id folder! ]
   [ -F input : (necessary) funcfile: unmasked functional file ]
   [ -f input : (necessary) funcmask: current functional mask ]
   [ -C input : (necessary) confoundsfile: csv of confounds as columns with headers. Need 6 motion parameters (e.g., rot_x, trans_x, etc.), dvars, framewise_displacement, csf, white_matter, and global_signal ]
@@ -250,9 +250,18 @@ cicada_logfile="${log_dir}/cicada_1.log"
 (
 ###################### ACTUAL WORK STARTS HERE #########################################################
 
-# Subject folder should be two levels up
+# ses_dir is one level up, Subject folder should be two levels up, cicada_dir should be three
 cd ${output_dir}/../
 ses_dir="$(pwd)"
+cd ../
+subj_dir="$(pwd)"
+cd ../
+cicada_home_dir="$(pwd)"
+cd ${output_dir}
+task_dir="$(pwd)"
+# get just the task name
+task_name="$(basename ${PWD})"
+
 
 # Make an anatomy directory for reference, one levels up (should be session folder)
 cd ${output_dir}
@@ -507,18 +516,18 @@ awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/fullvolume_smoo
 # Now set up brain network template for easy comparisons
 echo "    Smoothing Checks are Complete! Now Setting Up Brain Network Template"
 # check if the resampled template already exists, if not, then make it
-template_dir="${output_dir}/templates"
+template_dir="${cicada_home_dir}/templates"
 if [ ! -d "${template_dir}" ]; then
   mkdir "${template_dir}"
 fi
 
-if [ ! -f "${template_dir}/network_template_resam.nii.gz" ]; then
-  echo "    Template Resampled Not Found, Resampling one now at ${template_dir}/network_template_resam.nii.gz."
-  flirt -ref "${funcmask}" -in "${brain_network_template}" -out "${template_dir}/network_template_resam.nii.gz" -usesqform -applyxfm -interp nearestneighbour
+if [ ! -f "${template_dir}/network_template_${task_name}.nii.gz" ]; then
+  echo "    Template Resampled Not Found, Resampling one now at ${template_dir}/network_template_${task_name}.nii.gz ."
+  flirt -ref "${funcmask}" -in "${brain_network_template}" -out "${template_dir}/network_template_${task_name}.nii.gz" -usesqform -applyxfm -interp nearestneighbour
 fi
 # OK, now we have a resampled template that we can use, should have 1-7 values
 # 1: Medial Visual, 2: Sensory Motor, 3: Dorsal Attention, 4: Ventral Attention, 5: FrontoParietal, 6: Default Mode Network, 7: Subcortical
-network_template="${template_dir}/network_template_resam.nii.gz"
+network_template="${template_dir}/network_template_${task_name}.nii.gz"
 #########################################################################################
 # NOW, do all the relevant calculations!
 echo "    Brain Network Template Calculated. Now finally do all the relevant calculations!"
