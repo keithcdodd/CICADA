@@ -1,11 +1,11 @@
-# CADICA
-Computer-Assisted Denoising Independent Component Analysis for rs-fMRI
+# CICADA
+Comprehensive Independent Component Analysis Denoising Assistant (for resting and task-based functional magnetic resonance analysis)
 
 # Installation
-CADICA requires FSL and matlab or octave (tested on matlab 2022a). Otherwise, this can be just be downloaded as a folder for the user. It is highly recommended that fMRIPrep has also been run on the data of interest ahead of time.
+CICADA requires FSL and matlab or octave (tested on matlab 2022a). Otherwise, this can be just be downloaded as a folder for the user. It is highly recommended that fMRIPrep has also been run on the data of interest ahead of time.
 
 # Requirements/Inputs
-CADICA assumes fMRIPrep has previously been run on the data and CADICA is written to run smoothly with fMRIPrep output. CADICA takes advantage of the subject specific segmented probability masks (from fMRIPrep/FreeSurfer) and confound outputs from fMRIPrep to aid in selection of noise components. If fMRIPrep is not run, CADICA can be easily modified to run without it. In its simplest form, one can use the template space's GM, WM, and CSF masks and comment out the use of the confounds to aid in noise identification selection. CADICA should remain effective and robust for most data even with these changes.
+CICADA can work with any preprocessed (warped to adult MNI space, but ideally not yet smoothed) but is well optimized for running on fMRIPrep outputs. CICADA can take advantage of the subject specific segmented probability masks (e.g., from fMRIPrep/FreeSurfer) and uses confound outputs (e.g., from fMRIPrep) to aid in selection of noise components. If fMRIPrep is not run, CICADA can be easily modified to run without it. In its simplest form, one can use the template space's GM, WM, and CSF masks to aid in noise identification selection. CICADA should remain effective and robust for most data sets, including resting-state and task-based analyses.
 
 # Example Walkthrough
 Will fill in later
