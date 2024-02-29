@@ -1,0 +1,293 @@
+function [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_denoised_table, qc_corrs_compare_table, qc_corrs_orig_table, qc_photo_paths] = cicada_get_qc(cleaned_dir)
+% function to grab the qc information that is needed and return relevant
+% data
+
+if not(isfolder(cleaned_dir))
+    fprintf(['Cleaned Directory ', cleaned_dir, 'does not exist\n'])
+    return;
+end
+
+% Now go to cleaned dir, and check the name (for auto or manual)
+cd(cleaned_dir)
+[~, cleaned_dir_name, ~]=fileparts(pwd);
+
+% if we are dealing with manually cleaned data, we want to compare to both
+% 8p and auto cleaned data
+if strcmp(cleaned_dir_name, 'cleaned_manual')
+    compare_tags = {'8p', 'auto'};
+    cicada_type = 'manual';
+    adjusted = 1;
+elseif strcmp(cleaned_dir_name, 'cleaned_auto')
+    compare_tags = {'8p'};
+    cicada_type = 'auto';
+    adjusted = 0;
+else
+    fprintf(['Cleaned Directory Name (', cleaned_dir_name, ') is not cleaned_manual or cleaned_auto...\n'])
+    return;
+end
+
+cleaned_file_info = dir(['*CICADA*', cicada_type, '*.nii.gz']);
+if size(cleaned_file_info,1) ~= 1
+    fprintf('Cannot find cleaned file matching standard tagging system, or multiple matches found...\n')
+    return
+end
+
+cleaned_data = [cleaned_file_info.folder, '/', cleaned_file_info.name];
+
+cd('../')
+task_dir = pwd;
+
+if ~isfile([task_dir, '/funcmask.nii.gz'])
+    fprintf(['Cannot find funcmask at ', task_dir, '/funcmask.nii.gz\n'])
+    return;
+end
+
+data_mask = [task_dir, '/funcmask.nii.gz'];    
+    
+% Now go in and grab signal and noise ic overlap file
+cd(task_dir)
+signalandnoise_overlap_info = dir([task_dir, '/ic_', cicada_type, '_selection/SignalandNoiseICOverlap.nii.gz']);
+if size(signalandnoise_overlap_info,1) ~= 1
+    fprintf('Cannot find signal and noise IC overlap file \n')
+    return;
+end
+
+signalandnoise_overlap = [signalandnoise_overlap_info.folder, '/', signalandnoise_overlap_info.name];
+signalandnoise_overlap_array = niftiread(signalandnoise_overlap);
+
+% and then also grab the resampled GM mni region mask
+cd(task_dir)
+gm_mni_prob_info = dir([task_dir, '/region_masks/GM_prob.nii.gz']);
+if size(gm_mni_prob_info,1) ~= 1
+    fprintf('Cannot find gm probability file inr region masks folder \n')
+    return;
+end
+gm_mni_prob = [gm_mni_prob_info.folder, '/', gm_mni_prob_info.name];
+gm_mni_thresh_array = niftiread(gm_mni_prob) > 0.67;
+signal_mask_array = signalandnoise_overlap_array == 1; % positive 1 is all signal, -1 would be all noise
+gm_signal_overlap_array = gm_mni_thresh_array .* signal_mask_array;
+
+
+gm_signal_proportion_array = sum(gm_signal_overlap_array(:)) / sum(gm_mni_thresh_array(:)); % What proportion of gm is covered by signal
+signal_gm_proportion_array = sum(gm_signal_overlap_array(:)) / sum(signal_mask_array(:)); % what proportion of signal is within GM
+
+% easier yet, calculate a dice coefficient
+gm_and_signal_array = gm_signal_overlap_array;
+gm_or_signal_array = (gm_mni_thresh_array + signal_mask_array) > 0;
+gm_signal_dice_array = sum(gm_and_signal_array(:)) / sum(gm_or_signal_array(:));
+
+% While we are in task_dir, lets grab the task_name, ses_id, and subj_id:
+cd(task_dir)
+[~, task_name, ~]=fileparts(pwd);
+cd('../')
+[~, ses_id, ~]=fileparts(pwd);
+cd('../')
+[~, subj_id, ~]=fileparts(pwd);
+cd(task_dir)
+
+% and then grab the qc values 
+qc_vals_info = dir([task_dir, '/qc/*', cicada_type, '*CICADA*' compare_tags{1}, '*.mat']); % this one will always grab 8p first (first compare tag)
+qc_vals = [qc_vals_info.folder, '/', qc_vals_info.name];
+load(qc_vals)
+percent_ICs_kept = Results.num_ICs_kept / Results.num_ICs_total;
+
+% OK we definitely want to save the following in a table(things that are one value per task): num_ICs_total,
+% num_ICs_kept, DOF_estimate_final
+% if no filtering is applied, dof_estimate_final will be equal to percent_variance_kept
+
+% dof_estimate_final should be equal to percent_variance_kept *
+% percent_freq_kept * numvolumes. Percent frequency kept is
+% 100% if we did not do any frequency filtering
+
+% in case we did not do "hisorically standard" resting state bp
+% (0.01-0.1Hz), calculate what estimated DOF would become if we
+% did do it.
+percent_freq_kept_if_standardbp = 0.09 / (1 / (2* tr));
+DOF_estimate_if_standard_bp = Results.percent_variance_kept * percent_freq_kept_if_standardbp * Data.numvolumes;
+
+% Get confounds too:
+confound_place = [task_dir, '/confounds_timeseries.csv'];
+allconfounds = readtable(confound_place);
+FD = table2array(allconfounds(:,{'framewise_displacement'}));
+DVARS = table2array(allconfounds(:,{'dvars'}));
+RMS = table2array(allconfounds(:,{'rmsd'})); 
+
+medFD = median(FD(2:end)); % median FD to pick cut offs. Liberal is 0.55mm cut off, conservative is >0.25mm cut off
+meanFD = mean(FD(2:end)); % some QC_FC likes comparing to mean FD
+perc_FD_above_thresh = (sum(FD(2:end) > 0.2) / length(FD(2:end))) * 100; %percent FD greater 0.2mm, 20% cut off also used for conservative
+Any_FD_above_thresh = int8(sum(FD(2:end) > 5) > 0); % also added onto conservative cut off, any FD > 5mm
+medDVARS = median(DVARS(2:end));
+meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
+
+% And lets include mean and std for all relevant QC plots from script 4:
+GM_NotGM_mean = median(denoised_GM_NotGM_corr);
+GM_NotGM_sd = std(denoised_GM_NotGM_corr);
+GM_GM_mean = median(denoised_GM_GM_corr);
+GM_GM_sd = std(denoised_GM_GM_corr);
+GM_dvars_mean = median(denoised_GM_dvars_corr);
+GM_dvars_sd = std(denoised_GM_dvars_corr);
+GM_fd_mean = median(denoised_GM_fd_corr);
+GM_fd_sd = std(denoised_GM_fd_corr);
+GM_CSF_mean = median(denoised_GM_CSF_corr);
+GM_CSF_sd = std(denoised_GM_CSF_corr);
+GM_WMCSF_mean = median(denoised_GM_WMCSF_corr);
+GM_WMCSF_sd = std(denoised_GM_WMCSF_corr);
+GM_Outbrain_mean = median(denoised_GM_Outbrain_corr);
+GM_Outbrain_sd = std(denoised_GM_Outbrain_corr);
+GM_Edge_mean = median(denoised_GM_Edge_corr);
+GM_Edge_sd = std(denoised_GM_Edge_corr);
+
+
+% If we did manual adjustment, we should track how many ICs were
+% changed from auto. To be consistent and allow for easier coding, we
+% should also record this for auto, but it will just be 0s
+num_ICs_adjusted = 0;
+percent_ICs_adjusted = 0;
+% the actual values for manual adjustment will come later in this code
+% because we should wait to load the other values. The later code will
+% update these values appropriately
+
+
+% OK, now can combine all of this as a row of values
+
+qc_array = [{cleaned_file_info.name, subj_id, ses_id, task_name, adjusted, meanRMS, ...
+    medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, gm_signal_dice_array, gm_signal_proportion_array, Results.num_ICs_kept, ...
+    Results.num_ICs_total, percent_ICs_kept, Results.percent_variance_kept, ...
+    Data.numvolumes, DOF_estimate_final, DOF_estimate_if_standard_bp, ...
+    GM_NotGM_mean, GM_NotGM_sd, GM_GM_mean, GM_GM_sd, GM_dvars_mean, GM_dvars_sd, ...
+    GM_fd_mean, GM_fd_sd, GM_CSF_mean, GM_CSF_sd, GM_WMCSF_mean, GM_WMCSF_sd, ...
+    GM_Outbrain_mean, GM_Outbrain_sd, GM_Edge_mean, GM_Edge_sd}, num2cell(Results.compare_cleaning.After'), {num_ICs_adjusted, percent_ICs_adjusted}];
+
+qc_labels = ['image_names', 'subject', 'session', 'task', 'manually_adjusted', 'meanRMS', ...
+    'median_FD', 'mean_FD', 'Percent_FD_gt_point2mm','AnyFD_gt_5mm', 'median_DVARS', 'gm_signal_dice', 'gm_coverage', 'number_kept_ics', 'number_total_ics', ...
+    'fraction_kept_ics', 'fraction_signal_variance_kept', 'numvolumes', ...
+    'dof_estimate_final', 'dof_estimate_final_if_standard_resting_bp', 'GM_NotGM_median', 'GM_NotGM_sd', ...
+    'GM_GM_median', 'GM_GM_sd', 'GM_dvars_median', 'GM_dvars_sd', 'GM_fd_median', 'GM_fd_sd', ...
+    'GM_CSF_median', 'GM_CSF_sd', 'GM_WMCSF_median', 'GM_WMCSF_sd', 'GM_Outbrain_median', 'GM_Outbrain_sd', ...
+    'GM_Edge_median', 'GM_Edge_sd', Results.compare_cleaning.Properties.RowNames', 'Num_ICs_Adjusted', 'Percent_ICs_Adjusted'];
+
+qc_table = cell2table(qc_array, 'VariableNames', qc_labels);
+
+% and also consider grabbing the correlation values so you can stack them
+% together:
+% Need current version, and 8p. If manual, then also need auto
+samps=500;
+GM_NotGM_randperm = randperm(size(denoised_GM_NotGM_corr, 1)); % and then grab ~samps of these
+GM_NotGM_randperm = GM_NotGM_randperm(1:samps);
+
+GM_GM_randperm = randperm(size(denoised_GM_GM_corr, 1)); % and then grab ~samps of these
+GM_GM_randperm = GM_GM_randperm(1:samps);
+
+GM_dvars_randperm = randperm(size(denoised_GM_dvars_corr, 1)); % and then grab ~samps of these
+GM_dvars_randperm = GM_dvars_randperm(1:samps);
+
+GM_fd_randperm = randperm(size(denoised_GM_fd_corr, 1)); % and then grab ~samps of these
+GM_fd_randperm = GM_fd_randperm(1:samps);
+
+GM_CSF_randperm = randperm(size(denoised_GM_CSF_corr, 1)); % and then grab ~samps of these
+GM_CSF_randperm = GM_CSF_randperm(1:samps);
+
+GM_WMCSF_randperm = randperm(size(denoised_GM_WMCSF_corr, 1)); % and then grab ~samps of these
+GM_WMCSF_randperm = GM_WMCSF_randperm(1:samps);
+
+GM_Outbrain_randperm = randperm(size(denoised_GM_Outbrain_corr, 1)); % and then grab ~samps of these
+GM_Outbrain_randperm = GM_Outbrain_randperm(1:samps);
+
+GM_Edge_randperm = randperm(size(denoised_GM_Edge_corr, 1)); % and then grab ~samps of these
+GM_Edge_randperm = GM_Edge_randperm(1:samps);
+
+
+% Now that we have the randomized samps numbers, we can actually grab them
+% from the correlations
+denoised_GM_NotGM_corr = denoised_GM_NotGM_corr(GM_NotGM_randperm);
+denoised_GM_GM_corr = denoised_GM_GM_corr(GM_GM_randperm);
+denoised_GM_dvars_corr = denoised_GM_dvars_corr(GM_dvars_randperm);
+denoised_GM_fd_corr = denoised_GM_fd_corr(GM_fd_randperm);
+denoised_GM_CSF_corr = denoised_GM_CSF_corr(GM_CSF_randperm);
+denoised_GM_WMCSF_corr = denoised_GM_WMCSF_corr(GM_WMCSF_randperm);
+denoised_GM_Outbrain_corr = denoised_GM_Outbrain_corr(GM_Outbrain_randperm);
+denoised_GM_Edge_corr = denoised_GM_Edge_corr(GM_Edge_randperm);
+
+qc_corrs_denoised_array = [denoised_GM_NotGM_corr, denoised_GM_GM_corr, denoised_GM_dvars_corr, denoised_GM_fd_corr, denoised_GM_CSF_corr, denoised_GM_WMCSF_corr, denoised_GM_Outbrain_corr, denoised_GM_Edge_corr];
+qc_corrs_labels = {'Edge-GM Corr', 'FD-GM Corr', 'DVARS-GM Corr', 'Outbrain-GM Corr', 'WMCSF-GM Corr', 'CSF-GM Corr', 'NotGM-GM Corr', 'GM-GM Auto Corr to Orig'};
+qc_corrs_denoised_table = array2table(qc_corrs_denoised_array, 'VariableNames',qc_corrs_labels);
+
+% compare to 8p:
+compare_GM_NotGM_corr = compare_GM_NotGM_corr(GM_NotGM_randperm);
+compare_GM_GM_corr = compare_GM_GM_corr(GM_GM_randperm);
+compare_GM_dvars_corr = compare_GM_dvars_corr(GM_dvars_randperm);
+compare_GM_fd_corr = compare_GM_fd_corr(GM_fd_randperm);
+compare_GM_CSF_corr = compare_GM_CSF_corr(GM_CSF_randperm);
+compare_GM_WMCSF_corr = compare_GM_WMCSF_corr(GM_WMCSF_randperm);
+compare_GM_Outbrain_corr = compare_GM_Outbrain_corr(GM_Outbrain_randperm);
+compare_GM_Edge_corr = compare_GM_Edge_corr(GM_Edge_randperm);
+
+qc_corrs_compare_array = [compare_GM_NotGM_corr, compare_GM_GM_corr, compare_GM_dvars_corr, compare_GM_fd_corr, compare_GM_CSF_corr, compare_GM_WMCSF_corr, compare_GM_Outbrain_corr, compare_GM_Edge_corr];
+qc_corrs_labels = {'Edge-GM Corr', 'FD-GM Corr', 'DVARS-GM Corr', 'Outbrain-GM Corr', 'WMCSF-GM Corr', 'CSF-GM Corr', 'NotGM-GM Corr', 'GM-GM Auto Corr to Orig'};
+qc_corrs_compare_table = array2table(qc_corrs_compare_array, 'VariableNames',qc_corrs_labels);
+
+% compare to orig (orig GM-GM Autocorrelation does not make sense, but include it for easier alignment of data later):
+orig_GM_NotGM_corr = orig_GM_NotGM_corr(GM_NotGM_randperm);
+orig_GM_GM_corr = zeros(samps,1); % All 0, even though all 1s would be actually correct... but we won't graph this and 0 is easier to catch
+orig_GM_dvars_corr = orig_GM_dvars_corr(GM_dvars_randperm);
+orig_GM_fd_corr = orig_GM_fd_corr(GM_fd_randperm);
+orig_GM_CSF_corr = orig_GM_CSF_corr(GM_CSF_randperm);
+orig_GM_WMCSF_corr = orig_GM_WMCSF_corr(GM_WMCSF_randperm);
+orig_GM_Outbrain_corr = orig_GM_Outbrain_corr(GM_Outbrain_randperm);
+orig_GM_Edge_corr = orig_GM_Edge_corr(GM_Edge_randperm);
+
+qc_corrs_orig_array = [orig_GM_NotGM_corr, orig_GM_GM_corr, orig_GM_dvars_corr, orig_GM_fd_corr, orig_GM_CSF_corr, orig_GM_WMCSF_corr, orig_GM_Outbrain_corr, orig_GM_Edge_corr];
+qc_corrs_labels = {'Edge-GM Corr', 'FD-GM Corr', 'DVARS-GM Corr', 'Outbrain-GM Corr', 'WMCSF-GM Corr', 'CSF-GM Corr', 'NotGM-GM Corr', 'GM-GM Auto Corr to Orig'};
+qc_corrs_orig_table = array2table(qc_corrs_orig_array, 'VariableNames',qc_corrs_labels);
+
+% If we did manual, then we also need to grab auto denoised... need to load
+% the other qc_vals version
+% Plan: check if manual, if so, load other qc vals (auto), then grab
+% denoised corrs, then tack those onto the compare qc_corrs_compare table.
+% Then later, if qc_corrs_compare_table is 2 rows deep (instead of 1) then
+% it means we have 8p then auto as compare data
+if strcmp(cicada_type, 'manual')
+    % grab new qc values (auto)
+    qc_vals_info = dir([task_dir, '/qc/*', cicada_type, '*CICADA*' compare_tags{2}, '*.mat']); % this should grab auto as the compare 
+    qc_vals = [qc_vals_info.folder, '/', qc_vals_info.name];
+    load(qc_vals)
+    
+    % grab compare values
+    compare_GM_NotGM_corr = compare_GM_NotGM_corr(GM_NotGM_randperm);
+    compare_GM_GM_corr = compare_GM_GM_corr(GM_GM_randperm);
+    compare_GM_dvars_corr = compare_GM_dvars_corr(GM_dvars_randperm);
+    compare_GM_fd_corr = compare_GM_fd_corr(GM_fd_randperm);
+    compare_GM_CSF_corr = compare_GM_CSF_corr(GM_CSF_randperm);
+    compare_GM_WMCSF_corr = compare_GM_WMCSF_corr(GM_WMCSF_randperm);
+    compare_GM_Outbrain_corr = compare_GM_Outbrain_corr(GM_Outbrain_randperm);
+    compare_GM_Edge_corr = compare_GM_Edge_corr(GM_Edge_randperm);
+
+    qc_corrs_compare_array_2 = [compare_GM_NotGM_corr, compare_GM_GM_corr, compare_GM_dvars_corr, compare_GM_fd_corr, compare_GM_CSF_corr, compare_GM_WMCSF_corr, compare_GM_Outbrain_corr, compare_GM_Edge_corr];
+    qc_corrs_compare_table_2 = array2table(qc_corrs_compare_array_2, 'VariableNames',qc_corrs_labels);
+
+    % join the two compare tables... 
+    
+
+    % also, record how many ICs were changed (good to know how many were
+    % "wrong") - implement later, once you have tried this once and
+    % adjusted the manual script
+    % based off of the following from Manual 2B:
+    changed_IC_labels_table = readtable([cleaned_dir, '/changed_signal_label_manual_ICs.csv']);
+    num_ICs_adjusted = height(changed_IC_labels_table);
+    percent_ICs_adjusted = num_ICs_adjusted ./ Results.num_ICs_total;
+
+    % update qc_table appropriately
+    qc_table.
+end
+
+
+
+% qc photo path can be length 2 (can hold 2 paths). If manual cicada is
+% run, then you want both 8p and auto photos. If auto, then just 8p is
+% perfect.
+for idx2 = 1:length(compare_tags)
+     qc_photo_info = dir([task_dir, '/qc/*', cicada_type, '*cicada*', compare_tags{idx2}, '*qc_plots.jpg']);
+     qc_photo_paths{idx2} = [qc_photo_info.folder, '/', qc_photo_info.name];
+end
+
+end

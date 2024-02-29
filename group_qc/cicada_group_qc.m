@@ -1,18 +1,18 @@
-function cicada_group_qc(output_dir, cicada_dir, subj_ids, ses_ids, task_names, bad_data_list, manual_adjustment_list)
+function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids, task_name, bad_data_list, manual_adjustment_list)
 % function to run group qc on cicada output
-% output_dir: where you want the group_qc
+% output_dir: where you want the group_qc: commonly something like: /cicada_group_qc/task_name
 % cicada_dir: general cicada directory to read from
+% cicada_type: 'auto' or 'manual'
 % subj_ids: e.g., {'102', '102', '103', '103'}
 % ses_ids: e.g., {'01', '02', '01', '02'}
-% task_names: (include run in there if it exists) e.g., {'visual_run-01', 'visual_run-01', 'visual_run-01', 'visual_run-01'} 
-% Note: Suggested to only do one task_name - to stay consisent with timing,
-% sampling, resolution, numvolumes, etc. 
+% task_name (include run in there if it exists) e.g., 'visual_run-01'
+% Note: Only one task_name 
 % bad_data_list: (clearly something wrong with scan, unusable data, found
 % earlier, like with mriqc). '1' designates bad. '0' is fine: e.g., {'0', '0', '1', '0'}
 % manual_adjustment_list: Data you have tried to save with manual
 % adjustment of IC selection (and Manual CICADA has been run): e.g., {'1',
 % '0'. '1', '0'}
-% Note: subj_ids, ses_ids, task_names must be all the same length of cell
+% Note: subj_ids, ses_ids, bad_data_list, and manual_adjustment_list must be all the same length of cell
 % arrays! Easier to read this from a .csv you make and feed that into this
 % script
 
@@ -27,16 +27,6 @@ network_file = [cicada_dir, '/templates/network_template_', task_id, '.nii.gz'];
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% For FSL to run all happy, we need to set the LD_LIBRARY_PATH Differently.
-setenv('LD_LIBRARY_PATH', '/usr/lib64/lib64/libstdc++.so.6:/usr/local/MATLAB/R2022b/bin/matlab')
-addpath('/home/doddke/code/CADICA')
-
-% OK, we need to go through each file of interest (per subject, session,
-% task) and then load the 3D Signal map, alongside save number of ICs kept,
-% percent ICs kept, and new folder for all this and to store the manual vs
-% aggressive (or which ever thing we care about the most) for quick
-% comparisons as well.
-
 % initialize struct:
 Group_QC = struct;
 
@@ -45,28 +35,22 @@ gm_mni_prob = niftiread(gm_mni_prob_file);
 gm_mni_thresh = gm_mni_prob_file > 0.67;
 gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
 gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
+compare_tags = {'8p'};
 
+% find the correct cicada cleaned folder tag, default is manual
+if strcmp(cicada_type, 'auto') ~= 1
+    cicada_type = 'manual';
+    compare_tags = {'8p', 'auto'}; % if doing all manual, it is good to compare to all auto to see impact
+end
+cicada_type_default = cicada_type; % for converting later
 
-% find the correct CADICA cleaned folder tag, default is manual
-if strcmp(CADICA_type, 'auto') ~= 1
-    CADICA_type = 'manual';
+% Create output_dir, if it does not already exist:
+if not(isfolder(output_dir))
+    mkdir(output_dir)
 end
 
-CADICA_type_default = CADICA_type;
 
-% Create cadica_group_dir, if it does not already exist:
-if not(isfolder(cadica_group_dir))
-    mkdir(cadica_group_dir)
-end
-
-% Create a folder that is more specific within there. group_dir should
-% already be specific to task id
-qc_specific_fol = [cadica_group_dir, '/', task_id, '/', smooth_filter_tag, denoise_tag, special_tag];
-if not(isfolder(qc_specific_fol))
-    mkdir(qc_specific_fol)
-end
-
-data_fol = [qc_specific_fol, '/data'];
+data_fol = [output_dir, '/data'];
 if not(isfolder(data_fol))
     mkdir(data_fol)
 else
@@ -78,7 +62,7 @@ end
 % all in the future
 for h = 1:length(compare_tags)
     % create folders for comparison photos to zip through too
-    photo_fol = [qc_specific_fol, '/qc_photos_', compare_tags{h}];
+    photo_fol = [output_dir, '/qc_photos_cicada_', cicada_type, '_', compare_tags{h}];
     if not(isfolder(photo_fol))
         mkdir(photo_fol)
     else
@@ -87,7 +71,7 @@ for h = 1:length(compare_tags)
     end
 end
 
-% don't forget to initialize with zeros a 4D signaltonoise file to save on
+% consider initializing a 4D signaltonoise file with zeros  to save on
 % time
 m = 1; % counting purposes, nothing major or wild
 
@@ -96,19 +80,19 @@ for j = 1:length(subj_ids)
     fprintf('\n')
     fprintf(['Running for subject ', subj_ids{j}, '\n'])
     % check for folder
-    curr_subj_fol = [cadica_dir, '/sub-', subj_ids{j}];
+    curr_subj_fol = [cicada_dir, '/sub-', subj_ids{j}];
     if ~isfolder(curr_subj_fol)
         fprintf(['No subject folder found for ', subj_ids{j}, '. Moving on to next one...\n'])
         continue
     end
 
-    for k = 1:length(sess_ids)
+    for k = 1:length(ses_ids)
         
-        fprintf(['Running for session ', sess_ids{k}, '\n'])
+        fprintf(['Running for session ', ses_ids{k}, '\n'])
         % check for folder
-        curr_sess_fol = [curr_subj_fol, '/ses-', sess_ids{k}];
+        curr_sess_fol = [curr_subj_fol, '/ses-', ses_ids{k}];
         if ~isfolder(curr_sess_fol)
-            fprintf(['No sess folder found for ', sess_ids{k}, '. Moving on to next one...\n'])
+            fprintf(['No sess folder found for ', ses_ids{k}, '. Moving on to next one...\n'])
             continue
         end
         
@@ -123,7 +107,7 @@ for j = 1:length(subj_ids)
 
         % OK, now grab the things you need/want:
         % The actually cleaned file, in cleaned_manual folder:
-        prefix = ['sub-', subj_ids{j}, '_ses-', sess_ids{k}, '_task-', task_id];
+        prefix = ['sub-', subj_ids{j}, '_ses-', ses_ids{k}, '_task-', task_id];
         suffix = 'bold.nii.gz';
 
         % if it is labeled as bad data from the get-go (e.g., mriqc shows
@@ -138,18 +122,18 @@ for j = 1:length(subj_ids)
             % adjusted, or not include it
             % To Do: figure out what you want to do here then
             adjusted = 0; % 1 if we adjusted it
-            CADICA_type = CADICA_type_default; % update to default version (often this is auto)
-            denoise_tag = ['CADICA_', CADICA_type, '_', reg_type];
+            cicada_type = cicada_type_default; % update to default version (often this is auto)
+            denoise_tag = ['cicada_', cicada_type, '_', reg_type];
             % if the current subject falls under the list of adjust or bad
             % prefixes, grab the manual version and label it appropriately
             if sum(contains(adjust_prefixes, prefix)) > 0
-                CADICA_type = 'manual';
-                denoise_tag = ['CADICA_', CADICA_type, '_', reg_type];
+                cicada_type = 'manual';
+                denoise_tag = ['cicada_', cicada_type, '_', reg_type];
                 adjusted = 1;
             end
     
              % check for cleaned folder
-            cleaned_folname = ['cleaned_' CADICA_type];
+            cleaned_folname = ['cleaned_' cicada_type];
             cleaned_fol = [curr_task_fol, '/', cleaned_folname];
             if not(isfolder(cleaned_fol))
                 fprintf(['No cleaned folder at ', cleaned_fol, ' found. Moving on to next one...\n'])
@@ -184,16 +168,16 @@ for j = 1:length(subj_ids)
     
             %curr_signalandnoise_overlap_filename = 'SignalICOverlap.nii.gz';
             
-            selection_fol = [curr_task_fol, '/ic_', CADICA_type, '_selection'];
+            selection_fol = [curr_task_fol, '/ic_', cicada_type, '_selection'];
             curr_signalandnoise_file = [selection_fol, '/', curr_signalandnoise_overlap_filename];
     
             curr_signalandnoise_mask = niftiread(curr_signalandnoise_file);
     
             % Calculate overlap with GM mask
             if m == 1
-                flirt_command = ['flirt -ref ', curr_signalandnoise_file, ' -in ', gm_mni_prob_file, ' -out ', qc_specific_fol, '/gm_mni_prob_resampled.nii.gz -usesqform -applyxfm'];
+                flirt_command = ['flirt -ref ', curr_signalandnoise_file, ' -in ', gm_mni_prob_file, ' -out ', output_dir, '/gm_mni_prob_resampled.nii.gz -usesqform -applyxfm'];
                 [status, cmdout_flirt] = system(flirt_command, '-echo');
-                gm_mni_prob_resampled = niftiread([qc_specific_fol, '/gm_mni_prob_resampled.nii.gz']);
+                gm_mni_prob_resampled = niftiread([output_dir, '/gm_mni_prob_resampled.nii.gz']);
                 gm_mni_thresh = gm_mni_prob_resampled > 0.67;
             end
             
@@ -264,7 +248,7 @@ for j = 1:length(subj_ids)
             GM_Edge_mean = median(denoised_GM_Edge_corr);
             GM_Edge_sd = std(denoised_GM_Edge_corr);
     
-            qc_group_array(:,m) = [{m, curr_filename, subj_ids{j}, sess_ids{k}, task_id, adjusted, meanRMS, ...
+            qc_group_array(:,m) = [{m, curr_filename, subj_ids{j}, ses_ids{k}, task_id, adjusted, meanRMS, ...
                 medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, gm_signal_dice, gm_signal_proportion, Results.num_ICs_kept, ...
                 Results.num_ICs_total, percent_ICs_kept, Results.percent_variance_kept, ...
                 Results.percent_freq_kept, numvolumes, DOF_estimate_final, DOF_estimate_if_standard_bp, ...
@@ -276,7 +260,7 @@ for j = 1:length(subj_ids)
     
             % finally copy over the photos to their respective folders
             for h = 1:length(compare_tags)
-                photo_fol = [qc_specific_fol, '/qc_photos_', compare_tags{h}];
+                photo_fol = [output_dir, '/qc_photos_', compare_tags{h}];
                 photo_name = [prefix, '_', denoise_tag, '_vs_', compare_tags{h}, '_qc_plots.png'];
                 photo_file = [curr_task_fol, '/qc/', photo_name];
                 copyfile(photo_file, photo_fol)
@@ -291,7 +275,7 @@ end
 Group_QC.bad_data_prefixes = bad_data_prefixes;
 
 % go to general group folder for this specific set
-cd(qc_specific_fol)
+cd(output_dir)
 
 % cell to table
 qc_table_labels = ['image_number', 'image_names', 'subject', 'session', 'task', 'manually_adjusted', 'meanRMS', ...
@@ -346,7 +330,7 @@ Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.GM_fd_median), "median")) 
 
 
 % combine to get overall outliers
-Group_QC.CADICA_outliers = logical(Group_QC.low_number_total_ics + ...
+Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
     Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
     Group_QC.low_Smoothing + Group_QC.low_power_overlap + Group_QC.low_gm_coverage + Group_QC.low_gm_dice);
 
@@ -366,7 +350,7 @@ final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
 final_qc_table.low_gm_coverage = Group_QC.low_gm_coverage;
 final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
 final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
-final_qc_table.CADICA_outliers = Group_QC.CADICA_outliers;
+final_qc_table.cicada_outliers = Group_QC.cicada_outliers;
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
 final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
 
@@ -376,7 +360,7 @@ Group_QC.final_qc_table = final_qc_table;
 % Now work on the images:
 
 % remove outliers from funcmask 
-image_keep = ~Group_QC.CADICA_outliers;
+image_keep = ~Group_QC.cicada_outliers;
 
 % remove outliers from signal and noise mask
 signalandnoise_mask_all = signalandnoise_mask;
@@ -416,7 +400,7 @@ niftiwrite(cast(signalandnoise_mask, 'single'), 'SignalandNoise_Group', signal_p
 % Make sure to not include data files that were designated as bad enough to
 % remove
 all_data_files = data_files;
-data_files = all_data_files(~Group_QC.CADICA_outliers);
+data_files = all_data_files(~Group_QC.cicada_outliers);
 writecell(data_files, 'image_names.txt')
 
 % Resample mni to be the background image for melodic
@@ -442,7 +426,7 @@ elseif redo_melodic == 1
     % create ICprobabilities combined in melodic folder (good for making masks
     % later at 100% probability, for example).
     % first get to qc folder in bash
-    out = system(['cd ', qc_specific_fol], '-echo');
+    out = system(['cd ', output_dir], '-echo');
     [~, str] = system('ls ./melodic/stats/probmap_* | sort -V');
     probmapnames = regexprep(str, '\s+', ' '); % convert newlines to spaces
     command = ['fslmerge -t ./melodic/ICprobabilities.nii.gz ', probmapnames];
