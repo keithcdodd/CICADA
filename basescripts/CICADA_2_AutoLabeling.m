@@ -1,4 +1,4 @@
-function CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance)
+function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance)
 % Run this after running CICADA_1 script
 % output_dir must be the same one as for the first script, so that this can
 % find all the relevant files. Again, it is best if this is in the format
@@ -494,8 +494,10 @@ classification_table{:, 'ICs'} = ICs;
 for i1 = 2:length(feature_labels)
     curr_val = feature_relative_table{:,feature_labels{i1}};
     [val_idx, val_C] = kmeans(curr_val, 3, 'Start', [min(curr_val); median(curr_val); max(curr_val)]);
-    classification_table{:, ['High_', feature_labels{i1}]} = val_idx == find(val_C == max(val_C));
-    classification_table{:, ['Low_', feature_labels{i1}]} = val_idx == find(val_C == min(val_C));
+    max_feats = find(val_C == max(val_C)); % make separate variables to deal with the unlikely scenario 3 groups becomes only 2. Likely terrible data if that happens anyways.
+    min_feats = find(val_C == min(val_C));
+    classification_table{:, ['High_', feature_labels{i1}]} = val_idx == max_feats(end);
+    classification_table{:, ['Low_', feature_labels{i1}]} = val_idx == min_feats(1);
 end
 
 % Start parsing out what is important to look at from classification
@@ -941,15 +943,21 @@ tmean_add_9p_command = ['fslmaths ', prefix, '_9p_', suffix, ' -add ', task_dir,
 [~, ~] = call_fsl(tmean_add_8p_command);
 [~, ~] = call_fsl(tmean_add_9p_command);
 
-% for good measure, run 8p & 9p too! Good for comparisons in QC script
-cleaned_auto_dir = [output_dir, '/cleaned_auto'];
-if ~isfolder(cleaned_auto_dir)
-    mkdir(cleaned_auto_dir)
+% create cleaned directory
+cleaned_dir = [output_dir, '/cleaned'];
+if ~isfolder(cleaned_dir)
+    mkdir(cleaned_dir)
 end
-delete([cleaned_auto_dir, '/*']) % clear out old files in here, save space and just in case
-movefile('*CICADA*.nii.gz', cleaned_auto_dir)
-movefile('*8p*.nii.gz', cleaned_auto_dir)
-movefile('*9p*.nii.gz', cleaned_auto_dir)
+delete([cleaned_dir, '/*']) % clear out old files in here, save space and just in case
 
+% for good measure, put in a copy of the original with similar naming in cleaned dir - Good for comparisons in QC script
+copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
+movefile('*CICADA*.nii.gz', cleaned_dir)
+movefile('*8p*.nii.gz', cleaned_dir)
+movefile('*9p*.nii.gz', cleaned_dir)
+
+% get cleaned_filename
+cleaned_file_info = dir([cleaned_dir, '/*CICADA*auto*.nii.gz']);
+cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
 
 end

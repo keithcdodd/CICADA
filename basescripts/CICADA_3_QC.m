@@ -4,19 +4,40 @@ function CICADA_3_QC(cleaned_dir, compare_file)
 % cleaned dir is a directory within the output_dir given in the first two
 % scripts. This will be either the cleaned_auto dir or the cleaned_manual
 % dir
+% While default compare file is 8p, you could feed it the cicada auto file
+% if you were doing manual cicada step, for example. The file does need to
+% already exist.
 
 fprintf('\n')
 close all
 
 cd(cleaned_dir)
-cleaned_dir_info = dir(cleaned_dir);
+cd('../')
+[~, task_dir_name, ~]=fileparts(pwd); % grab task dir name
+cd('../')
+[~, ses_dir_name, ~]=fileparts(pwd); % grab ses dir name
+cd('../')
+[~, subj_dir_name, ~]=fileparts(pwd); % grab subj dir name
+cd(cleaned_dir)
+
+% need to check if manual or auto, because there will be two cicada files
+% if manual
+[~, cleaned_dir_name, ~]=fileparts(pwd);
+
+if contains(cleaned_dir_name, 'manual')
+    cicada_type = 'manual';
+else
+    cicada_type = 'auto';
+end
 
 % Grab files, check if they exist 
-cicada_name = dir('*CICADA*nonagg*');
-cicada_file = [cicada_name.folder, '/', cicada_name.name];
-orig_file = [cleaned_dir, '/../funcfile.nii.gz'];
+cicada_file_info = dir(['*CICADA*', cicada_type, '*nonagg*.nii.gz']); % grabs the auto if cleaned auto, grabs manual if cleaned manual
+cicada_file = [cicada_file_info.folder, '/', cicada_file_info.name];
+orig_file_info = dir('*orig*.nii.gz'); % needs to be in cleaned_dir too
+orig_file = [orig_file_info.folder, '/', orig_file_info.name];
 
-% catch if there is no compare_file
+% catch if there is no compare_file, and if so, do standard 8p (and auto
+% later if cicada is manual version)
 if ~exist('compare_file', 'var') || strcmp(compare_file, 'x')
     fprintf('Will compare to standard 8 parameter \n')
     compare_file_info = dir('*8p*');
@@ -26,21 +47,20 @@ end
 
 if ~isfile(compare_file)
     fprintf(['ERROR, cannot find compare file: ', compare_file, '\n'])
+    return;
 elseif ~isfile(orig_file)
     fprintf('ERROR, cannot find orig file: funcfile.nii.gz \n')
+    return;
 elseif ~isfile(cicada_file)
-    fprintf(['ERROR, cannot find CICADA file: ', cicada_name.name, '\n'])
+    fprintf(['ERROR, cannot find CICADA file: ', cicada_file_info.name, '\n'])
+    return;
 end
 
-cicada_data = niftiread(cicada_file);
-orig_data = niftiread(orig_file);
-compare_data = niftiread(compare_file);
-
 orig_info = niftiinfo(orig_file);
-tr=orig_info.PixelDimensions(4);
-cleaned_dir_name = cleaned_dir_info.folder;
+tr = orig_info.PixelDimensions(4);
 
 % check if comparing auto or manual, can base this off of cleaned dir name
+% then load relevant files from cicada
 if contains(cleaned_dir_name, 'manual')
     if isfile([cleaned_dir, '/../ic_manual_selection/DecisionVariables_Manual.mat'])
         load([cleaned_dir, '/../ic_manual_selection/DecisionVariables_Manual.mat']) %#ok<LOAD> 
@@ -70,109 +90,23 @@ end
 DOF_estimate_final = Data.numvolumes .* Results.percent_variance_kept; %#ok<NODEF,USENS> 
 Results.num_ICs_kept = length(Results.signal_ICs);
 Results.num_ICs_total = length(Results.ICs);
-fprintf(['Estimate of Final DOF for ', cicada_name.name, ' is %.2f\n'], DOF_estimate_final)
+fprintf(['Estimate of Final DOF for ', cicada_file_info.name, ' is %.2f\n'], DOF_estimate_final)
 
-% confounds: So, overall you want/need the 6 motion parameters, dvars,
-% framewise displacement, csf, white_matter, and global signal
-confound_place = [cleaned_dir, '/../confounds_timeseries.csv'];
-allconfounds = readtable(confound_place);
-confounds_dvars = table2array(allconfounds(:,{'dvars'}));
-confounds_fd = table2array(allconfounds(:,{'framewise_displacement'}));
 
-% Get GM prob mask and create GM mask and not GM mask for denoised
-% and original files
-GM_prob_file = [cleaned_dir, '/../region_masks/GM_prob.nii.gz'];
-WMCSF_prob_file = [cleaned_dir, '/../region_masks/WMandCSF_mask.nii.gz'];
-CSF_prob_file = [cleaned_dir, '/../region_masks/CSF_prob.nii.gz'];
-Edge_prob_file = [cleaned_dir, '/../region_masks/Edge_prob.nii.gz'];
-Outbrain_prob_file = [cleaned_dir, '/../region_masks/OutbrainOnly_prob.nii.gz'];
-funcmask = [cleaned_dir, '/../funcmask.nii.gz'];
-if isfile([cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']) == 1
-    NotGM_prob_file = [cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']; % this is a better estimate if we calculated it
-else
-    NotGM_prob_file = [cleaned_dir, '/../region_masks/NotGMorWM_prob.nii.gz']; % Makes sure not including anything that could be signal, removes WM too
-end
+% Now, we can get the relevant correlation values and such!
+fprintf(['Running comparison of ', cicada_file_info.name, ' to ', dir(compare_file).name, '\n'])   
 
-fprintf(['Running comparison of ', cicada_name.name, ' to ', dir(compare_file).name, '\n'])    
+[denoised_Edge_GM_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_GM_corr, ...
+    denoised_WMCSF_GM_corr, denoised_CSF_GM_corr, denoised_NotGM_GM_corr, denoised_GM_GM_autocorr, ...
+    denoised_GM_mean] = CICADA_fileQC(cicada_file, orig_file);
 
-% Now, get data for NotGM, Edge, Outbrain, WMCSF, and CSF for denoised data
-fprintf('Calculating Denoised Data\n')
-[denoised_GM, denoised_NotGM, ~, denoised_GM_mean, ~, ~] = getData(cicada_data, funcmask, GM_prob_file, NotGM_prob_file);
-[~, denoised_Edge, ~, ~, ~, ~] = getData(cicada_data, funcmask, GM_prob_file, Edge_prob_file);
-[~, denoised_Outbrain, ~, ~, ~, ~] = getData(cicada_data, funcmask, GM_prob_file, Outbrain_prob_file);
-[~, denoised_WMCSF, ~, ~, ~, ~] = getData(cicada_data, funcmask, GM_prob_file, WMCSF_prob_file);
-[~, denoised_CSF, ~, ~, ~, ~] = getData(cicada_data, funcmask, GM_prob_file, CSF_prob_file);
+[compare_Edge_GM_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_GM_corr, ...
+    compare_WMCSF_GM_corr, compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, ...
+    compare_GM_mean] = CICADA_fileQC(compare_file, orig_file);
 
-% Now, get data for NotGM, Edge, Outbrain, WMCSF, and CSF for orig data
-fprintf('Calculating Original Data\n')
-[orig_GM, orig_NotGM, ~, orig_GM_mean, ~, ~] = getData(orig_data, funcmask, GM_prob_file, NotGM_prob_file);
-[~, orig_Edge, ~, ~, ~, ~] = getData(orig_data, funcmask, GM_prob_file, Edge_prob_file);
-[~, orig_Outbrain, ~, ~, ~, ~] = getData(orig_data, funcmask, GM_prob_file, Outbrain_prob_file);
-[~, orig_WMCSF, ~, ~, ~, ~] = getData(orig_data, funcmask, GM_prob_file, WMCSF_prob_file);
-[~, orig_CSF, ~, ~, ~, ~] = getData(orig_data, funcmask, GM_prob_file, CSF_prob_file);
-
-% Now, get data for NotGM, Edge, Outbrain, WMCSF, and CSF for compared data
-fprintf('Calculating Compare Data\n')
-[compare_GM, compare_NotGM, ~, compare_GM_mean, ~, ~] = getData(compare_data, funcmask, GM_prob_file, NotGM_prob_file);
-[~, compare_Edge, ~, ~, ~] = getData(compare_data, funcmask, GM_prob_file, Edge_prob_file);
-[~, compare_Outbrain, ~, ~, ~, ~] = getData(compare_data, funcmask, GM_prob_file, Outbrain_prob_file);
-[~, compare_WMCSF, ~, ~, ~, ~] = getData(compare_data, funcmask, GM_prob_file, WMCSF_prob_file);
-[~, compare_CSF, ~, ~, ~, ~] = getData(compare_data, funcmask, GM_prob_file, CSF_prob_file);
-
-% Now compute relevant correlations, and some others that we don't use, but
-% one could make use of if they desired
-fprintf('Calculating Relevant Correlations\n')
-
-% create permutations for regions, subtract a little bit because sometimes
-% something funky happens and the sizes do not fully align with Edge
-% Voxels. Very close (probably related to thresholding values)
-GM_randperm = randperm(size(orig_GM, 1));
-NotGM_randperm = randperm(size(orig_NotGM, 1));
-Outbrain_randperm = randperm(size(orig_Outbrain, 1));
-Edge_randperm = randperm(size(orig_Edge, 1));
-WMCSF_randperm = randperm(size(orig_WMCSF, 1));
-CSF_randperm = randperm(size(orig_CSF, 1));
-
-% NotGM: Want to be shifted tighter and closer to 0
-denoised_GM_NotGM_corr = createHistData(denoised_GM, denoised_NotGM, GM_randperm, NotGM_randperm, 500);
-compare_GM_NotGM_corr = createHistData(compare_GM, compare_NotGM, GM_randperm, NotGM_randperm, 500);
-orig_GM_NotGM_corr = createHistData(orig_GM, orig_NotGM, GM_randperm, NotGM_randperm, 500);
-
-% GM: But, we want to maintain GM correlations in comparison (after other is removed)
-% this one we compare to the original data, to see how much GM is
-% maintained (want bad stuff removed, but not good stuff too!)
-denoised_GM_GM_corr = createHistData(denoised_GM, orig_GM, GM_randperm, GM_randperm, 500);
-compare_GM_GM_corr = createHistData(compare_GM, orig_GM, GM_randperm, GM_randperm, 500);
-
-% Edge
-denoised_GM_Edge_corr = createHistData(denoised_GM, denoised_Edge, GM_randperm, Edge_randperm, 500);
-compare_GM_Edge_corr = createHistData(compare_GM, compare_Edge, GM_randperm, Edge_randperm, 500);
-orig_GM_Edge_corr = createHistData(orig_GM, orig_Edge, GM_randperm, Edge_randperm, 500);
-
-% Outbrain
-denoised_GM_Outbrain_corr = createHistData(denoised_GM, denoised_Outbrain, GM_randperm, Outbrain_randperm, 500);
-compare_GM_Outbrain_corr = createHistData(compare_GM, compare_Outbrain, GM_randperm, Outbrain_randperm, 500);
-orig_GM_Outbrain_corr = createHistData(orig_GM, orig_Outbrain, GM_randperm, Outbrain_randperm, 500);
-
-% WMCSF
-denoised_GM_WMCSF_corr = createHistData(denoised_GM, denoised_WMCSF, GM_randperm, WMCSF_randperm, 500);
-compare_GM_WMCSF_corr = createHistData(compare_GM, compare_WMCSF, GM_randperm, WMCSF_randperm, 500);
-orig_GM_WMCSF_corr = createHistData(orig_GM, orig_WMCSF, GM_randperm, WMCSF_randperm, 500);
-
-% CSF
-denoised_GM_CSF_corr = createHistData(denoised_GM, denoised_CSF, GM_randperm, CSF_randperm, 500);
-compare_GM_CSF_corr = createHistData(compare_GM, compare_CSF, GM_randperm, CSF_randperm, 500);
-orig_GM_CSF_corr = createHistData(orig_GM, orig_CSF, GM_randperm, CSF_randperm, 500);
-
-% dvars
-denoised_GM_dvars_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 10000);
-compare_GM_dvars_corr = createHistConf1DData(compare_GM, confounds_dvars, GM_randperm, 10000);
-orig_GM_dvars_corr = createHistConf1DData(orig_GM, confounds_dvars, GM_randperm, 10000);
-
-% fd
-denoised_GM_fd_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 10000);
-compare_GM_fd_corr = createHistConf1DData(compare_GM, confounds_fd, GM_randperm, 10000);
-orig_GM_fd_corr = createHistConf1DData(orig_GM, confounds_fd, GM_randperm, 10000);
+[orig_Edge_GM_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_GM_corr, ...
+    orig_WMCSF_GM_corr, orig_CSF_GM_corr, orig_NotGM_GM_corr, orig_GM_GM_autocorr, ...
+    orig_GM_mean] = CICADA_fileQC(orig_file, orig_file);
 
 
 % Create QC folder (if it doesn't already exist)
@@ -182,33 +116,31 @@ end
 delete([cleaned_dir, '/../qc/*']) % delete old files to save potential space
 cd([cleaned_dir, '/../qc'])
 
-% The trick for naming is to spit by _, find slot of CICADA, save that slot
-% and then up to, but not including, the last slot 
-cicada_splitting = split(cicada_name.name, '_');
-compare_splitting = split(dir(compare_file).name, '_');
-
-label_spot = find(strcmp(cicada_splitting, 'CICADA'));
-prefix = strjoin(cicada_splitting(1:label_spot-1), '_');
-cicada_tag = strjoin(cicada_splitting(label_spot:end-1), '_');
-compare_tag = strjoin(compare_splitting(label_spot:end-1), '_');
+% extract naming tags
+cicada_tag = extractBetween(cicada_file_info.name, [task_dir_name, '_'], '_bold.nii.gz');
+cicada_tag = cicada_tag{:}; % need to expand it to just be char array
+compare_tag = extractBetween(dir(compare_file).name, [task_dir_name, '_'], '_bold.nii.gz');
+compare_tag = compare_tag{:}; % need to expand it to just be char array
 orig_tag = 'orig';
+prefix = [subj_dir_name, '_', ses_dir_name, '_task-', task_dir_name];
 
-qc_naming = [prefix, '_', ic_select, '_', cicada_tag, '_vs_', compare_tag]; 
+qc_naming = [prefix, '_', cicada_tag, '_vs_', compare_tag]; 
 qc_vals = [qc_naming, '_qc_vals.mat'];
 qc_plots = [qc_naming, '_qc_plots.jpg'];
 
 % save relevant plotting variables
 fprintf('Saving Relevant QC Data\n')
 title_string = [prefix, ': ', cicada_tag, ', ', compare_tag, ', & ', orig_tag];
-save(qc_vals, 'orig_GM_NotGM_corr', 'compare_GM_NotGM_corr', 'denoised_GM_NotGM_corr', ...
-     'compare_GM_GM_corr', 'denoised_GM_GM_corr', ...
-     'orig_GM_Outbrain_corr', 'compare_GM_Outbrain_corr', 'denoised_GM_Outbrain_corr', ...
-     'orig_GM_Edge_corr', 'compare_GM_Edge_corr', 'denoised_GM_Edge_corr', ...
-     'orig_GM_WMCSF_corr', 'compare_GM_WMCSF_corr', 'denoised_GM_WMCSF_corr', ...
-     'orig_GM_CSF_corr', 'compare_GM_CSF_corr', 'denoised_GM_CSF_corr', ...
-     'orig_GM_dvars_corr', 'compare_GM_dvars_corr', 'denoised_GM_dvars_corr', ...
-     'orig_GM_fd_corr', 'compare_GM_fd_corr', 'denoised_GM_fd_corr', ...
-     'denoised_GM_mean', 'title_string', 'orig_tag', 'compare_tag', 'cicada_tag',...
+save('qc_vals', 'orig_NotGM_GM_corr', 'compare_NotGM_GM_corr', 'denoised_NotGM_GM_corr', ...
+     'orig_GM_GM_autocorr', 'compare_GM_GM_autocorr', 'denoised_GM_GM_autocorr', ...
+     'orig_Outbrain_GM_corr', 'compare_Outbrain_GM_corr', 'denoised_Outbrain_GM_corr', ...
+     'orig_Edge_GM_corr', 'compare_Edge_GM_corr', 'denoised_Edge_GM_corr', ...
+     'orig_WMCSF_GM_corr', 'compare_WMCSF_GM_corr', 'denoised_WMCSF_GM_corr', ...
+     'orig_CSF_GM_corr', 'compare_CSF_GM_corr', 'denoised_CSF_GM_corr', ...
+     'orig_DVARS_GM_corr', 'compare_DVARS_GM_corr', 'denoised_DVARS_GM_corr', ...
+     'orig_FD_GM_corr', 'compare_FD_GM_corr', 'denoised_FD_GM_corr', ...
+     'denoised_GM_mean', 'compare_GM_mean', 'orig_GM_mean', ...
+     'title_string', 'orig_tag', 'compare_tag', 'cicada_tag',...
      'ic_select', 'DOF_estimate_final', 'Results', 'tr', 'Data', 'Tables') %#ok<USENS> 
 
 % Now, in the future, if you want to replot anything, you should have
@@ -226,9 +158,9 @@ title(t, title_string, 'Interpreter', 'none')
 nexttile
 hold on
 title('Edge-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -238,9 +170,9 @@ hold off
 nexttile
 hold on
 title('FD-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_fd_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_fd_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_fd_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -251,9 +183,9 @@ hold off
 nexttile
 hold on
 title('DVARS-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_dvars_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_dvars_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_dvars_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -263,9 +195,9 @@ hold off
 nexttile
 hold on
 title('Outbrain-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -275,9 +207,9 @@ hold off
 nexttile
 hold on
 title('WMCSF-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -287,9 +219,9 @@ hold off
 nexttile
 hold on
 title('CSF-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -299,9 +231,9 @@ hold off
 nexttile
 hold on
 title('NotGM-GM Corr ', 'Interpreter', 'none')
-histogram(orig_GM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_GM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_GM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(orig_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(compare_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+histogram(denoised_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -313,8 +245,8 @@ colorord = get(gca, 'colororder');
 nexttile
 hold on
 title('GM-GM Auto Corr to Orig', 'Interpreter', 'none')
-histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
-histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+histogram(compare_GM_GM_autocorr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+histogram(denoised_GM_GM_autocorr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
 legend('compare', 'CICADA', 'Interpreter', 'none')
 hold off
 
@@ -335,60 +267,4 @@ fprintf('Saving Figure\n')
 exportgraphics(t, qc_plots, 'Resolution', 300)
 
 fprintf('\n')
-end
-
-%%
-function [GM, region, Global_Signal, GM_Signal_mean, GM_var, region_var] = getData(funcfile_data, funcmask, GM_prob_file, region_prob_file)
-% read in the niftis
-region_prob_data = niftiread(region_prob_file);
-gm_prob_data = niftiread(GM_prob_file);
-func_data = funcfile_data;
-funcmask_data = niftiread(funcmask);
-
-gm_mask = logical(gm_prob_data > 0.75 & funcmask_data == 1);
-region_mask = logical(region_prob_data > 0.75 & funcmask_data == 1);
-func_mask = logical(funcmask_data == 1);
-
-% Select the timeseries for GM and region and global signal
-global_signal = zeros(sum(func_mask(:)), size(func_data, 4));
-GM = zeros(sum(gm_mask(:)), size(func_data, 4));
-region = zeros(sum(region_mask(:)), size(func_data, 4));
-for j = 1:size(func_data, 4)
-    curr_func = func_data(:,:,:,j);
-    GM(:,j) = curr_func(gm_mask);
-    region(:,j) = curr_func(region_mask);
-    global_signal(:,j) = curr_func(func_mask);
-end
-
-GM = GM(GM(:,1) ~= 0, :);
-region = region(region(:, 1) ~= 0, :);
-Global_Signal = global_signal(global_signal(:, 1) ~= 0, :);
-
-GM_var = var(GM, 0, 2); % variance of difference in time for GM)
-region_var = var(region, 0, 2);
-
-%Global_Signal_mean = mean(global_signal(global_signal(:, 1) ~= 0, :));
-%Global_Signal_mean = Global_Signal_mean - mean(Global_Signal_mean);
-GM_Signal_mean = mean(GM(GM(:,1) ~= 0, :));
-GM_Signal_mean = GM_Signal_mean - mean(GM_Signal_mean);
-end
-
-function compare_orig_corr = createHistData(compare_GM, orig_region, GM_randperm, region_randperm, perms)
-% Should center close to 0 (not globally correlated) if it's
-% denoised (e.g., denoised lowered noise)
-compare_orig_corr = corr(compare_GM(GM_randperm(1:perms), :)', orig_region(region_randperm(1:perms), :)');
-compare_orig_corr = compare_orig_corr(tril(compare_orig_corr, -1) ~= 0);
-
-% Should center above 0 (e.g., denoise did not remove true signal)
-% GM_corr = corr(compare_GM(GM_randperm(1:perms), :)', compare_GM(GM_randperm(1:perms), :)');
-% GM_GM_corr = GM_corr(tril(GM_corr, -1) ~= 0);
-end
-
-function [GM_conf1D_corr] = createHistConf1DData(GM, conf, GM_randperm, perms)
-% This is for confounds that are calculated in the 1st derivative
-% and absolute value (e.g., dvars, fd)
-% corr conf vs GM diff abs: Should be reduced if denoised
-% consider detrend() for GM, since that is what we do for script 2 to focus
-% more on spikes, less on drift.
-GM_conf1D_corr = corr(conf(2:end), abs(diff(GM(GM_randperm(1:perms), :)')))';
 end

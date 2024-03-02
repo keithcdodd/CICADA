@@ -20,18 +20,24 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, subj_id, ses_id, task_na
 % Now check for non-necessary variables
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file=[];
+    compare_file_record = 'Standard 8 parameter compare';
 elseif ~isfile(compare_file)
     fprintf(['Compare file not found at ', compare_file, '\n'])
-    return
+    return;
+else
+    compare_file_record = compare_file;
 end
 
 % if task_events_file does not exist, make it empty array [], 'x' would
 % work too given how I wrote the scripts.
 if ~exist('task_events_file', 'var') || ~ischar(task_events_file) || isempty(task_events_file)
     task_events_file=[]; 
+    task_events_file_record = 'None Provided';
 elseif ~isfile(task_events_file)
     fprintf(['Task events file not found at ', task_events_file, '\n'])
-    return
+    return;
+else
+    task_events_file_record = task_events_file;
 end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
@@ -48,10 +54,10 @@ fmriprep_func_dir = [fmriprep_dir, '/sub-', subj_id, '/ses-', ses_id, '/func'];
 fmriprep_anat_dir = [fmriprep_dir, '/sub-', subj_id, '/ses-', anat_ses_id, '/anat'];
 if ~isfolder(fmriprep_func_dir)
     fprintf(['Cannot find fmriprep func dir at ', fmriprep_func_dir, '\n'])
-    return
+    return;
 elseif ~isfolder(fmriprep_anat_dir)
     fprintf(['Cannot find fmriprep anat dir at ', fmriprep_anat_dir, '\n'])
-    return
+    return;
 else
     % first grab things from func folder
     cd(fmriprep_func_dir)
@@ -87,8 +93,8 @@ fprintf(['subj_id: ', subj_id, '\n'])
 fprintf(['ses_id: ', ses_id, '\n'])
 fprintf(['task_name: ', task_name, '\n'])
 fprintf(['ses_id for anat: ', anat_ses_id, '\n'])
-fprintf(['task_events_file: ', task_events_file, '\n'])
-fprintf(['compare_file: ', compare_file, '\n'])
+fprintf(['task_events_file: ', task_events_file_record, '\n'])
+fprintf(['compare_file: ', compare_file_record, '\n'])
 fprintf(['melodic folder: ', mel_fol, '\n\n'])
 
 

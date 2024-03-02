@@ -108,12 +108,11 @@ fprintf('Done with CICADA_1\n\n')
 
 fprintf('Running: CICADA_2_AutoLabeling \n')
 tolerance = 4;
-CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance)
+cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance);
 fprintf('Done with CICADA_2\n\n')
 
 fprintf('Running: CICADA_3_QC \n')
-cleaned_dir = [output_dir, '/cleaned_auto'];
-CICADA_3_QC(cleaned_dir, compare_file)
+CICADA_3_QC(cleaned_file, compare_file)
 fprintf('Done with CICADA_3\n\n')
 
 end

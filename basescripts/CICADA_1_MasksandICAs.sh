@@ -320,7 +320,7 @@ fslmaths "${funcfile_nomask}" -Tmean -thrP 5 -bin "${output_dir}/funcfile_unmask
 fslmaths "${output_dir}/max_anatmask_tmp_funcmask.nii.gz" -mul "${output_dir}/anatmask_resam_tmp_smoothed.nii.gz" -mul "${output_dir}/funcfile_unmasked_tmp_thrP5.nii.gz" -bin -fillh "${output_dir}/funcmask.nii.gz"
 funcmask="${output_dir}/funcmask.nii.gz" # update main funcmask
 
-# now mask your funcfile with this new funcmask
+# now mask your unmasked funcfile with this new funcmask
 fslmaths "${funcfile_nomask}" -mul "${funcmask}" "${output_dir}/${funcfilename}.nii.gz"
 
 funcfile="${output_dir}/${funcfilename}.nii.gz" # masked explicitely

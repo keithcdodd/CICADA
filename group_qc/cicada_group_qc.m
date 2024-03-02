@@ -1,4 +1,4 @@
-function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids, task_name, bad_data_list, manual_adjustment_list)
+function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids, task_name, bad_data, manually_adjusted)
 % function to run group qc on cicada output
 % output_dir: where you want the group_qc: commonly something like: /cicada_group_qc/task_name
 % cicada_dir: general cicada directory to read from
@@ -7,9 +7,9 @@ function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids,
 % ses_ids: e.g., {'01', '02', '01', '02'}
 % task_name (include run in there if it exists) e.g., 'visual_run-01'
 % Note: Only one task_name 
-% bad_data_list: (clearly something wrong with scan, unusable data, found
+% bad_data: (clearly something wrong with scan, unusable data, found
 % earlier, like with mriqc). '1' designates bad. '0' is fine: e.g., {'0', '0', '1', '0'}
-% manual_adjustment_list: Data you have tried to save with manual
+% manually_adjusted: Data you have tried to save with manual
 % adjustment of IC selection (and Manual CICADA has been run): e.g., {'1',
 % '0'. '1', '0'}
 % Note: subj_ids, ses_ids, bad_data_list, and manual_adjustment_list must be all the same length of cell
@@ -17,39 +17,30 @@ function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids,
 % script
 
 
-cicada_group_qc_dir = fileparts(mfilename('fullpath')); % this gives current script path
-cd([cicada_group_qc_dir, '/..'])
-cicada_path = pwd;
-gm_mni_prob_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_gm_tal_nlin_asym_09c_2mm.nii.gz'];
-background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii.gz'];
-network_file = [cicada_dir, '/templates/network_template_', task_id, '.nii.gz'];
 
+%%%%%%%% NOTE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% do not need two cleaned folders! Just do one! Then you need to include
+% NEW ways to know if you want to do auto or manual!
+% Work from here 03/01/2024
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clearvars
+%%%%%%%%%%%%%%%%%%%%%%%%%% SET UP %%%%%%%%%%%%%%%%%%%%%%%%%%
+file_tag = 'auto'; % a tag that is unique to the type of denoised file. E.g., 'auto', 'manual', '8p', '9p', etc.
+cicada_csv = '/Users/keithdodd/Work/awesome/documents/cicada_runs/cicada_runs.csv'; % As described above, change as needed
+rerun_melodic_regardless = 0; % 0 will not rerun melodic if it is found in default space. 1 will rerun regardless
+cicada_wrapper_dir = '/Users/keithdodd/Work/code/CICADA/wrappers';
+task_name = 'rest'; % should only be on one task for group qc
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% initialize struct:
-Group_QC = struct;
-
-% convert gm probability into a mask at .67
-gm_mni_prob = niftiread(gm_mni_prob_file);
-gm_mni_thresh = gm_mni_prob_file > 0.67;
-gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
-gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
-compare_tags = {'8p'};
-
-% find the correct cicada cleaned folder tag, default is manual
-if strcmp(cicada_type, 'auto') ~= 1
-    cicada_type = 'manual';
-    compare_tags = {'8p', 'auto'}; % if doing all manual, it is good to compare to all auto to see impact
-end
-cicada_type_default = cicada_type; % for converting later
-
+% set up folders for outputs:
 % Create output_dir, if it does not already exist:
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
 
-
+% create a data folder, remove old one if it exists
 data_fol = [output_dir, '/data'];
 if not(isfolder(data_fol))
     mkdir(data_fol)
@@ -58,8 +49,11 @@ else
    mkdir(data_fol) % and now make new folder
 end
 
+
 % Make separate photo folders, so it is easier to just scroll through them
-% all in the future
+% all in the future. There is only 8p compare if auto, but 8p and auto if
+% manual 
+
 for h = 1:length(compare_tags)
     % create folders for comparison photos to zip through too
     photo_fol = [output_dir, '/qc_photos_cicada_', cicada_type, '_', compare_tags{h}];
@@ -70,6 +64,140 @@ for h = 1:length(compare_tags)
         mkdir(photo_fol)
     end
 end
+
+% the following block is needed for later (like making group melodic look
+% easy to follow):
+cicada_group_qc_dir = fileparts(mfilename('fullpath')); % this gives current script path
+cd([cicada_group_qc_dir, '/..'])
+cicada_path = pwd;
+gm_mni_prob_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_gm_tal_nlin_asym_09c_2mm.nii.gz'];
+background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii.gz'];
+network_file = [cicada_dir, '/templates/network_template_', task_name, '.nii.gz'];
+
+
+% convert gm probability into a mask at .67
+gm_mni_prob = niftiread(gm_mni_prob_file);
+gm_mni_thresh = gm_mni_prob_file > 0.67;
+gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
+gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
+
+% make sure everything is read as a cell array of char vector from the .csv
+% for consistency
+opts = detectImportOptions(cicada_csv);
+opts = setvartype(opts, 'char');  
+
+cicada_runs_table = readtable(cicada_csv, opts); % now read in the actual inputs!
+cicada_runs = cicada_runs_table(strcmp(cicada_runs_table.task_name, task_name),:);
+num_runs = size(cicada_runs,1);
+
+% read variables, make sure excel has these columns
+cicada_dirs = cicada_runs.cicada_dir;
+output_dirs = cicada_runs.group_gc_dir; % Add this to your excel
+subj_ids = cicada_runs.subj_id;
+ses_ids = cicada_runs.ses_id;
+task_names = cicada_runs.task_name;
+bad_data_list = cicada_runs.bad_data;
+manually_adjusted_list = cicada_runs.manually_adjusted;
+
+% initialize struct to store all information:
+Group_QC = struct;
+
+% because not all instances might work, we should keep our own counter
+% within the for loop 
+m = 1;
+
+fprintf('\n')
+for idx = 1:num_runs
+    fprintf('Running subj ', subj_id, ' ses ', ses_id, ' task ', task_name, '\n')
+    cicada_dir = cicada_dirs{idx}; % should be the same for all
+    output_dir = output_dirs{idx}; % should be the same for all
+    subj_id = subj_ids{idx};
+    ses_id = ses_ids{idx};
+    task_name = task_names{idx}; % should be the same for all 
+    bad_data = bad_data_list{idx}; % needs to be '1' for bad data, or '0' for OK data
+    manually_adjusted = manually_adjusted_list{idx}; % needs to be '1' for manually adjsuted, '0' for not
+
+    % if bad data, whole run needs to be skipped and not included in qc
+    % (use continue)
+    if ~strcmp(bad_data, '0')
+        % this is bad data from the get go (recognized previously, like
+        % with mriqc, or at time of scan), do not include in group qc
+        % analysis
+        fprintf('   Subj ', subj_id, ' ses ', ses_id, ' task ', task_name, 'was marked as bad data. Skipping...\n')
+        continue;
+    end
+
+    % Make sure task directory exists
+    task_dir = [cicada_dir, '/subj-', subj_id, '/ses-', ses_id, '/', task_name];
+    if ~isfolder(task_dir)
+        fprintf('   Cannot find task directory at ', task_dir, '. Skipping...\n')
+        continue;
+    end
+    
+    
+
+
+    % cicada type determines if we default from pulling from cleaned_auto
+    % or cleaned_manual. Manually adjusted ('1') would mean pull from manual too.
+    if strcmp(cicada_type, 'manual') || ~strcmp(manually_adjusted, '0')
+        cleaned_dir = [task_dir, '/cleaned_manual'];
+    else
+        cleaned_dir = [task_dir, '/cleaned_auto'];
+    end
+
+    % then, test if desired cleaned dir exists
+    if ~isfolder(cleaned_dir)
+        fprintf('   Cannot find designated cleaned_dir at ', cleaned_dir, '. Skipping...\n')
+        continue;
+    end
+
+    % OK, now loop through cleaned_dir files, and run qc for all of them!
+    % then finally individually grab relevant qc
+    [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_denoised_table, qc_corrs_compare_table, qc_corrs_orig_table, qc_photo_paths] = cicada_get_qc(cleaned_dir);
+
+    % then we need to be adding this information into the group qc stuff
+    % (Group_QC struct)
+    cleaned_data_list{m} = cleaned_data{1};
+    data_mask_list{m} = data_mask{1};
+    signalandnoise_overlap_list{m} = signalandnoise_overlap{1};
+
+    if m == 1
+         % if it is first instance, then group qc table is just subject qc
+         % table
+         group_qc_table = qc_table;
+         group_qc_corrs_denoised_table = qc_corrs_denoised_table;
+         group_qc_corrs_orig_table = qc_corrs_orig_table;
+
+         % compare might be height 2 if we did manual (might have 8p &
+         % auto)
+         if height(qc_corrs_compare_table) == 2
+             group_qc_corrs_8p_table = qc_corrs_compare_table(1,:);
+             group_qc_corrs_auto_table = qc_corrs_compare_table(2,:);
+         else
+             
+         end
+    else
+        % otherwise, tack it on to the end
+        group_qc_table = [group_qc_table; qc_table];
+        group_qc_corrs_denoised_table = [group_qc_corrs_denoised_table; qc_corrs_denoised_table];
+        group_qc_corrs_orig_table = [group_qc_corrs_orig_table; qc_corrs_denoised_table];
+    end
+   
+    
+    m = m+1; % increment successful counter
+end
+
+
+
+
+
+
+
+
+
+
+
+
 
 % consider initializing a 4D signaltonoise file with zeros  to save on
 % time
