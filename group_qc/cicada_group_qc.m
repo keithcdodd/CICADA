@@ -34,8 +34,38 @@ cicada_wrapper_dir = '/Users/keithdodd/Work/code/CICADA/wrappers';
 task_name = 'rest'; % should only be on one task for group qc
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% make sure everything is read as a cell array of char vector from the .csv
+% for consistency
+opts = detectImportOptions(cicada_csv);
+opts = setvartype(opts, 'char');  
+
+cicada_runs_table = readtable(cicada_csv, opts); % now read in the actual inputs!
+cicada_runs = cicada_runs_table(strcmp(cicada_runs_table.task_name, task_name),:);
+num_runs = size(cicada_runs,1);
+
+% read variables, make sure excel has these columns
+cicada_dirs = cicada_runs.cicada_dir;
+output_dirs = cicada_runs.group_qc_dir; % Add this to your excel
+subj_ids = cicada_runs.subj_id;
+ses_ids = cicada_runs.ses_id;
+task_names = cicada_runs.task_name;
+bad_data_list = cicada_runs.bad_data;
+manually_adjusted_list = cicada_runs.manually_adjusted;
+
+% check that group_qc_dir and cicada_dir are the same for everyone (it should be)
+if ~(sum(strcmp(output_dirs, output_dirs{1})) == length(output_dirs))
+    fprintf('Group QC directory is not the same for everyone!')
+    return;
+end
+
+if ~(sum(strcmp(cicada_dirs, cicada_dirs{1})) == length(cicada_dirs))
+    fprintf('CICADA directory is not the same for everyone!')
+    return;
+end
+
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
+output_dir = [cicada_dirs{1}, '/', task_name]; % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -54,6 +84,8 @@ end
 % all in the future. There is only 8p compare if auto, but 8p and auto if
 % manual 
 
+% TO DO: split up by extractBetween function after dir, like you have done
+% in other scripts
 for h = 1:length(compare_tags)
     % create folders for comparison photos to zip through too
     photo_fol = [output_dir, '/qc_photos_cicada_', cicada_type, '_', compare_tags{h}];
@@ -81,23 +113,6 @@ gm_mni_thresh = gm_mni_prob_file > 0.67;
 gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
 gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
 
-% make sure everything is read as a cell array of char vector from the .csv
-% for consistency
-opts = detectImportOptions(cicada_csv);
-opts = setvartype(opts, 'char');  
-
-cicada_runs_table = readtable(cicada_csv, opts); % now read in the actual inputs!
-cicada_runs = cicada_runs_table(strcmp(cicada_runs_table.task_name, task_name),:);
-num_runs = size(cicada_runs,1);
-
-% read variables, make sure excel has these columns
-cicada_dirs = cicada_runs.cicada_dir;
-output_dirs = cicada_runs.group_gc_dir; % Add this to your excel
-subj_ids = cicada_runs.subj_id;
-ses_ids = cicada_runs.ses_id;
-task_names = cicada_runs.task_name;
-bad_data_list = cicada_runs.bad_data;
-manually_adjusted_list = cicada_runs.manually_adjusted;
 
 % initialize struct to store all information:
 Group_QC = struct;

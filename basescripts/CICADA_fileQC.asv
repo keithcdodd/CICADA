@@ -65,12 +65,12 @@ fprintf('Calculating Relevant Correlations\n')
 % something funky happens and the sizes do not fully align with Edge
 % Voxels. Very close (probably related to thresholding values and minor 
 % smoothing meaning some voxels that are all 0s for one, are not for the other.)
-GM_randperm = randperm(size(denoised_GM, 1));
-NotGM_randperm = randperm(size(denoised_NotGM, 1));
-Outbrain_randperm = randperm(size(denoised_Outbrain, 1));
-Edge_randperm = randperm(size(denoised_Edge, 1));
-WMCSF_randperm = randperm(size(denoised_WMCSF, 1));
-CSF_randperm = randperm(size(denoised_CSF, 1));
+GM_randperm = randperm(size(denoised_GM, 1)-100);
+NotGM_randperm = randperm(size(denoised_NotGM, 1)-100);
+Outbrain_randperm = randperm(size(denoised_Outbrain, 1)-100);
+Edge_randperm = randperm(size(denoised_Edge, 1)-100);
+WMCSF_randperm = randperm(size(denoised_WMCSF, 1)-100);
+CSF_randperm = randperm(size(denoised_CSF, 1)-100);
 
 % Now get all the relevant correlations:
 Edge_GM_corr = createHistData(denoised_GM, denoised_Edge, GM_randperm, Edge_randperm, 500);
@@ -99,25 +99,19 @@ region_mask = logical(region_prob_data > 0.75 & funcmask_data == 1);
 func_mask = logical(funcmask_data == 1);
 
 % Select the timeseries for GM and region and global signal
-Global_Signal = zeros(sum(func_mask(:)), size(func_data, 4));
+global_signal = zeros(sum(func_mask(:)), size(func_data, 4));
 GM = zeros(sum(gm_mask(:)), size(func_data, 4));
 region = zeros(sum(region_mask(:)), size(func_data, 4));
 for j = 1:size(func_data, 4)
     curr_func = func_data(:,:,:,j);
     GM(:,j) = curr_func(gm_mask);
     region(:,j) = curr_func(region_mask);
-    Global_Signal(:,j) = curr_func(func_mask);
+    global_signal(:,j) = curr_func(func_mask);
 end
 
-%GM = GM(GM(:,1) ~= 0, :);
-%region = region(region(:, 1) ~= 0, :);
-%Global_Signal = global_signal(global_signal(:, 1) ~= 0, :);
-
-% need to make sure size of GM and region are the same
-if size(GM) ~= size(region)
-    fprintf('Sizes of GM vs Region are different. This should not happen if made from the same mask?\n')
-    return;
-end
+GM = GM(GM(:,1) ~= 0, :);
+region = region(region(:, 1) ~= 0, :);
+Global_Signal = global_signal(global_signal(:, 1) ~= 0, :);
 
 GM_var = var(GM, 0, 2); % variance of difference in time for GM)
 region_var = var(region, 0, 2);
