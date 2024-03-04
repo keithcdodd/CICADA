@@ -1,4 +1,4 @@
-function [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
+function [cleaned_file, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -29,8 +29,8 @@ else
     cicada = 0;
 end
 
-% get cicada type based on cleaned dir
-if contains(cleaned_dir, 'manual')
+% get cicada type based on cleaned file name
+if contains(cleaned_file, 'manual')
     cicada_type = 'manual';
     compare_tags = {'8p', 'auto'}; % manual will compare to 8p and auto
     adjusted = 1;
@@ -61,7 +61,8 @@ gm_mni_thresh_array = niftiread(gm_mni_prob) > 0.67;
 
 % Also grab helpful information from DecisionVariables*.mat
 ic_select_dir = [task_dir, '/ic_', cicada_type, '_selection']; % could be auto or manual
-data_vals = dir([ic_select_dir, '/DecisionVariables*.mat']);
+data_vals_info = dir([ic_select_dir, '/DecisionVariables*.mat']);
+data_vals = [data_vals_info.folder, '/', data_vals_info.name];
 load(data_vals)
     
 
@@ -82,9 +83,13 @@ meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
 % then also recalculate general correlation qc information to use here.
 % Need the orig file stored in the cleaned dir, and then of course the
 % actual cleaned file
-orig_file_info = dir([cleaned_dir, '*orig*.nii.gz']);
+orig_file_info = dir([cleaned_dir, '/*orig*.nii.gz']);
 orig_file = [cleaned_dir, '/', orig_file_info.name];
 [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_autocorr, GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
+
+% grab niftiinfo to grab tr for later
+cleaned_file_info = niftiinfo(cleaned_file);
+tr = cleaned_file_
 
 % And lets include mean and std for all relevant QC plots from last basescript:
 Edge_GM_median = median(Edge_GM_corr);
@@ -106,9 +111,9 @@ GM_GM_sd = std(GM_GM_autocorr);
 
 % If it is a CICADA file, then go in and grab additional things (e.g., signal and noise ic overlap file)
 if cicada == 1
-    signalandnoise_overlap_info = dir([task_dir, '/', ic_select_dir, '/SignalandNoiseICOverlap.nii.gz']);
+    signalandnoise_overlap_info = dir([ic_select_dir, '/SignalandNoiseICOverlap.nii.gz']);
     if size(signalandnoise_overlap_info,1) ~= 1
-            fprintf('Cannot find signal and noise IC overlap file \n')
+            fprintf(['Cannot find signal and noise IC overlap file at ', [ic_select_dir, '/SignalandNoiseICOverlap.nii.gz'] '\n'])
             return;
     end
     signalandnoise_overlap = [signalandnoise_overlap_info.folder, '/', signalandnoise_overlap_info.name];
@@ -132,7 +137,6 @@ if cicada == 1
     % percent_freq_kept * numvolumes. Percent frequency kept is
     % 100% if we did not do any frequency filtering
     DOF_estimate_if_standard_bp = Results.percent_variance_kept * percent_freq_kept_if_standardbp * Data.numvolumes;
-
 
     % Now do some variables that are only relevant for manual cicada
     if strcmp(cicada_type, 'manual')
@@ -248,85 +252,9 @@ Outbrain_GM_corr = Outbrain_GM_corr(Outbrain_GMrandperm);
 Edge_GM_corr = Edge_GM_corr(Edge_GMrandperm);
 
 qc_corrs_array = [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr];
-qc_corrs_labels = {['Edge_GM_Corr_', curr_tag], ['FD_GM_Corr_', curr_tag], ...
-    ['DVARS_GM_Corr_', curr_tag], ['Outbrain_GM_Corr_', curr_tag], ['WMCSF_GM_Corr_', curr_tag], ...
-    ['CSF_GM_Corr_', curr_tag], ['NotGM_GM_Corr_', curr_tag], ['GM_GM_AutoCorr_', curr_tag]};
-qc_corrs_denoised_table = array2table(qc_corrs_denoised_array, 'VariableNames',qc_corrs_labels);
-
-% compare to 8p:
-compare_NotGM_GM_corr = compare_NotGM_GM_corr(NotGM_GM_randperm);
-compare_GM_GM_corr = compare_GM_GM_corr(GM_GM_randperm);
-compare_DVARS_GM_corr = compare_DVARS_GM_corr(DVARS_GMrandperm);
-compare_FD_GM_corr = compare_FD_GM_corr(FD_GMrandperm);
-compare_CSF_GM_corr = compare_CSF_GM_corr(CSF_GMrandperm);
-compare_WMCSF_GM_corr = compare_WMCSF_GM_corr(WMCSF_GMrandperm);
-compare_Outbrain_GM_corr = compare_Outbrain_GM_corr(Outbrain_GMrandperm);
-compare_Edge_GM_corr = compare_Edge_GM_corr(Edge_GMrandperm);
-
-qc_corrs_compare_array = [compare_Edge_GM_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_corr];
-qc_corrs_labels = {'Edge-GM Corr', 'FD-GM Corr', 'DVARS-GM Corr', 'Outbrain-GM Corr', 'WMCSF-GM Corr', 'CSF-GM Corr', 'NotGM-GM Corr', 'GM-GM Auto Corr to Orig'};
-qc_corrs_compare_table = array2table(qc_corrs_compare_array, 'VariableNames',qc_corrs_labels);
-
-% compare to orig (orig GM-GM Autocorrelation does not make sense, but include it for easier alignment of data later):
-orig_NotGM_GM_corr = orig_NotGM_GM_corr(NotGM_GM_randperm);
-orig_GM_GM_corr = ones(samps,1); % We won't plot this as it is useless, but for joining tables later and such, it's easier to include here now
-orig_DVARS_GM_corr = orig_DVARS_GM_corr(DVARS_GMrandperm);
-orig_FD_GM_corr = orig_FD_GM_corr(FD_GMrandperm);
-orig_CSF_GM_corr = orig_CSF_GM_corr(CSF_GMrandperm);
-orig_WMCSF_GM_corr = orig_WMCSF_GM_corr(WMCSF_GMrandperm);
-orig_Outbrain_GM_corr = orig_Outbrain_GM_corr(Outbrain_GMrandperm);
-orig_Edge_GM_corr = orig_Edge_GM_corr(Edge_GMrandperm);
-
-qc_corrs_orig_array = [orig_Edge_GM_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_GM_corr, orig_WMCSF_GM_corr, orig_CSF_GM_corr, orig_NotGM_GM_corr, orig_GM_GM_corr];
-qc_corrs_labels = {'Edge-GM Corr', 'FD-GM Corr', 'DVARS-GM Corr', 'Outbrain-GM Corr', 'WMCSF-GM Corr', 'CSF-GM Corr', 'NotGM-GM Corr', 'GM-GM Auto Corr to Orig'};
-qc_corrs_orig_table = array2table(qc_corrs_orig_array, 'VariableNames',qc_corrs_labels);
-
-% If we did manual, then we also need to grab auto denoised... need to load
-% the other qc_vals version
-% Plan: check if manual, if so, load other qc vals (auto), then grab
-% denoised corrs, then tack those onto the compare qc_corrs_compare table.
-% Then later, if qc_corrs_compare_table is 2 rows deep (instead of 1) then
-% it means we have 8p then auto as compare data
-if strcmp(cicada_type, 'manual')
-    % grab new qc values (auto)
-    qc_vals_info = dir([task_dir, '/qc/*', cicada_type, '*CICADA*' compare_tags{2}, '*.mat']); % this should grab auto as the compare 
-    qc_vals = [qc_vals_info.folder, '/', qc_vals_info.name];
-    load(qc_vals)
-    
-    % grab compare values
-    compare_NotGM_GM_corr = compare_NotGM_GM_corr(NotGM_GM_randperm);
-    compare_GM_GM_corr = compare_GM_GM_corr(GM_GM_randperm);
-    compare_DVARS_GM_corr = compare_DVARS_GM_corr(DVARS_GMrandperm);
-    compare_FD_GM_corr = compare_FD_GM_corr(FD_GMrandperm);
-    compare_CSF_GM_corr = compare_CSF_GM_corr(CSF_GMrandperm);
-    compare_WMCSF_GM_corr = compare_WMCSF_GM_corr(WMCSF_GMrandperm);
-    compare_Outbrain_GM_corr = compare_Outbrain_GM_corr(Outbrain_GMrandperm);
-    compare_Edge_GM_corr = compare_Edge_GM_corr(Edge_GMrandperm);
-
-    qc_corrs_compare_array_2 = [compare_NotGM_GM_corr, compare_GM_GM_corr, compare_DVARS_GM_corr, compare_FD_GM_corr, compare_CSF_GM_corr, compare_WMCSF_GM_corr, compare_Outbrain_GM_corr, compare_Edge_GM_corr];
-    qc_corrs_compare_table_2 = array2table(qc_corrs_compare_array_2, 'VariableNames',qc_corrs_labels);
-
-    qc_corrs_compare_table_1 = qc_corrs_compare_table;
-    qc_corrs_compare_table = [qc_corrs_compare_table_1; qc_corrs_compare_table_2];
-    
-
-    
-
-
-    % update qc_table appropriately
-    qc_table.Num_ICs_Adjusted = num_ICs_adjusted;
-    qc_table.Percent_ICs_Adjusted = percent_ICs_adjusted;
-    qc_table.Percent_Exp_Var_Adjusted = percent_exp_var_adjusted;
-end
-
-
-
-% qc photo path can be length 2 (can hold 2 paths). If manual cicada is
-% run, then you want both 8p and auto photos. If auto, then just 8p is
-% perfect.
-for idx2 = 1:length(compare_tags)
-     qc_photo_info = dir([task_dir, '/qc/*', cicada_type, '*cicada*', compare_tags{idx2}, '*qc_plots.jpg']);
-     qc_photo_paths{idx2} = [qc_photo_info.folder, '/', qc_photo_info.name];
-end
+qc_corrs_labels = {'Edge_GM_Corr', 'FD_GM_Corr', ...
+    'DVARS_GM_Corr', 'Outbrain_GM_Corr', 'WMCSF_GM_Corr', ...
+    'CSF_GM_Corr', 'NotGM_GM_Corr', 'GM_GM_AutoCorr'};
+qc_corrs_table = array2table(qc_corrs_array, 'VariableNames',qc_corrs_labels);
 
 end

@@ -1,4 +1,4 @@
-function [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
+function [cleaned_file, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -12,15 +12,20 @@ end
 cleaned_file_info = dir(cleaned_file);
 cleaned_dir = cleaned_file_info.folder;
 
-% Get cleaned dir, task dir, ses_dir, and subj_dir
+% Get cleaned dir, task dir, ses_dir, and sub_dir
 cd(cleaned_dir)
 cd('../')
 task_dir = pwd;
+[~,task_name,~]=fileparts(pwd);
 cd('../') 
 ses_dir = pwd;
+[~,ses_id,~]=fileparts(pwd);
 cd('../') 
-subj_dir = pwd;
+sub_dir = pwd;
+[~,sub_id,~]=fileparts(pwd);
 cd(cleaned_dir)
+
+
 
 % figure out if cleaned file is a cicada file
 if contains(cleaned_file, 'CICADA')
@@ -61,7 +66,8 @@ gm_mni_thresh_array = niftiread(gm_mni_prob) > 0.67;
 
 % Also grab helpful information from DecisionVariables*.mat
 ic_select_dir = [task_dir, '/ic_', cicada_type, '_selection']; % could be auto or manual
-data_vals = dir([ic_select_dir, '/DecisionVariables*.mat']);
+data_vals_info = dir([ic_select_dir, '/DecisionVariables*.mat']);
+data_vals = [data_vals_info.folder, '/', data_vals_info.name];
 load(data_vals)
     
 
@@ -82,9 +88,13 @@ meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
 % then also recalculate general correlation qc information to use here.
 % Need the orig file stored in the cleaned dir, and then of course the
 % actual cleaned file
-orig_file_info = dir([cleaned_dir, '*orig*.nii.gz']);
+orig_file_info = dir([cleaned_dir, '/*orig*.nii.gz']);
 orig_file = [cleaned_dir, '/', orig_file_info.name];
 [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_autocorr, GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
+
+% grab niftiinfo to grab tr for later
+cleaned_file_niftiinfo = niftiinfo(cleaned_file);
+tr = cleaned_file_niftiinfo.PixelDimensions(4);
 
 % And lets include mean and std for all relevant QC plots from last basescript:
 Edge_GM_median = median(Edge_GM_corr);
@@ -106,9 +116,9 @@ GM_GM_sd = std(GM_GM_autocorr);
 
 % If it is a CICADA file, then go in and grab additional things (e.g., signal and noise ic overlap file)
 if cicada == 1
-    signalandnoise_overlap_info = dir([task_dir, '/', ic_select_dir, '/SignalandNoiseICOverlap.nii.gz']);
+    signalandnoise_overlap_info = dir([ic_select_dir, '/SignalandNoiseICOverlap.nii.gz']);
     if size(signalandnoise_overlap_info,1) ~= 1
-            fprintf('Cannot find signal and noise IC overlap file \n')
+            fprintf(['Cannot find signal and noise IC overlap file at ', [ic_select_dir, '/SignalandNoiseICOverlap.nii.gz'] '\n'])
             return;
     end
     signalandnoise_overlap = [signalandnoise_overlap_info.folder, '/', signalandnoise_overlap_info.name];
@@ -132,7 +142,6 @@ if cicada == 1
     % percent_freq_kept * numvolumes. Percent frequency kept is
     % 100% if we did not do any frequency filtering
     DOF_estimate_if_standard_bp = Results.percent_variance_kept * percent_freq_kept_if_standardbp * Data.numvolumes;
-
 
     % Now do some variables that are only relevant for manual cicada
     if strcmp(cicada_type, 'manual')
@@ -162,10 +171,10 @@ if cicada == 1
     % Now we can combine everything in to a large table!
     % OK, now can combine all of this as a row of values
 
-    qc_array = [{cleaned_file_info.name, subj_id, ses_id, task_name, adjusted, meanRMS, ...
+    qc_array = [{cleaned_file_info.name, sub_id, ses_id, task_name, adjusted, meanRMS, ...
         medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, gm_signal_dice_array, gm_signal_proportion_array, Results.num_ICs_kept, ...
         Results.num_ICs_total, percent_ICs_kept, Results.percent_variance_kept, ...
-        Data.numvolumes, DOF_estimate_final, DOF_estimate_if_standard_bp, ...
+        Data.numvolumes, DOF_estimate_if_standard_bp, ...
         NotGM_GM_median, NotGM_GM_sd, GM_GM_median, GM_GM_sd, DVARS_GM_median, DVARS_GM_sd, ...
         FD_GM_median, FD_GM_sd, CSF_GM_median, CSF_GM_sd, WMCSF_GM_median, WMCSF_GM_sd, ...
         Outbrain_GM_median, Outbrain_GM_sd, Edge_GM_median, Edge_GM_sd}, num2cell(Results.compare_cleaning.After'), ...
@@ -174,10 +183,10 @@ if cicada == 1
     qc_labels = ['image_names', 'subject', 'session', 'task', 'manually_adjusted', 'meanRMS', ...
         'median_FD', 'mean_FD', 'Percent_FD_gt_point2mm','AnyFD_gt_5mm', 'median_DVARS', 'gm_signal_dice', 'gm_coverage', 'number_kept_ics', 'number_total_ics', ...
         'fraction_kept_ics', 'fraction_signal_variance_kept', 'numvolumes', ...
-        'dof_estimate_final', 'dof_estimate_final_if_standard_resting_bp', 'NotGM_GM_median', 'NotGM_GM_sd', ...
-        'GM_GM_median', 'GM_GM_sd', 'DVARS_GMmedian', 'DVARS_GMsd', 'FD_GMmedian', 'FD_GMsd', ...
-        'CSF_GMmedian', 'CSF_GMsd', 'WMCSF_GMmedian', 'WMCSF_GMsd', 'Outbrain_GMmedian', 'Outbrain_GMsd', ...
-        'Edge_GMmedian', 'Edge_GMsd', Results.compare_cleaning.Properties.RowNames', 'Num_ICs_Adjusted', 'Percent_ICs_Adjusted', 'Percent_Exp_Var_Adjusted'];
+        'dof_estimate_final_if_standard_resting_bp', 'NotGM_GM_median', 'NotGM_GM_sd', ...
+        'GM_GM_median', 'GM_GM_sd', 'DVARS_GM_median', 'DVARS_GM_sd', 'FD_GM_median', 'FD_GM_sd', ...
+        'CSF_GM_median', 'CSF_GM_sd', 'WMCSF_GM_median', 'WMCSF_GM_sd', 'Outbrain_GM_median', 'Outbrain_GM_sd', ...
+        'Edge_GM_median', 'Edge_GM_sd', Results.compare_cleaning.Properties.RowNames', 'Num_ICs_Adjusted', 'Percent_ICs_Adjusted', 'Percent_Exp_Var_Adjusted'];
     
     qc_table = cell2table(qc_array, 'VariableNames', qc_labels);
 
@@ -189,7 +198,7 @@ else
     % Now we can combine everything in to a large table!
     % OK, now can combine all of this as a row of values
 
-    qc_array = {cleaned_file_info.name, subj_id, ses_id, task_name, meanRMS, ...
+    qc_array = {cleaned_file_info.name, sub_id, ses_id, task_name, meanRMS, ...
         medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, ...
         Data.numvolumes, NotGM_GM_median, NotGM_GM_sd, GM_GM_median, GM_GM_sd, DVARS_GM_median, DVARS_GM_sd, ...
         FD_GM_median, FD_GM_sd, CSF_GM_median, CSF_GM_sd, WMCSF_GM_median, WMCSF_GM_sd, ...
@@ -239,7 +248,7 @@ Edge_GMrandperm = Edge_GMrandperm(1:samps);
 % Now that we have the randomized samps numbers, we can actually grab them
 % from the correlations
 NotGM_GM_corr = NotGM_GM_corr(NotGM_GM_randperm);
-GM_GM_corr = GM_GM_corr(GM_GM_randperm);
+GM_GM_autocorr = GM_GM_autocorr(GM_GM_randperm);
 DVARS_GM_corr = DVARS_GM_corr(DVARS_GMrandperm);
 FD_GM_corr = FD_GM_corr(FD_GMrandperm);
 CSF_GM_corr = CSF_GM_corr(CSF_GMrandperm);
@@ -247,7 +256,7 @@ WMCSF_GM_corr = WMCSF_GM_corr(WMCSF_GMrandperm);
 Outbrain_GM_corr = Outbrain_GM_corr(Outbrain_GMrandperm);
 Edge_GM_corr = Edge_GM_corr(Edge_GMrandperm);
 
-qc_corrs_array = [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr];
+qc_corrs_array = [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_autocorr];
 qc_corrs_labels = {'Edge_GM_Corr', 'FD_GM_Corr', ...
     'DVARS_GM_Corr', 'Outbrain_GM_Corr', 'WMCSF_GM_Corr', ...
     'CSF_GM_Corr', 'NotGM_GM_Corr', 'GM_GM_AutoCorr'};

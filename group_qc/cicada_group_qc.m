@@ -1,28 +1,5 @@
-function cicada_group_qc(output_dir, cicada_dir, cicada_type, subj_ids, ses_ids, task_name, bad_data, manually_adjusted)
-% function to run group qc on cicada output
-% output_dir: where you want the group_qc: commonly something like: /cicada_group_qc/task_name
-% cicada_dir: general cicada directory to read from
-% cicada_type: 'auto' or 'manual'
-% subj_ids: e.g., {'102', '102', '103', '103'}
-% ses_ids: e.g., {'01', '02', '01', '02'}
-% task_name (include run in there if it exists) e.g., 'visual_run-01'
-% Note: Only one task_name 
-% bad_data: (clearly something wrong with scan, unusable data, found
-% earlier, like with mriqc). '1' designates bad. '0' is fine: e.g., {'0', '0', '1', '0'}
-% manually_adjusted: Data you have tried to save with manual
-% adjustment of IC selection (and Manual CICADA has been run): e.g., {'1',
-% '0'. '1', '0'}
-% Note: subj_ids, ses_ids, bad_data_list, and manual_adjustment_list must be all the same length of cell
-% arrays! Easier to read this from a .csv you make and feed that into this
-% script
-
-
-
-%%%%%%%% NOTE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% do not need two cleaned folders! Just do one! Then you need to include
-% NEW ways to know if you want to do auto or manual!
-% Work from here 03/01/2024
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% script to run group qc of cicada files
+% This will all be based on the same .csv you used for initial cicada runs.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clearvars
@@ -32,7 +9,12 @@ cicada_csv = '/Users/keithdodd/Work/awesome/documents/cicada_runs/cicada_runs.cs
 rerun_melodic_regardless = 0; % 0 will not rerun melodic if it is found in default space. 1 will rerun regardless
 cicada_wrapper_dir = '/Users/keithdodd/Work/code/CICADA/wrappers';
 task_name = 'rest'; % should only be on one task for group qc
+redo_melodic = 1; % 0 is to not redo if it is already done. 1 redoes it even if already done.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% need to make sure CICADA folder and subfolders are added to path!
+CICADA_group_scripts_dir = fileparts(mfilename('fullpath')); % this gives current script path
+addpath(CICADA_group_scripts_dir); % current location to path 
 
 % make sure everything is read as a cell array of char vector from the .csv
 % for consistency
@@ -43,29 +25,40 @@ cicada_runs_table = readtable(cicada_csv, opts); % now read in the actual inputs
 cicada_runs = cicada_runs_table(strcmp(cicada_runs_table.task_name, task_name),:);
 num_runs = size(cicada_runs,1);
 
+fprintf('###########################################\n')
+fprintf(['Running for ', num2str(num_runs), ' number of runs!\n'])
+
 % read variables, make sure excel has these columns
 cicada_dirs = cicada_runs.cicada_dir;
 output_dirs = cicada_runs.group_qc_dir; % Add this to your excel
-subj_ids = cicada_runs.subj_id;
+sub_ids = cicada_runs.sub_id;
 ses_ids = cicada_runs.ses_id;
 task_names = cicada_runs.task_name;
-bad_data_list = cicada_runs.bad_data;
-manually_adjusted_list = cicada_runs.manually_adjusted;
+initial_outliers = cicada_runs.initial_outlier; % data that was unusable from the get-go
+denoising_outliers = cicada_runs.denoising_outlier; % data where denoising was unable to save the data, or is deemed to throw out for other reasons
+% NOTE: An example for using denoising_outlier might be when the data
+% exceeds movement thresholds, or if CICADA marked outliers, and you want
+% to apply this same outlier list (manually) here. The point is, you, or a
+% program, determines outliers due to thresholds and this is where you can
+% manually mark that. The data will still be a part of group_qc, but for
+% future analyses, you can use this list to not include them.
+manually_adjusteds = cicada_runs.manually_adjusted; % data you have tried to save with manual ICA selection
+task_event_files = cicada_runs.task_events_file;
 
 % check that group_qc_dir and cicada_dir are the same for everyone (it should be)
 if ~(sum(strcmp(output_dirs, output_dirs{1})) == length(output_dirs))
-    fprintf('Group QC directory is not the same for everyone!')
+    fprintf('Group QC directory is not the same for everyone!\n')
     return;
 end
 
 if ~(sum(strcmp(cicada_dirs, cicada_dirs{1})) == length(cicada_dirs))
-    fprintf('CICADA directory is not the same for everyone!')
+    fprintf('CICADA directory is not the same for everyone!\n')
     return;
 end
 
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
-output_dir = [cicada_dirs{1}, '/', task_name]; % because they should ALL be the same, and specified to task
+output_dir = [output_dirs{1}, '/', task_name]; % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -84,11 +77,23 @@ end
 % all in the future. There is only 8p compare if auto, but 8p and auto if
 % manual 
 
-% TO DO: split up by extractBetween function after dir, like you have done
-% in other scripts
-for h = 1:length(compare_tags)
-    % create folders for comparison photos to zip through too
-    photo_fol = [output_dir, '/qc_photos_cicada_', cicada_type, '_', compare_tags{h}];
+% go into first participant's info to extract the correct naming:
+first_task_dir = [cicada_dirs{1}, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
+compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+
+% make sure that the dir call actually found the file(s) of images that
+% compare to your cleaned file of interest (given the file tag)
+if size(compare_image_info,1) == 0
+    fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
+    return;
+end
+
+% Ok, NOW this should make appropriate photo folders
+for h = 1:size(compare_image_info,1)
+    compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+    compare_tag = compare_tag{:};
+    photo_fol = [output_dir, '/qc_photos_', compare_tag];
+    qc_photo_fols{h} = photo_fol; % for use for later for copy and past
     if not(isfolder(photo_fol))
         mkdir(photo_fol)
     else
@@ -97,15 +102,34 @@ for h = 1:length(compare_tags)
     end
 end
 
+% Now go into first cleaned_dir in order to extract if these are CICADA
+% files or not
+first_cleaned_dir = [first_task_dir, '/cleaned'];
+first_image_info = dir([first_cleaned_dir, '/*', file_tag, '*.nii.gz']); % specific to file tag of interest, should be only ONE file
+
+if size(first_image_info,1) ~= 1
+    fprintf(['File tag', file_tag, ', is either not specific enough to only grab one file, or grabs no files. \n'])
+    return;
+end
+
+% grab tr, which can be relevant for melodic 
+first_image_nifi_info = niftiinfo([first_image_info.folder, '/', first_image_info.name]);
+tr = first_image_nifi_info.PixelDimensions(4); % for use later with melodic
+
+if contains(first_image_info.name, 'CICADA')
+    cicada = 1; % mark if these will be CICADA files or not, important for qc tables
+else
+    cicada = 0;
+end
+
 % the following block is needed for later (like making group melodic look
-% easy to follow):
+% easy to follow with a nice mni background image):
 cicada_group_qc_dir = fileparts(mfilename('fullpath')); % this gives current script path
 cd([cicada_group_qc_dir, '/..'])
 cicada_path = pwd;
-gm_mni_prob_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_gm_tal_nlin_asym_09c_2mm.nii.gz'];
-background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii.gz'];
-network_file = [cicada_dir, '/templates/network_template_', task_name, '.nii.gz'];
-
+gm_mni_prob_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_gm_tal_nlin_asym_09c.nii.gz'];
+background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz'];
+network_file = [cicada_dirs{1}, '/templates/network_template_', task_name, '.nii.gz'];
 
 % convert gm probability into a mask at .67
 gm_mni_prob = niftiread(gm_mni_prob_file);
@@ -113,24 +137,26 @@ gm_mni_thresh = gm_mni_prob_file > 0.67;
 gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
 gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
 
-
 % initialize struct to store all information:
 Group_QC = struct;
 
 % because not all instances might work, we should keep our own counter
 % within the for loop 
 m = 1;
+bd = 1;
 
-fprintf('\n')
 for idx = 1:num_runs
-    fprintf('Running subj ', subj_id, ' ses ', ses_id, ' task ', task_name, '\n')
     cicada_dir = cicada_dirs{idx}; % should be the same for all
     output_dir = output_dirs{idx}; % should be the same for all
-    subj_id = subj_ids{idx};
+    sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
     task_name = task_names{idx}; % should be the same for all 
-    bad_data = bad_data_list{idx}; % needs to be '1' for bad data, or '0' for OK data
-    manually_adjusted = manually_adjusted_list{idx}; % needs to be '1' for manually adjsuted, '0' for not
+    bad_data = initial_outliers{idx}; % needs to be '1' for bad data, or '0' for OK data
+    manually_adjusted = manually_adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
+    denoising_outlier = denoising_outliers{idx};
+    task_event_file = task_event_files{idx};
+
+    fprintf(['\nRunning sub ', sub_id, ' ses ', ses_id, ' task ', task_name, '\n'])
 
     % if bad data, whole run needs to be skipped and not included in qc
     % (use continue)
@@ -138,344 +164,171 @@ for idx = 1:num_runs
         % this is bad data from the get go (recognized previously, like
         % with mriqc, or at time of scan), do not include in group qc
         % analysis
-        fprintf('   Subj ', subj_id, ' ses ', ses_id, ' task ', task_name, 'was marked as bad data. Skipping...\n')
+        bad_data_prefixes{bd} = ['sub-', sub_id, '_ses-', ses_id, '_task-', task_name];
+        fprintf(['   Sub ', sub_id, ' ses ', ses_id, ' task ', task_name, ' was marked as bad data. Skipping...\n'])
         continue;
     end
 
     % Make sure task directory exists
-    task_dir = [cicada_dir, '/subj-', subj_id, '/ses-', ses_id, '/', task_name];
+    task_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
     if ~isfolder(task_dir)
         fprintf('   Cannot find task directory at ', task_dir, '. Skipping...\n')
         continue;
     end
-    
-    
-
 
     % cicada type determines if we default from pulling from cleaned_auto
     % or cleaned_manual. Manually adjusted ('1') would mean pull from manual too.
-    if strcmp(cicada_type, 'manual') || ~strcmp(manually_adjusted, '0')
-        cleaned_dir = [task_dir, '/cleaned_manual'];
-    else
-        cleaned_dir = [task_dir, '/cleaned_auto'];
-    end
+    cleaned_dir = [task_dir, '/cleaned'];
 
     % then, test if desired cleaned dir exists
     if ~isfolder(cleaned_dir)
-        fprintf('   Cannot find designated cleaned_dir at ', cleaned_dir, '. Skipping...\n')
+        fprintf(['   Cannot find designated cleaned_dir at ', cleaned_dir, '. Skipping...\n'])
         continue;
     end
 
-    % OK, now loop through cleaned_dir files, and run qc for all of them!
+    % if manually adjusted, will need to pull from manual for this task
+    % instance
+
+    % first grab general file tag and see if it contains CICADA in it:
+    test_cleaned_file_info = dir([cleaned_dir, '/*', file_tag, '*.nii.gz']);
+
+    % make sure only one file is grabbed
+    if size(test_cleaned_file_info,1) ~= 1
+        fprintf('Either your file_tag is not specific enough (grabs more than one file) OR no files match with file_tag\n')
+        return;
+    end
+
+    if contains(test_cleaned_file_info.name, 'CICADA')
+        % This confirms we are working with CICADA data, and thus should
+        % check if manually adjusted is the preferred usage
+        if ~strcmp(manually_adjusted, '0')
+            % this was manually adjusted, grab manual version
+            cleaned_file_info = dir([cleaned_dir, '*CICADA*manual*.nii.gz']);
+
+            % make sure only one file is grabbed
+            if size(cleaned_file_info,1) ~= 1
+                fprintf('Do you have more than one CICADA*manual*.nii.gz file somehow?\n')
+                return;
+            end
+        else
+            % else, use file_tag
+            cleaned_file_info = test_cleaned_file_info;
+        end
+    else
+        % this is not a cicada file, so we do not need to worry about
+        % manual CICADA adjustments
+        cleaned_file_info = test_cleaned_file_info;
+    end
+
+    cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
+
+    
+    % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
-    [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_denoised_table, qc_corrs_compare_table, qc_corrs_orig_table, qc_photo_paths] = cicada_get_qc(cleaned_dir);
+    [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
 
     % then we need to be adding this information into the group qc stuff
     % (Group_QC struct)
-    cleaned_data_list{m} = cleaned_data{1};
-    data_mask_list{m} = data_mask{1};
-    signalandnoise_overlap_list{m} = signalandnoise_overlap{1};
+    cleaned_data_list{m} = cleaned_data;
+    data_mask_list{m} = data_mask;
+    signalandnoise_overlap_list{m} = signalandnoise_overlap;
+    denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
+    task_event_file_exist_list{m} = ~isempty(task_event_file);
 
     if m == 1
-         % if it is first instance, then group qc table is just subject qc
+         % if it is first instance, then group qc table is just subect qc
          % table
          group_qc_table = qc_table;
-         group_qc_corrs_denoised_table = qc_corrs_denoised_table;
-         group_qc_corrs_orig_table = qc_corrs_orig_table;
-
-         % compare might be height 2 if we did manual (might have 8p &
-         % auto)
-         if height(qc_corrs_compare_table) == 2
-             group_qc_corrs_8p_table = qc_corrs_compare_table(1,:);
-             group_qc_corrs_auto_table = qc_corrs_compare_table(2,:);
-         else
-             
-         end
+         group_qc_corrs_table = qc_corrs_table;
     else
         % otherwise, tack it on to the end
         group_qc_table = [group_qc_table; qc_table];
-        group_qc_corrs_denoised_table = [group_qc_corrs_denoised_table; qc_corrs_denoised_table];
-        group_qc_corrs_orig_table = [group_qc_corrs_orig_table; qc_corrs_denoised_table];
+        group_qc_corrs_table = [group_qc_corrs_table; qc_corrs_table];
+    end
+
+    % And then move the qc photos to their respective folders!
+    compare_image_info = dir([task_dir, 'sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+    for h = 1:size(compare_image_info,1)
+        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name]; % use later for copy and paste
+        compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+        compare_tag = compare_tag{:};
+
+        photo_fol = [output_dir, '/qc_photos_', compare_tag];
+        copyfile(curr_compare_image_file, photo_fol)
     end
    
-    
     m = m+1; % increment successful counter
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-% consider initializing a 4D signaltonoise file with zeros  to save on
-% time
-m = 1; % counting purposes, nothing major or wild
-
-for j = 1:length(subj_ids)
-
-    fprintf('\n')
-    fprintf(['Running for subject ', subj_ids{j}, '\n'])
-    % check for folder
-    curr_subj_fol = [cicada_dir, '/sub-', subj_ids{j}];
-    if ~isfolder(curr_subj_fol)
-        fprintf(['No subject folder found for ', subj_ids{j}, '. Moving on to next one...\n'])
-        continue
-    end
-
-    for k = 1:length(ses_ids)
-        
-        fprintf(['Running for session ', ses_ids{k}, '\n'])
-        % check for folder
-        curr_sess_fol = [curr_subj_fol, '/ses-', ses_ids{k}];
-        if ~isfolder(curr_sess_fol)
-            fprintf(['No sess folder found for ', ses_ids{k}, '. Moving on to next one...\n'])
-            continue
-        end
-        
-        % Can finally now get to the task
-        fprintf(['Running for task ', task_id, '\n'])
-        curr_task_fol = [curr_sess_fol, '/', task_id];
-
-        if ~isfolder(curr_task_fol)
-            fprintf(['No task folder found for ', task_id, '. Moving on to next one...\n'])
-            continue
-        end
-
-        % OK, now grab the things you need/want:
-        % The actually cleaned file, in cleaned_manual folder:
-        prefix = ['sub-', subj_ids{j}, '_ses-', ses_ids{k}, '_task-', task_id];
-        suffix = 'bold.nii.gz';
-
-        % if it is labeled as bad data from the get-go (e.g., mriqc shows
-        % that the data was corrupted from the start), don't include in
-        % analysis
-        % This if statement makes sure it is NOT the terrible data 
-        if sum(contains(bad_data_prefixes, prefix)) < 1
-            % cd into task folder and go from there:
-            cd(curr_task_fol)
-
-            % check if this is a subject where you want to use the manually
-            % adjusted, or not include it
-            % To Do: figure out what you want to do here then
-            adjusted = 0; % 1 if we adjusted it
-            cicada_type = cicada_type_default; % update to default version (often this is auto)
-            denoise_tag = ['cicada_', cicada_type, '_', reg_type];
-            % if the current subject falls under the list of adjust or bad
-            % prefixes, grab the manual version and label it appropriately
-            if sum(contains(adjust_prefixes, prefix)) > 0
-                cicada_type = 'manual';
-                denoise_tag = ['cicada_', cicada_type, '_', reg_type];
-                adjusted = 1;
-            end
-    
-             % check for cleaned folder
-            cleaned_folname = ['cleaned_' cicada_type];
-            cleaned_fol = [curr_task_fol, '/', cleaned_folname];
-            if not(isfolder(cleaned_fol))
-                fprintf(['No cleaned folder at ', cleaned_fol, ' found. Moving on to next one...\n'])
-                continue
-            end
-    
-            curr_filename = [prefix, '_', smooth_filter_tag, denoise_tag, '_', suffix];
-            curr_denoised_file = [cleaned_fol, '/', curr_filename];
-           
-    
-            % the funcmask
-            curr_mask_file = [curr_task_fol, '/funcmask.nii.gz'];
-    
-            if ~exist(curr_denoised_file, 'file')
-                fprintf(['No file matching ' curr_filename, ' in cleaned folder ' cleaned_fol, ' found. Moving on to next one...\n'])
-            end
-    
-            % OK, we have the denoised file! Now copy it to group folder!
-            copyfile(curr_denoised_file, data_fol)
-            curr_copied_denoised_file = [data_fol, '/' curr_filename];
-    
-            % Grab current functional mask and load it into a larger 4D
-            % file
-            curr_funcmask = niftiread(curr_mask_file);
-            funcmask(:,:,:,m) = curr_funcmask;
-    
-            % Grab Signal IC Overlap, found in ic_manual_selection, or
-            % ic_auto_selection depending on your selection. Help you
-            % determine if regions of interest are well represented per
-            % subject
-            curr_signalandnoise_overlap_filename = 'SignalandNoiseICOverlap.nii.gz'; % 1 for signal, -1 for noise without signal
-    
-            %curr_signalandnoise_overlap_filename = 'SignalICOverlap.nii.gz';
-            
-            selection_fol = [curr_task_fol, '/ic_', cicada_type, '_selection'];
-            curr_signalandnoise_file = [selection_fol, '/', curr_signalandnoise_overlap_filename];
-    
-            curr_signalandnoise_mask = niftiread(curr_signalandnoise_file);
-    
-            % Calculate overlap with GM mask
-            if m == 1
-                flirt_command = ['flirt -ref ', curr_signalandnoise_file, ' -in ', gm_mni_prob_file, ' -out ', output_dir, '/gm_mni_prob_resampled.nii.gz -usesqform -applyxfm'];
-                [status, cmdout_flirt] = system(flirt_command, '-echo');
-                gm_mni_prob_resampled = niftiread([output_dir, '/gm_mni_prob_resampled.nii.gz']);
-                gm_mni_thresh = gm_mni_prob_resampled > 0.67;
-            end
-            
-            signal_mask = curr_signalandnoise_mask == 1;
-            gm_signal_overlap = gm_mni_thresh .* signal_mask;
-            
-            gm_signal_proportion = sum(gm_signal_overlap(:)) / sum(gm_mni_thresh(:)); % What proportion of gm is covered by signal
-            signal_gm_proportion = sum(gm_signal_overlap(:)) / sum(signal_mask(:)); % what proportion of signal is within GM
-    
-            % easier yet, calculate a dice coefficient
-            gm_and_signal = gm_signal_overlap;
-            gm_or_signal = (gm_mni_thresh + signal_mask) > 0;
-            gm_signal_dice = sum(gm_and_signal(:)) / sum(gm_or_signal(:));
-    
-            % load it into larger 4D file
-            signalandnoise_mask(:,:,:,m) = curr_signalandnoise_mask;
-    
-            % load the qc values, and then save the ones you care about
-            % most
-            qc_fol = [curr_task_fol, '/qc'];
-            qc_vals = [qc_fol, '/', prefix, '_', denoise_tag, '_vs_', compare_tags{1}, '_qc_vals.mat']; % load values of interest will be the same independent of compare tag, so just use first one
-            load(qc_vals)
-            percent_ICs_kept = Results.num_ICs_kept / Results.num_ICs_total;
-    
-            % OK we definitely want to save the following in a table(things that are one value per task): num_ICs_total,
-            % num_ICs_kept, DOF_estimate_final
-            % if no filtering is applied, dof_estimate_final will be equal to percent_variance_kept
-            
-            % dof_estimate_final should be equal to percent_variance_kept *
-            % percent_freq_kept * numvolumes. Percent frequency kept is
-            % 100% if we did not do any frequency filtering
-    
-            % in case we did not do "hisorically standard" resting state bp
-            % (0.01-0.1Hz), calculate what estimated DOF would become if we
-            % did do it.
-            percent_freq_kept_if_standardbp = 0.09 / (1 / (2* tr));
-            DOF_estimate_if_standard_bp = Results.percent_variance_kept * percent_freq_kept_if_standardbp * numvolumes;
-    
-            % Get confounds too:
-            confound_place = [curr_task_fol, '/confounds_timeseries.csv'];
-            allconfounds = readtable(confound_place);
-            FD = table2array(allconfounds(:,{'framewise_displacement'}));
-            DVARS = table2array(allconfounds(:,{'dvars'}));
-            RMS = table2array(allconfounds(:,{'rmsd'})); 
-    
-            medFD = median(FD(2:end)); % median FD to pick cut offs. Liberal is 0.55mm cut off, conservative is >0.25mm cut off
-            meanFD = mean(FD(2:end)); % some QC_FC likes comparing to mean FD
-            perc_FD_above_thresh = (sum(FD(2:end) > 0.2) / length(FD(2:end))) * 100; %percent FD greater 0.2mm, 20% cut off also used for conservative
-            Any_FD_above_thresh = int8(sum(FD(2:end) > 5) > 0); % also added onto conservative cut off, any FD > 5mm
-            medDVARS = median(FD(2:end));
-            meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
-    
-            % And lets include mean and std for all relevant QC plots from script 4:
-            GM_NotGM_mean = median(denoised_GM_NotGM_corr);
-            GM_NotGM_sd = std(denoised_GM_NotGM_corr);
-            GM_GM_mean = median(denoised_GM_GM_corr);
-            GM_GM_sd = std(denoised_GM_GM_corr);
-            GM_dvars_mean = median(denoised_GM_dvars_corr);
-            GM_dvars_sd = std(denoised_GM_dvars_corr);
-            GM_fd_mean = median(denoised_GM_fd_corr);
-            GM_fd_sd = std(denoised_GM_fd_corr);
-            GM_CSF_mean = median(denoised_GM_CSF_corr);
-            GM_CSF_sd = std(denoised_GM_CSF_corr);
-            GM_WMCSF_mean = median(denoised_GM_WMCSF_corr);
-            GM_WMCSF_sd = std(denoised_GM_WMCSF_corr);
-            GM_Outbrain_mean = median(denoised_GM_Outbrain_corr);
-            GM_Outbrain_sd = std(denoised_GM_Outbrain_corr);
-            GM_Edge_mean = median(denoised_GM_Edge_corr);
-            GM_Edge_sd = std(denoised_GM_Edge_corr);
-    
-            qc_group_array(:,m) = [{m, curr_filename, subj_ids{j}, ses_ids{k}, task_id, adjusted, meanRMS, ...
-                medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, gm_signal_dice, gm_signal_proportion, Results.num_ICs_kept, ...
-                Results.num_ICs_total, percent_ICs_kept, Results.percent_variance_kept, ...
-                Results.percent_freq_kept, numvolumes, DOF_estimate_final, DOF_estimate_if_standard_bp, ...
-                GM_NotGM_mean, GM_NotGM_sd, GM_GM_mean, GM_GM_sd, GM_dvars_mean, GM_dvars_sd, ...
-                GM_fd_mean, GM_fd_sd, GM_CSF_mean, GM_CSF_sd, GM_WMCSF_mean, GM_WMCSF_sd, ...
-                GM_Outbrain_mean, GM_Outbrain_sd, GM_Edge_mean, GM_Edge_sd}, num2cell(Results.compare_cleaning.After')];
-    
-            data_files{m} = curr_copied_denoised_file;
-    
-            % finally copy over the photos to their respective folders
-            for h = 1:length(compare_tags)
-                photo_fol = [output_dir, '/qc_photos_', compare_tags{h}];
-                photo_name = [prefix, '_', denoise_tag, '_vs_', compare_tags{h}, '_qc_plots.png'];
-                photo_file = [curr_task_fol, '/qc/', photo_name];
-                copyfile(photo_file, photo_fol)
-            end
-            m = m+1; % increment m
-        end
-
-    end
-end
-
-% record the bad data that was not even looked at:
+% record the bad data that was not even looked at, for easy reference later:
 Group_QC.bad_data_prefixes = bad_data_prefixes;
 
 % go to general group folder for this specific set
 cd(output_dir)
 
-% cell to table
-qc_table_labels = ['image_number', 'image_names', 'subject', 'session', 'task', 'manually_adjusted', 'meanRMS', ...
-    'median_FD', 'mean_FD', 'Percent_FD_gt_point2mm','AnyFD_gt_5mm', 'median_DVARS', 'gm_signal_dice', 'gm_coverage', 'number_kept_ics', 'number_total_ics', ...
-    'fraction_kept_ics', 'fraction_signal_variance_kept', 'fraction_frequency_kept', 'numvolumes', ...
-    'dof_estimate_final', 'dof_estimate_final_if_standard_resting_bp', 'GM_NotGM_median', 'GM_NotGM_sd', ...
-    'GM_GM_median', 'GM_GM_sd', 'GM_dvars_median', 'GM_dvars_sd', 'GM_fd_median', 'GM_fd_sd', ...
-    'GM_CSF_median', 'GM_CSF_sd', 'GM_WMCSF_median', 'GM_WMCSF_sd', 'GM_Outbrain_median', 'GM_Outbrain_sd', ...
-    'GM_Edge_median', 'GM_Edge_sd', Results.compare_cleaning.Properties.RowNames'];
-final_qc_table = cell2table(qc_group_array', 'VariableNames', qc_table_labels);
-
 % Calculate outliers based on the final qc table. Do it in three ways and
-% add it to the qc table:
+% add it to the qc table (only if this is CICADA though!):
+final_qc_table = group_qc_table;
 
-% Number of total ICs (if very low -- bad data all round)
-Group_QC.low_number_total_ics = (isoutlier(final_qc_table.number_total_ics, "median")) & (final_qc_table.number_total_ics < mean(final_qc_table.number_kept_ics));
+% Now we can calculate outliers, but some are only calculated in this
+% manner IF it is CICADA data
+if cicada == 1
+    % Number of total ICs (if very low -- bad data all round)
+    Group_QC.low_number_total_ics = (isoutlier(final_qc_table.number_total_ics, "median")) & (final_qc_table.number_total_ics < mean(final_qc_table.number_kept_ics));
+    % Low GM coverage, regular and dice
+    Group_QC.low_gm_coverage = (isoutlier(final_qc_table.gm_coverage, "median")) & (final_qc_table.gm_coverage < mean(final_qc_table.gm_coverage));
+    Group_QC.low_gm_dice = (isoutlier(final_qc_table.gm_signal_dice, "median")) & (final_qc_table.gm_signal_dice < mean(final_qc_table.gm_signal_dice));
+    
+    % Fraction Signal Variance Kept (low would suggest there are very few good 
+    % number of ICs (too swamped by noise) and it does not explain much of the data):
+    Group_QC.low_fraction_signal_variance_kept = (isoutlier(final_qc_table.fraction_signal_variance_kept, "median")) & (final_qc_table.fraction_signal_variance_kept < mean(final_qc_table.fraction_signal_variance_kept));
+    
+    % Signal (The kept ICs should contain a fair amount of signal region
+    % overlap)
+    Group_QC.low_Signal = (isoutlier(final_qc_table.Signal, "median")) & (final_qc_table.Signal < mean(final_qc_table.Signal));
+    
+    % Smoothing
+    Group_QC.low_Smoothing = (isoutlier(final_qc_table.Smoothing_Retention, "median")) & (final_qc_table.Smoothing_Retention < mean(final_qc_table.Smoothing_Retention));
+    
+    % Power Overlap
+    % if task data, take into account task power overlap
+    Group_QC.low_general_power_overlap = (isoutlier(final_qc_table.general_power_overlap, "median")) & ...
+        (final_qc_table.general_power_overlap < mean(final_qc_table.general_power_overlap));
+    if sum(cell2mat(task_event_file_exist_list)) > 0 % so there are task event files!
+        fprintf('Found task event files, so using best task power overlap.\n')
+        Group_QC.low_besttask_power_overlap = (isoutlier(final_qc_table.besttask_power_overlap, "median")) & ...
+        (final_qc_table.besttask_power_overlap < mean(final_qc_table.besttask_power_overlap));
+        Group_QC.low_power_overlap = Group_QC.low_general_power_overlap & Group_QC.low_besttask_power_overlap;
+    else
+        %else it is resting state
+        fprintf('No Task event files. Assumed to be resting state.\n')
+        Group_QC.low_power_overlap = Group_QC.low_general_power_overlap;
+    end
+    
+    
+    % DVARS_Corr
+    Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.DVARS_GM_median), "median")) & (abs(final_qc_table.DVARS_GM_median) > median(abs(final_qc_table.DVARS_GM_median)));
+    
+    % FD_Corr
+    Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_median), "median")) & (abs(final_qc_table.FD_GM_median) > median(abs(final_qc_table.FD_GM_median)));
+    
+    
+    % combine to get overall outliers
+    Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
+        Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
+        Group_QC.low_Smoothing + Group_QC.low_power_overlap + Group_QC.low_gm_coverage + Group_QC.low_gm_dice);
 
-% Low GM coverage, regular and dice
-Group_QC.low_gm_coverage = (isoutlier(final_qc_table.gm_coverage, "median")) & (final_qc_table.gm_coverage < mean(final_qc_table.gm_coverage));
-Group_QC.low_gm_dice = (isoutlier(final_qc_table.gm_signal_dice, "median")) & (final_qc_table.gm_signal_dice < mean(final_qc_table.gm_signal_dice));
-
-% Fraction Signal Variance Kept (low would suggest there are very few good 
-% number of ICs (too swamped by noise) and it does not explain much of the data):
-Group_QC.low_fraction_signal_variance_kept = (isoutlier(final_qc_table.fraction_signal_variance_kept, "median")) & (final_qc_table.fraction_signal_variance_kept < mean(final_qc_table.fraction_signal_variance_kept));
-
-% Signal (The kept ICs should contain a fair amount of signal region
-% overlap)
-Group_QC.low_Signal = (isoutlier(final_qc_table.Signal, "median")) & (final_qc_table.Signal < mean(final_qc_table.Signal));
-
-% Smoothing
-Group_QC.low_Smoothing = (isoutlier(final_qc_table.Smoothing_Retention, "median")) & (final_qc_table.Smoothing_Retention < mean(final_qc_table.Smoothing_Retention));
-
-% Power Overlap
-% if task data, take into account task power overlap
-Group_QC.low_general_power_overlap = (isoutlier(final_qc_table.general_power_overlap, "median")) & ...
-    (final_qc_table.general_power_overlap < mean(final_qc_table.general_power_overlap));
-if has_task_onsets == 1
-    Group_QC.low_besttask_power_overlap = (isoutlier(final_qc_table.besttask_power_overlap, "median")) & ...
-    (final_qc_table.besttask_power_overlap < mean(final_qc_table.besttask_power_overlap));
-    Group_QC.low_power_overlap = Group_QC.low_general_power_overlap & Group_QC.low_besttask_power_overlap;
-else
-    %else it is resting state
-    Group_QC.low_power_overlap = Group_QC.low_general_power_overlap;
+    % add to final qc table
+    final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
+    final_qc_table.low_fraction_signal_variance_kept = Group_QC.low_fraction_signal_variance_kept;
+    final_qc_table.low_Signal = Group_QC.low_Signal;
+    final_qc_table.low_Smoothing = Group_QC.low_Smoothing;
+    final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
+    final_qc_table.low_gm_coverage = Group_QC.low_gm_coverage;
+    final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
+    final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
+    final_qc_table.cicada_outliers = Group_QC.cicada_outliers;   
 end
-
-
-% DVARS_Corr
-Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.GM_dvars_median), "median")) & (abs(final_qc_table.GM_dvars_median) > median(abs(final_qc_table.GM_dvars_median)));
-
-% FD_Corr
-Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.GM_fd_median), "median")) & (abs(final_qc_table.GM_fd_median) > median(abs(final_qc_table.GM_fd_median)));
-
-
-% combine to get overall outliers
-Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
-    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
-    Group_QC.low_Smoothing + Group_QC.low_power_overlap + Group_QC.low_gm_coverage + Group_QC.low_gm_dice);
 
 % Now, get liberal outliers (not restrictive)
 Group_QC.liberal_outliers = final_qc_table.mean_FD > 0.55;
@@ -485,55 +338,44 @@ Group_QC.conservative_outliers = (final_qc_table.mean_FD > 0.25) | ...
     (final_qc_table.Percent_FD_gt_point2mm > 20) | ...
     (final_qc_table.AnyFD_gt_5mm);
 
-final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
-final_qc_table.low_fraction_signal_variance_kept = Group_QC.low_fraction_signal_variance_kept;
-final_qc_table.low_Signal = Group_QC.low_Signal;
-final_qc_table.low_Smoothing = Group_QC.low_Smoothing;
-final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
-final_qc_table.low_gm_coverage = Group_QC.low_gm_coverage;
-final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
-final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
-final_qc_table.cicada_outliers = Group_QC.cicada_outliers;
+% And record Denoising outlier (which was manually selected by the user)
+Group_QC.denoising_outliers = cell2mat(denoising_outlier_list)';
+
+% add to final qc table
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
 final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
+final_qc_table.denoising_outliers = Group_QC.denoising_outliers;
 
 writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_signal and signal_gm proportions and also number_kept_ics to help find the bad or adjustable data
 Group_QC.final_qc_table = final_qc_table;
 
 % Now work on the images:
 
-% remove outliers from funcmask 
-image_keep = ~Group_QC.cicada_outliers;
+% remove outliers from the rest of analysis
+if cicada == 1
+    image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
+else
+    image_keep = ~Group_QC.denoising_outliers;
+end
 
-% remove outliers from signal and noise mask
-signalandnoise_mask_all = signalandnoise_mask;
-signalandnoise_mask = signalandnoise_mask_all(:,:,:,image_keep);
+% save image_keep so it is easy in the future to know what images were left
+% out
+Group_QC.Images_Used = image_keep;
 
-% collapse funcmask into 3D with mean, remove outliers
-mean_funcmask = mean(funcmask(:,:,:,image_keep), 4); 
-funcmask_info = niftiinfo(curr_mask_file); % will be 3D instead of 4D, will need 
-% thresh is for melodic mask - mask 99% coverage needed
-funcmask_info.Datatype = 'uint8';
-niftiwrite(cast((mean_funcmask>0.99), 'uint8'), 'mean_funcmask_thresh', funcmask_info, 'Compressed', true) % 0-1, it should be the percent of funcmasks that overlapped with voxel
-% prob is for helping with a final group mask
-funcmask_info.Datatype = 'single';
-niftiwrite(cast(mean_funcmask, 'single'), 'mean_funcmask_prob', funcmask_info, 'Compressed', true) % 0-1, it should be the percent of funcmasks that overlapped with voxel
+% merge signalandnoise_overlap into a 4D file, if CICADA
+if cicada == 1
+    merge_signalandnoise_overlap_command = ['fslmerge -a ', output_dir, '/signal_noise_overlaps.nii.gz ', strjoin(signalandnoise_overlap_list(image_keep))];
+    [~, ~] = call_fsl(merge_signalandnoise_overlap_command);
+end
 
-% Create 4d funcmask too so it is easy to search through
-funcmask_info.Datatype = 'uint8';
-funcmask_info.ImageSize = [funcmask_info.ImageSize, size(signalandnoise_mask,4)];
-funcmask_info.PixelDimensions = [funcmask_info.PixelDimensions, 1];
-niftiwrite(cast(funcmask(:,:,:,image_keep), 'uint8'), 'funcmask_Group', funcmask_info, 'Compressed', true)
+% merge func masks as well!
+merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', strjoin(data_mask_list(image_keep))];
+[~, ~] = call_fsl(merge_funcmasks_command);
 
-% OK, now load and create 4D signaltonoise file and header, and write to
-% the group directory
-signal_prob_info = niftiinfo(curr_signalandnoise_file); % will be 3D instead of 4D, will need to edit to 4D
-signal_prob_info.ImageSize = [signal_prob_info.ImageSize, size(signalandnoise_mask,4)];
-signal_prob_info.PixelDimensions = [signal_prob_info.PixelDimensions, 1]; % idk if 1 is "right", but it makes some sense/should work! 4 dimension is just each image
-
-niftiwrite(cast(signalandnoise_mask, 'single'), 'SignalandNoise_Group', signal_prob_info, 'Compressed', true) % 1 is high signal, -1 is high noise-labeled only
-%niftiwrite(cast(signalandnoise_mask, 'single'), 'Signal_Group', signal_prob_info, 'Compressed', true) % 1 is high signal, -1 is high noise-labeled only
-
+% and calculate a Tmin of data masks (where there is funcmask overlap
+% across all subects)
+funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ', output_dir, '/group_funcmask.nii.gz'];
+[~, ~] = call_fsl(funcmask_overlap_command);
 
 
 % Run Group MELODIC
@@ -542,28 +384,28 @@ niftiwrite(cast(signalandnoise_mask, 'single'), 'SignalandNoise_Group', signal_p
 % the melodic call $(cat )
 % Make sure to not include data files that were designated as bad enough to
 % remove
+data_files = cleaned_data_list;
 all_data_files = data_files;
-data_files = all_data_files(~Group_QC.cicada_outliers);
+data_files = all_data_files(image_keep);
 writecell(data_files, 'image_names.txt')
 
 % Resample mni to be the background image for melodic
-flirt_command = ['flirt -ref mean_funcmask_thresh.nii.gz -in ', background_file, ' -out mni_resampled.nii.gz -usesqform -applyxfm'];
-[status, cmdout_flirt] = system(flirt_command, '-echo');
+flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -out mni_resampled.nii.gz -usesqform -applyxfm'];
+[~, ~] = call_fsl(flirt_command);
 
 % If you want to specify how many ICs to make:
 %Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m mean_funcmask_thresh.nii.gz --bgimage=mni_resampled.nii.gz -d ', num2str(num_ICs), ' --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 % Vs.: let Melodic decide on number of ICs (preferred)
-Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m mean_funcmask_thresh.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
+Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m group_funcmask.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 
 if redo_melodic == 0
     if not(isfolder('melodic'))
         fprintf(['Running: ', Group_ICA_command, '\n'])
-        %[status, cmdout_ICA] = system(Group_ICA_command, '-echo');
         fprintf('Done with Group ICA (Melodic)\n\n')
     end
 elseif redo_melodic == 1
     fprintf(['Running: ', Group_ICA_command, '\n'])
-    [status, cmdout_ICA] = system(Group_ICA_command, '-echo');
+    [~, ~] = call_fsl(Group_ICA_command);
     fprintf('Done with Group ICA (Melodic)\n\n')
 
     % create ICprobabilities combined in melodic folder (good for making masks
@@ -573,7 +415,8 @@ elseif redo_melodic == 1
     [~, str] = system('ls ./melodic/stats/probmap_* | sort -V');
     probmapnames = regexprep(str, '\s+', ' '); % convert newlines to spaces
     command = ['fslmerge -t ./melodic/ICprobabilities.nii.gz ', probmapnames];
-    [status, cmdout] = system(command, '-echo');
+    [~, ~] = call_fsl(command);
+
     % And load this now, 4th dimension is the ICs
     IC_probs = niftiread('./melodic/ICprobabilities.nii.gz');
     IC_probs_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
@@ -584,8 +427,7 @@ elseif redo_melodic == 1
     IC_3D_info.ImageSize = IC_3D_info.ImageSize(1:end-1);
     IC_3D_info.PixelDimensions = IC_3D_info.PixelDimensions(1:end-1);
     IC_3D_info.Datatype = 'single';
-    
-    
+       
     % Also go through melodic output and calculate overlap % of IC to each
     % network between the 7 networks, which can be useful
     networks_combined = niftiread(network_file);
