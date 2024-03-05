@@ -63,15 +63,6 @@ if not(isfolder(output_dir))
     mkdir(output_dir)
 end
 
-% create a data folder, remove old one if it exists
-data_fol = [output_dir, '/data'];
-if not(isfolder(data_fol))
-    mkdir(data_fol)
-else
-   rmdir(data_fol, 's') % remove data folder and contents if it already exists
-   mkdir(data_fol) % and now make new folder
-end
-
 
 % Make separate photo folders, so it is easier to just scroll through them
 % all in the future. There is only 8p compare if auto, but 8p and auto if
@@ -147,7 +138,7 @@ bd = 1;
 
 for idx = 1:num_runs
     cicada_dir = cicada_dirs{idx}; % should be the same for all
-    output_dir = output_dirs{idx}; % should be the same for all
+    output_dir = [output_dirs{idx}, '/', task_name]; % should be the same for all
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
     task_name = task_names{idx}; % should be the same for all 
@@ -247,9 +238,9 @@ for idx = 1:num_runs
     end
 
     % And then move the qc photos to their respective folders!
-    compare_image_info = dir([task_dir, 'sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+    compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
     for h = 1:size(compare_image_info,1)
-        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name]; % use later for copy and paste
+        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
         compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
         compare_tag = compare_tag{:};
 

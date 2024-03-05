@@ -310,6 +310,7 @@ confound_place = 'confounds_timeseries.csv';
 allconfounds = readtable(confound_place);
 Data.Confounds.Nineparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z', 'white_matter', 'csf', 'global_signal'}));
 Data.Confounds.Eightparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z', 'white_matter', 'csf'}));
+Data.Confounds.Sixmotionparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'}));
 Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
 Results.Confounds = Data.Confounds; %#ok<STRNU> 
@@ -447,11 +448,13 @@ end
 % save standard 9Param and 8Param for comparison or use later, and write to mat file for fsl glm in future:
 writematrix(Data.Confounds.Nineparam, '9p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Eightparam, '8p_regressors.txt', 'Delimiter', ' ')
+writematrix(Data.Confounds.Sixmotionparam, '6p_motion_regressors.txt', 'Delimiter', ' ')
 % include versions with an intercept column, in case you regress without
 % demeaning 
 intercept = ones(size(Data.Confounds.Eightparam,1),1);
 writematrix([intercept, Data.Confounds.Nineparam], '9p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Eightparam], '8p_regressors_intercept.txt', 'Delimiter', ' ')
+writematrix([intercept, Data.Confounds.Sixmotionparam], '6p_motion_regressors_intercept.txt', 'Delimiter', ' ')
 [~, ~] = call_fsl('Text2Vest 8p_regressors_intercept.txt 8p_regressors_intercept.mat');
 [~, ~] = call_fsl('Text2Vest 9p_regressors_intercept.txt 9p_regressors_intercept.mat');
 
