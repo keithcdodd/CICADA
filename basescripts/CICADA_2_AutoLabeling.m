@@ -2,7 +2,7 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, to
 % Run this after running CICADA_1 script
 % output_dir must be the same one as for the first script, so that this can
 % find all the relevant files. Again, it is best if this is in the format
-% of CICADA_dir/subj-id/ses-id/task-id
+% of CICADA_dir/subj-id/ses-id/task-id (so, a task_dir, really)
 
 % task_events_file should be given if evaluating a task -- will increase IC
 % classification accuracy. Task Events file should be the same structure as

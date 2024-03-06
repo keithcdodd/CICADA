@@ -9,7 +9,7 @@ cicada_csv = '/Users/keithdodd/Work/awesome/documents/cicada_runs/cicada_runs.cs
 rerun_melodic_regardless = 0; % 0 will not rerun melodic if it is found in default space. 1 will rerun regardless
 cicada_wrapper_dir = '/Users/keithdodd/Work/code/CICADA/wrappers';
 task_name = 'rest'; % should only be on one task for group qc
-redo_melodic = 1; % 0 is to not redo if it is already done. 1 redoes it even if already done.
+redo_melodic = 0; % 0 is to not redo if it is already done. 1 redoes it even if already done.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % need to make sure CICADA folder and subfolders are added to path!
@@ -189,7 +189,7 @@ for idx = 1:num_runs
         return;
     end
 
-    if contains(test_cleaned_file_info.name, 'CICADA')
+    if contains(test_cleaned_file_info.name, '_CICADA_')
         % This confirms we are working with CICADA data, and thus should
         % check if manually adjusted is the preferred usage
         if ~strcmp(manually_adjusted, '0')
@@ -213,10 +213,41 @@ for idx = 1:num_runs
 
     cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
 
+    % And get a helpful cleaned_file_tag 
+    cleaned_file_tag = extractBetween(cleaned_file_info.name, [task_name, '_'], '_bold.nii.gz');
+    cleaned_file_tag = cleaned_file_tag{:};
+
+    % Also grab the orig file and compare file
+    orig_file_info = dir([cleaned_dir, '/*_orig_*.nii.gz']);
+   % make sure only one file is grabbed
+    if size(orig_file_info,1) ~= 1
+        fprintf('Are there no _orig_ files (or more than one) in cleaned dir?\n')
+        return;
+    end
+    orig_file = [orig_file_info.folder, '/', orig_file_info.name];
+
+    compare_file_info = dir([cleaned_dir, '/*_8p_*.nii.gz']); % need to make sure this is not the same as cleaned file
+    % make sure only one file is grabbed
+    if size(compare_file_info,1) ~= 1
+        fprintf('Are there no _8p_ files (or more than one) in cleaned dir?\n')
+        return;
+    end
+    compare_file = [compare_file_info.folder, '/', compare_file_info.name];
+
+    if strcmp(compare_file, cleaned_file)
+        % then the cleaned file is the 8p file... no use comparing
+        % something to itself!
+        compare_file = '';
+    end
+
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
     [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
+    [~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
+    % to get compare_qc_corrs_table, you should loop through when you do
+    % your qc photos and make a cell array of stacked tables if there is
+    % more than one comparison
 
     % then we need to be adding this information into the group qc stuff
     % (Group_QC struct)
@@ -226,26 +257,55 @@ for idx = 1:num_runs
     denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
 
+
+    % And then move the qc photos to their respective folders & grab all qc
+    % values (sampled). plot AFTER
+    samps=500; % needs to match number of samps for denoised and orig data. 
+    compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+    compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_vals.mat']); % specific to file tag of interest, can be multiples
+    if ~isempty(compare_file)
+        for h = 1:size(compare_image_info,1)
+        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
+        compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+        compare_tag = compare_tag{:};
+        compare_tags{h} = compare_tag; % this should be the same for everyone, so it is OK that we overwrite
+
+        photo_fol = [output_dir, '/qc_photos_', compare_tag];
+        copyfile(curr_compare_image_file, photo_fol)
+
+        % We will also want to grab current compare qc corrs table, and if
+        % there are multiple, stack them into a cell array
+        curr_compare_data_file = [compare_data_info(h).folder, '/', compare_data_info(h).name];
+        load(curr_compare_data_file, "-regexp", "^compare_")
+        compare_qc_corrs_table = grab_corr_sampling(compare_Edge_GM_corr, compare_FD_GM_corr, ...
+                compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, ...
+                compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, samps);
+
+
+        % Stack it into group cell array!
+        if m == 1
+            group_compare_qc_corrs_table{h} = compare_qc_corrs_table;
+        else
+            group_compare_qc_corrs_table{h} = [group_compare_qc_corrs_table{h}; compare_qc_corrs_table];
+        end
+        end
+    else
+        group_compare_qc_corrs_table = {};
+    end
+    
+
+    % Now, add all corrs into the group (compare is already done above in for loop)!
     if m == 1
-         % if it is first instance, then group qc table is just subect qc
+         % if it is first instance, then group qc table is just subject qc
          % table
          group_qc_table = qc_table;
          group_qc_corrs_table = qc_corrs_table;
+         group_orig_qc_corrs_table = orig_qc_corrs_table;
     else
         % otherwise, tack it on to the end
         group_qc_table = [group_qc_table; qc_table];
         group_qc_corrs_table = [group_qc_corrs_table; qc_corrs_table];
-    end
-
-    % And then move the qc photos to their respective folders!
-    compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
-    for h = 1:size(compare_image_info,1)
-        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
-        compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
-        compare_tag = compare_tag{:};
-
-        photo_fol = [output_dir, '/qc_photos_', compare_tag];
-        copyfile(curr_compare_image_file, photo_fol)
+        group_orig_qc_corrs_table = [group_orig_qc_corrs_table; orig_qc_corrs_table];
     end
    
     m = m+1; % increment successful counter
@@ -260,6 +320,7 @@ cd(output_dir)
 % Calculate outliers based on the final qc table. Do it in three ways and
 % add it to the qc table (only if this is CICADA though!):
 final_qc_table = group_qc_table;
+final_qc_corrs_table = group_qc_corrs_table;
 
 % Now we can calculate outliers, but some are only calculated in this
 % manner IF it is CICADA data
@@ -338,7 +399,53 @@ final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
 final_qc_table.denoising_outliers = Group_QC.denoising_outliers;
 
 writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_signal and signal_gm proportions and also number_kept_ics to help find the bad or adjustable data
+writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv')
 Group_QC.final_qc_table = final_qc_table;
+Group_QC.final_qc_corrs_table = final_qc_corrs_table;
+
+% Now do group plotting (don't forget to loop based on dimensions of compare matrix):
+dcorrt = group_qc_corrs_table;
+ocorrt = group_orig_qc_corrs_table;
+
+% see if we have compare data to deal with here
+if ~isempty(group_compare_qc_corrs_table)
+    % we have compare data to make lovely group plots, but there may be
+    % more than one!
+    for h = 1:size(group_compare_qc_corrs_table,2)
+        ccorrt = group_compare_qc_corrs_table{h};
+
+        % get current compare tag:
+        curr_compare_tag = compare_tags{h}; % will say both cleaned file name AND compare file name
+        
+        % Set appropriate titles and destination
+        title_string = ['Group_QC_' curr_compare_tag];
+        qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
+        
+        % now we can plot
+        plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
+            dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, ...
+            ccorrt.Edge_GM_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_GM_Corr, ...
+            ccorrt.WMCSF_GM_Corr, ccorrt.CSF_GM_Corr, ccorrt.NotGM_GM_Corr, ccorrt.GM_GM_AutoCorr, ...
+            ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
+            ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ...
+            [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
+    end
+else
+    % we can plot now! There is no compare data
+    title_string = ['Group_QC_' cleaned_file_tag, '_vs_orig'];
+    qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
+    
+
+    plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
+            dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, ...
+            [], [], [], [], [], [], [], [], ...
+            ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
+            ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ...
+            [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
+end
+
+fprintf('Finished Group QC Plotting!\n')
+
 
 % Now work on the images:
 
@@ -390,11 +497,20 @@ flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -ou
 Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m group_funcmask.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 
 if redo_melodic == 0
-    if not(isfolder('melodic'))
+    if not(isfile('./melodic/melodic_IC.nii.gz'))
+        % if melodic clearly did not finish last time, re do it.
+        if isfolder('melodic')
+            rmdir('melodic', 's')
+        end
         fprintf(['Running: ', Group_ICA_command, '\n'])
+        [~, ~] = call_fsl(Group_ICA_command);
         fprintf('Done with Group ICA (Melodic)\n\n')
     end
 elseif redo_melodic == 1
+    if isfolder('melodic')
+        rmdir('melodic', 's')
+    end
+
     fprintf(['Running: ', Group_ICA_command, '\n'])
     [~, ~] = call_fsl(Group_ICA_command);
     fprintf('Done with Group ICA (Melodic)\n\n')

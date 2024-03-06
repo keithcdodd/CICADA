@@ -204,12 +204,12 @@ else
         FD_GM_median, FD_GM_sd, CSF_GM_median, CSF_GM_sd, WMCSF_GM_median, WMCSF_GM_sd, ...
         Outbrain_GM_median, Outbrain_GM_sd, Edge_GM_median, Edge_GM_sd};
     
-    qc_labels = ['image_names', 'subject', 'session', 'task', 'meanRMS', ...
-        'median_FD', 'mean_FD', 'Percent_FD_gt_point2mm','AnyFD_gt_5mm', 'median_DVARS', ...
-        'numvolumes', 'NotGM_GM_median', 'NotGM_GM_sd', 'GM_GM_median', 'GM_GM_sd', ...
-        'DVARS_GM_median', 'DVARS_GM_sd', 'FD_GM_median', 'FD_GM_sd', ...
-        'CSF_GM_median', 'CSF_GM_sd', 'WMCSF_GM_median', 'WMCSF_GM_sd', ...
-        'Outbrain_GM_median', 'Outbrain_GM_sd', 'Edge_GM_median', 'Edge_GM_sd'];
+    qc_labels = ["image_names", "subject", "session", "task", "meanRMS", ...
+        "median_FD", "mean_FD", "Percent_FD_gt_point2mm","AnyFD_gt_5mm", "median_DVARS", ...
+        "numvolumes", "NotGM_GM_median", "NotGM_GM_sd", "GM_GM_median", "GM_GM_sd", ...
+        "DVARS_GM_median", "DVARS_GM_sd", "FD_GM_median", "FD_GM_sd", ...
+        "CSF_GM_median", "CSF_GM_sd", "WMCSF_GM_median", "WMCSF_GM_sd", ...
+        "Outbrain_GM_median", "Outbrain_GM_sd", "Edge_GM_median", "Edge_GM_sd"];
     
     qc_table = cell2table(qc_array, 'VariableNames', qc_labels);
 end
@@ -217,49 +217,7 @@ end
 
 % Grab a sampling of the correlation values, because otherwise it might
 % become too much
-samps=500;
-NotGM_GM_randperm = randperm(size(NotGM_GM_corr, 1)); % and then grab ~samps of these
-NotGM_GM_randperm = NotGM_GM_randperm(1:samps);
-
-GM_GM_randperm = randperm(size(GM_GM_autocorr, 1)); % and then grab ~samps of these
-GM_GM_randperm = GM_GM_randperm(1:samps);
-
-DVARS_GMrandperm = randperm(size(DVARS_GM_corr, 1)); % and then grab ~samps of these
-DVARS_GMrandperm = DVARS_GMrandperm(1:samps);
-
-FD_GMrandperm = randperm(size(FD_GM_corr, 1)); % and then grab ~samps of these
-FD_GMrandperm = FD_GMrandperm(1:samps);
-
-CSF_GMrandperm = randperm(size(CSF_GM_corr, 1)); % and then grab ~samps of these
-CSF_GMrandperm = CSF_GMrandperm(1:samps);
-
-WMCSF_GMrandperm = randperm(size(WMCSF_GM_corr, 1)); % and then grab ~samps of these
-WMCSF_GMrandperm = WMCSF_GMrandperm(1:samps);
-
-Outbrain_GMrandperm = randperm(size(Outbrain_GM_corr, 1)); % and then grab ~samps of these
-Outbrain_GMrandperm = Outbrain_GMrandperm(1:samps);
-
-Edge_GMrandperm = randperm(size(Edge_GM_corr, 1)); % and then grab ~samps of these
-Edge_GMrandperm = Edge_GMrandperm(1:samps);
-
-% We will make a qc_corrs_table that holds manual (if it exists or is
-% calculated, otherwise 0s), auto, 8p, & 9p, because why not?
-
-% Now that we have the randomized samps numbers, we can actually grab them
-% from the correlations
-NotGM_GM_corr = NotGM_GM_corr(NotGM_GM_randperm);
-GM_GM_autocorr = GM_GM_autocorr(GM_GM_randperm);
-DVARS_GM_corr = DVARS_GM_corr(DVARS_GMrandperm);
-FD_GM_corr = FD_GM_corr(FD_GMrandperm);
-CSF_GM_corr = CSF_GM_corr(CSF_GMrandperm);
-WMCSF_GM_corr = WMCSF_GM_corr(WMCSF_GMrandperm);
-Outbrain_GM_corr = Outbrain_GM_corr(Outbrain_GMrandperm);
-Edge_GM_corr = Edge_GM_corr(Edge_GMrandperm);
-
-qc_corrs_array = [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_autocorr];
-qc_corrs_labels = {'Edge_GM_Corr', 'FD_GM_Corr', ...
-    'DVARS_GM_Corr', 'Outbrain_GM_Corr', 'WMCSF_GM_Corr', ...
-    'CSF_GM_Corr', 'NotGM_GM_Corr', 'GM_GM_AutoCorr'};
-qc_corrs_table = array2table(qc_corrs_array, 'VariableNames',qc_corrs_labels);
+samps = 500;
+qc_corrs_table = grab_corr_sampling(Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_autocorr, samps);
 
 end
