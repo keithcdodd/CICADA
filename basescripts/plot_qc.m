@@ -11,11 +11,13 @@ function plot_qc(denoised_Edge_GM_corr, denoised_FD_GM_corr, denoised_DVARS_GM_c
 % You can see if GM mean is empty for denoised
 
 fprintf('Creating Figures\n')
-figure('Position', [50, 50, 2000, 900])
+
 
 if isempty(denoised_GM_mean)
+    figure('Position', [50, 50, 2000, 900])
     t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
+    figure('Position', [50, 50, 2000, 700])
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
