@@ -1,9 +1,9 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, subj_id, ses_id, task_name, anat_ses_id, task_events_file, compare_file, mel_fol)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, task_events_file, compare_file, mel_fol)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them. 
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
 % cicada_dir: home directory for cicada folder e.g., /path/cicada
-% subj_id: e.g., '101'
+% sub_id: e.g., '101'
 % ses_id e.g., '01'
 % task_name e.g., 'visual_run-01' (include run tags in this if they exist!)
 % anat_ses_id: Whichever ses_id  has the best anat folder to use
@@ -44,14 +44,14 @@ if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
     mel_fol=[]; % will end up using default
 elseif ~isfolder(mel_fol)
     fprintf(['MELODIC folder not found at ', mel_fol, '\n'])
-    mel_fol = [cicada_dir, '/sub-', subj_id, '/ses-', ses_id, '/', task_name, '/melodic'];
+    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic'];
     fprintf(['Will run new melodic in new default folder: ' mel_fol, '\n'])
 end
 
 % First do all the checks to make sure everything seems legit!
 % check that expected fmriprep directories exist first
-fmriprep_func_dir = [fmriprep_dir, '/sub-', subj_id, '/ses-', ses_id, '/func'];
-fmriprep_anat_dir = [fmriprep_dir, '/sub-', subj_id, '/ses-', anat_ses_id, '/anat'];
+fmriprep_func_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/func'];
+fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', anat_ses_id, '/anat'];
 if ~isfolder(fmriprep_func_dir)
     fprintf(['Cannot find fmriprep func dir at ', fmriprep_func_dir, '\n'])
     return;
@@ -61,35 +61,35 @@ elseif ~isfolder(fmriprep_anat_dir)
 else
     % first grab things from func folder
     cd(fmriprep_func_dir)
-    funcfile_info = dir(['*', subj_id, '*', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
+    funcfile_info = dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
     funcfile = [funcfile_info.folder, '/', funcfile_info.name];
-    funcmask_info = dir(['*', subj_id, '*', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
+    funcmask_info = dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
     funcmask = [funcmask_info.folder, '/', funcmask_info.name];
-    confounds_info =  dir(['*', subj_id, '*', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
+    confounds_info =  dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
     confoundsfile = [confounds_info.folder, '/', confounds_info.name];
 
     % and now grab from best anat folder
     % Note, if you use a different structural other than T1w, you may need
     % to change that below
     cd(fmriprep_anat_dir)
-    anatfile_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
+    anatfile_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
     anatfile = [anatfile_info.folder, '/', anatfile_info.name];
-    anatmask_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
+    anatmask_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
     anatmask = [anatmask_info.folder, '/', anatmask_info.name];
-    gm_prob_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
+    gm_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
     gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
-    wm_prob_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
+    wm_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
     wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
-    csf_prob_info = dir(['*', subj_id, '*', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
+    csf_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
     csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
 end
 
-output_dir = [cicada_dir, '/sub-', subj_id, '/ses-', ses_id, '/', task_name];
+output_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
 
 % Output everything to check:
 fprintf(['\nfmriprep_dir: ', fmriprep_dir, '\n'])
 fprintf(['cicada_dir: ', cicada_dir, '\n'])
-fprintf(['subj_id: ', subj_id, '\n'])
+fprintf(['sub_id: ', sub_id, '\n'])
 fprintf(['ses_id: ', ses_id, '\n'])
 fprintf(['task_name: ', task_name, '\n'])
 fprintf(['ses_id for anat: ', anat_ses_id, '\n'])

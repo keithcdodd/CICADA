@@ -1,4 +1,4 @@
-function [cleaned_file] = CICADA_2_ManualLabeling(output_dir, IC_manual_checker)
+function [cleaned_file] = CICADA_2_ManualLabeling(output_dir, IC_manual_checker, mel_fol)
 % 
 % NOTE: NEED TO MAKE IC_manual_checker.csv BEFORE RUNNING THIS FUNCTION:
 % To make IC_manual_checker.csv, open IC_auto_checker.csv in
@@ -31,25 +31,15 @@ end
 % structure
 cd(output_dir)
 task_dir = output_dir;
-[~,task_name,~]=fileparts(pwd);
-cd ../
-ses_dir = pwd;
-[~,ses_id,~]=fileparts(pwd);
-cd ../
-sub_dir = pwd;
-[~,sub_id,~]=fileparts(pwd);
-cd(output_dir)
 
-funcfilename = 'funcfile';
-funcfile_info = dir([output_dir, '/', funcfilename, '.nii.gz']);
-funcfile = [funcfile_info.folder, '/', funcfile_info.name];
-funcfile_niftiinfo = niftiinfo(funcfile);
+if ~exist('mel_fol', 'var') || isempty(mel_fol) || ~isfolder(mel_fol)
+    mel_fol = [task_dir, '/melodic'];
+end
 
-
-tr = funcfile_niftiinfo.PixelDimensions(4);
-numvolumes = funcfile_niftiinfo.ImageSize(4);
-repetitiontime = tr; TR = tr;
-
+if ~isfolder(mel_fol)
+    fprintf(['Cannot find melodic folder at ' mel_fol, '\n'])
+    return;
+end
 
 if ~exist('IC_manual_checker', 'var')
     % If not given assume it is in its normal spot and look for it
@@ -75,7 +65,7 @@ if ~isfile([output_dir, '/ic_auto_selection/DecisionVariables_Auto.mat'])
     return
 end
 
-load('./ic_auto_selection/DecisionVariables_Auto.mat')
+load([output_dir, '/ic_auto_selection/DecisionVariables_Auto.mat'], 'output_dir', 'subject_id', 'session_id', 'task_id', 'Data', 'Tables', 'Results')
 
 Results_Auto = Results; % Save auto results struct
 % Create a new Results struct
@@ -90,8 +80,8 @@ auto_table = Results_Auto.IC_checker_table;
 % table:
 temp_manual_table = manual_table;
 temp_auto_table = auto_table;
-[B_manual, index_manual] = sortrows(temp_manual_table, 'PotentialICs', 'ascend'); % put in order from IC 1:end
-[B_auto, index_auto] = sortrows(temp_auto_table, 'PotentialICs', 'ascend'); % put in order from IC 1:end
+[B_manual, ~] = sortrows(temp_manual_table, 'PotentialICs', 'ascend'); % put in order from IC 1:end
+[~, index_auto] = sortrows(temp_auto_table, 'PotentialICs', 'ascend'); % put in order from IC 1:end
 fixed_manual_table = table(); % initialize as a table
 fixed_manual_table(index_auto,:) = B_manual; % OK, now manual table PotentialICs order matches auto table even if it did not before
 % Now, create a new IC Checker that is in the same form as auto, but
@@ -102,15 +92,10 @@ IC_checker_table = temp_table; % update name to IC_checker_table
 % IC_checker_table should be the same as the imported manual table, but in
 % case you changed other columns in the auto checker, this makes sure it
 % has the same auto columns, just updates the SignalLabel column
+signal_idx = IC_checker_table.PotentialICs; % This just gives us the ordered list of ICs
 
 % input into Manual_Results
 Results.IC_checker_table = IC_checker_table;
-
-
-% remove old ic_manual_selection folder if it exists
- %if isfolder('./ic_manual_selection')
- %    rmdir './ic_manual_selection' 's'
- %end
 
 % Note what the changes are in Signal Label Column
 IC_selection_changes = IC_checker_table(IC_checker_table.SignalLabel ~= auto_table.SignalLabel, :); % this will list the signal labels that manual has, that auto selection had the opposite on
@@ -120,7 +105,6 @@ writetable(IC_selection_changes, 'changed_signal_label_manual_ICs.csv')
 % input into Manual_Results
 Results.IC_selection_changes = IC_selection_changes;
 
-
 % Now do the things, cut off the table to not include the classification
 % strings
 cut_off_table = IC_checker_table(:,{'PotentialICs', 'SignalLabel', 'HighSignalLabel', 'HighNoiseLabel'});
@@ -128,7 +112,6 @@ manual_array = table2array(cut_off_table);
 
 % import some variables from Auto Results:
 noise_indices = Results_Auto.noise_indices;
-signal_indices = Results_Auto.signal_indices;
 ICs = Results_Auto.ICs;
 IC_exp_var = table2array(Tables.IC_exp_var_table);
 
@@ -169,23 +152,16 @@ Results.num_ICs_total = length(ICs);
 Results.IC_exp_var = IC_exp_var;
 Results.ICs = ICs;
 
-
 % Create images to review signal and noise components from
 % probabilities ICs
-all_prob = niftiread('./melodic/ICprobabilities.nii.gz');
-all_clusterthresh = niftiread('./melodic/ICclusterthresh_zstat.nii.gz');
-
-% higher probability clustered & Highest prob only clustered
-all_prob_clustered = cast(all_prob .* (all_prob > 0.67) .* (abs(all_clusterthresh) > 3), 'single'); % includes probability values
-all_highest_prob_clustered = cast(all_prob .* (all_prob > 0.95) .* (abs(all_clusterthresh) > 3), 'single'); % higher cut off
-
-gm_prob = niftiread('./region_masks/GM_prop_final.nii.gz');
-notgm_prob = niftiread('./region_masks/NotGM_prop_final.nii.gz');
+all_prob = niftiread([mel_fol, '/ICprobabilities.nii.gz']);
+gm_prob = niftiread([task_dir, '/region_masks/GM_prob.nii.gz']);
+notgm_prob = niftiread([task_dir, '/region_masks/NotGM_prob.nii.gz']);
 gm_bin = gm_prob > 0.75;
 notgm_bin = notgm_prob > 0.75;
-noise_prob = all_prob_clustered(:,:,:,noise_ICs);
-noise_prob_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
-signal_prob = all_prob_clustered(:,:,:,signal_ICs);
+noise_prob = all_prob(:,:,:,noise_ICs);
+noise_prob_info = niftiinfo([mel_fol, '/ICprobabilities.nii.gz']);
+signal_prob = all_prob(:,:,:,signal_ICs);
 
 % grab noise probabilities, update header, and write, same for
 % signal
@@ -196,17 +172,16 @@ noise_prob_info.Datatype = 'single';
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
 
-potential_signal_ICs = IC_checker_table.PotentialICs;
-potential_signal_prob = all_prob_clustered(:,:,:,potential_signal_ICs);
+potential_signal_prob = all_prob(:,:,:,signal_idx);
 potential_signal_prob_info = noise_prob_info;
 potential_signal_prob_info.ImageSize = size(potential_signal_prob);
 
-niftiwrite(potential_signal_prob, 'PotentialSignalICs', potential_signal_prob_info, 'Compressed', true)
+niftiwrite(potential_signal_prob, 'PotentialSignalICs', potential_signal_prob_info, 'Compressed', true) % just the ICs that were considered
 niftiwrite(noise_prob, 'NoiseICs', noise_prob_info, 'Compressed', true)
 niftiwrite(signal_prob, 'SignalICs', signal_prob_info, 'Compressed', true)
 
-% Now compress noise and signal, with only highest probabilities
-[all_prob_1D, all_prob_ind] = max(all_prob, [], 4); 
+% Now compress noise and signal, with only max probabilities per voxel
+[~, ~] = max(all_prob, [], 4); 
 [noise_prob_1D, noise_prob_ind] = max(all_prob(:,:,:,noise_ICs), [], 4); 
 [signal_prob_1D, signal_prob_ind] = max(all_prob(:,:,:,signal_ICs), [], 4); 
 
@@ -215,10 +190,11 @@ noise_prob_info.ImageSize = noise_prob_info.ImageSize(1:end-1);
 noise_prob_info.PixelDimensions = noise_prob_info.PixelDimensions(1:end-1);
 signal_prob_info = noise_prob_info;
 
-% Calculate out a signal to noise ratio mask overlap
+% Calculate out a signal to noise ratio mask overlap - but this might not
+% be very helpful
 signal_noise_ratio_IC_overlap = signal_prob_1D ./ (noise_prob_1D+signal_prob_1D);
 signal_noise_ratio_IC_overlap(isnan(signal_noise_ratio_IC_overlap)) = 0.5; % convert if/when there is no noise or signal high prob value to 0.5 (will become 0)
-signal_noise_ratio_IC_overlap = signal_noise_ratio_IC_overlap - 0.5; % shift 0.5 to 0, to center it so <0 is more noise & >0 is more signal
+signal_noise_ratio_IC_overlap = signal_noise_ratio_IC_overlap - 0.5; % shift 0.5 to 0, to center it so <0 is more nois & >0 is more signal
 
 % perhaps a better method is threshold at 0.95 both signal and noise, make
 % noise be noise - signal (to get noise sections alone), set to -1 for
@@ -256,28 +232,52 @@ writematrix(Results.signal_indices, 'manual_signal_dist_indices.csv')
 writetable(Results.IC_checker_table, 'IC_manual_checker.csv')
 writetable(Results_Auto.feature_relative_table, 'feature_manual_vals.csv')
 writetable(Results_Auto.feature_table_norm, 'feature_manual_norms.csv')
-writetable(Results.compare_cleaning, 'compare_manual_cleaning.csv')
+writetable(Results.compare_cleaning, 'compare_manual_cleaning.csv','WriteRowNames', true)
 writetable(Results.eval_table, 'eval_manual_table.csv')
 
-
 % and then make noise components if you want to do aggressive denoising like in CONN (regression)
-mixing_matrix = dlmread('./melodic/melodic_mix');
+mixing_matrix = readmatrix([mel_fol, '/melodic_mix']);
 manual_noise_dist_covariates = mixing_matrix(:, Results.noise_ICs');
 writematrix(manual_noise_dist_covariates, 'manual_noise_dist_covariates.csv')
 writematrix(manual_noise_dist_covariates, 'manual_noise_dist_covariates.txt', 'Delimiter', ' ')
 
 % save a matrix of relevant variables if you want to examine later!
-save('DecisionVariables_Manual.mat', 'cadicafol', 'subject_id', 'session_id', ...
-    'taskname', 'ICs', 'Data', 'Tables', 'Results_Auto', 'Results')
+save('DecisionVariables_Manual.mat', 'output_dir', 'subject_id', 'session_id', ...
+    'task_id', 'ICs', 'Data', 'Tables', 'Results_Auto', 'Results')
 
 % And then move relevant files
 movefile manual* ic_manual_selection
 movefile *SignalIC* ic_manual_selection
 movefile *NoiseIC* ic_manual_selection
-movefile *Manual* ic_manual_selection
-movefile *manual_ICs.* ic_manual_selection
+
+movefile *_manual_* ic_manual_selection
+
+
+movefile *IC_manual_checker.* ic_manual_selection
+movefile *_auto_* ic_auto_selection
+
+
 if ~isfile('./ic_manual_selection/IC_manual_checker.csv')
     movefile(IC_manual_checker, "ic_manual_selection")
 end
+
+% OK, now run the manual CICADA denoising
+prefix = [subject_id, '_', session_id, '_task-', task_id];
+CICADA_tag = 'CICADA_manual_nonagg';
+suffix = 'bold.nii.gz';
+fsl_regfilt_command = ['fsl_regfilt -i ', task_dir, '/funcfile.nii.gz -f ', ...
+    '"', '$(cat ', task_dir, '/ic_manual_selection/manual_noise_dist_ICs.csv)', '"', ...
+    ' -d ', mel_fol, '/melodic_mix -m ', ...
+    task_dir, '/funcmask.nii.gz -o ', prefix, '_', CICADA_tag, '_', suffix];
+fprintf(['Running: ', fsl_regfilt_command, '\n'])
+[~, ~] = call_fsl(fsl_regfilt_command);
+
+% Now put things in cleaned_dir, and also get cleaned_filename
+cleaned_dir = [task_dir, '/cleaned'];
+movefile('*CICADA*.nii.gz', cleaned_dir)
+
+% get cleaned_filename
+cleaned_file_info = dir([cleaned_dir, '/*CICADA*manual*.nii.gz']);
+cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
 
 end

@@ -1,4 +1,4 @@
-function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance)
+function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance, mel_fol)
 % Run this after running CICADA_1 script
 % output_dir must be the same one as for the first script, so that this can
 % find all the relevant files. Again, it is best if this is in the format
@@ -45,6 +45,17 @@ fprintf(['   Tolerance is ' num2str(tolerance), '. Standard is 4.\n'])
 
 % read in the functional file to get necessary information
 cd(output_dir)
+task_dir = output_dir;
+
+if ~exist('mel_fol', 'var') || isempty(mel_fol) || ~isfolder(mel_fol)
+    mel_fol = [task_dir, '/melodic'];
+end
+
+if ~isfolder(mel_fol)
+    fprintf(['Cannot find melodic folder at ' mel_fol, '\n'])
+    return;
+end
+
 % read in task name, session name, and subject name based on default folder
 % structure
 [~,task_id,~]=fileparts(pwd);
@@ -250,7 +261,7 @@ LowfreqIC = zeros(length(ICs), 1);
 HighfreqIC = zeros(length(ICs), 1);
 for i=1:length(ICs)
     % grab time spectrum
-    file=strcat('melodic/report/t', num2str(i), '.txt');
+    file=strcat(mel_fol, '/report/t', num2str(i), '.txt');
     ts(:,i)=readmatrix(file);
 
     % calculate power spectrum as evidenced in matlab tutorials (floor is
@@ -808,13 +819,13 @@ Results.ICs = ICs;
 
 % Create images to review signal and noise components from
 % probabilities ICs
-all_prob = niftiread('./melodic/ICprobabilities.nii.gz');
-gm_prob = niftiread('./region_masks/GM_prob.nii.gz');
-notgm_prob = niftiread('./region_masks/NotGM_prob.nii.gz');
+all_prob = niftiread([mel_fol, '/ICprobabilities.nii.gz']);
+gm_prob = niftiread([task_dir, '/region_masks/GM_prob.nii.gz']);
+notgm_prob = niftiread([task_dir, '/region_masks/NotGM_prob.nii.gz']);
 gm_bin = gm_prob > 0.75;
 notgm_bin = notgm_prob > 0.75;
 noise_prob = all_prob(:,:,:,noise_ICs);
-noise_prob_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
+noise_prob_info = niftiinfo([mel_fol, '/ICprobabilities.nii.gz']);
 signal_prob = all_prob(:,:,:,signal_ICs);
 
 % grab noise probabilities, update header, and write, same for
@@ -890,7 +901,7 @@ writetable(feature_table_norm, 'feature_auto_norms.csv')
 writetable(compare_cleaning, 'compare_auto_cleaning.csv', 'WriteRowNames', true)
 
 % and then make noise components if you want to do aggressive denoising like in CONN (regression)
-mixing_matrix = readmatrix('./melodic/melodic_mix');
+mixing_matrix = readmatrix([mel_fol, '/melodic_mix']);
 auto_noise_dist_covariates = mixing_matrix(:, Results.noise_ICs');
 writematrix(auto_noise_dist_covariates, 'auto_noise_dist_covariates.txt', 'Delimiter', ' ')
 writematrix(auto_noise_dist_covariates, 'auto_noise_dist_covariates.csv')
@@ -919,7 +930,7 @@ CICADA_tag = 'CICADA_auto_nonagg';
 suffix = 'bold.nii.gz';
 fsl_regfilt_command = ['fsl_regfilt -i ', task_dir, '/funcfile.nii.gz -f ', ...
     '"', '$(cat ', task_dir, '/ic_auto_selection/auto_noise_dist_ICs.csv)', '"', ...
-    ' -d ', task_dir, '/melodic/melodic_mix -m ', ...
+    ' -d ', mel_fol, '/melodic_mix -m ', ...
     task_dir, '/funcmask.nii.gz -o ', prefix, '_', CICADA_tag, '_', suffix];
 fprintf(['Running: ', fsl_regfilt_command, '\n'])
 [~, ~] = call_fsl(fsl_regfilt_command);
@@ -951,7 +962,7 @@ cleaned_dir = [output_dir, '/cleaned'];
 if ~isfolder(cleaned_dir)
     mkdir(cleaned_dir)
 end
-delete([cleaned_dir, '/*']) % clear out old files in here, save space and just in case
+%delete([cleaned_dir, '/*']) % clear out old files in here, save space and just in case
 
 % for good measure, put in a copy of the original with similar naming in cleaned dir - Good for comparisons in QC script
 copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
