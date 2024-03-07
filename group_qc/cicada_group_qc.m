@@ -251,29 +251,32 @@ for idx = 1:num_runs
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_vals.mat']); % specific to file tag of interest, can be multiples
     if ~isempty(compare_file)
         for h = 1:size(compare_image_info,1)
-        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
-        compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
-        compare_tag = compare_tag{:};
-        compare_tags{h} = compare_tag; % this should be the same for everyone, so it is OK that we overwrite
-
-        photo_fol = [output_dir, '/qc_photos_', compare_tag];
-        copyfile(curr_compare_image_file, photo_fol)
-
-        % We will also want to grab current compare qc corrs table, and if
-        % there are multiple, stack them into a cell array
-        curr_compare_data_file = [compare_data_info(h).folder, '/', compare_data_info(h).name];
-        load(curr_compare_data_file, "-regexp", "^compare_")
-        compare_qc_corrs_table = grab_corr_sampling(compare_Edge_GM_corr, compare_FD_GM_corr, ...
-                compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, ...
-                compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, samps);
-
-
-        % Stack it into group cell array!
-        if m == 1
-            group_compare_qc_corrs_table{h} = compare_qc_corrs_table;
-        else
-            group_compare_qc_corrs_table{h} = [group_compare_qc_corrs_table{h}; compare_qc_corrs_table];
-        end
+            curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
+            compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+            compare_tag = compare_tag{:};
+            compare_tags{h} = compare_tag; % this should be the same for everyone, so it is OK that we overwrite
+    
+            photo_fol = [output_dir, '/qc_photos_', compare_tag];
+            copyfile(curr_compare_image_file, photo_fol)
+    
+            % We will also want to grab current compare qc corrs table, and if
+            % there are multiple, stack them into a cell array
+            curr_compare_data_file = [compare_data_info(h).folder, '/', compare_data_info(h).name];
+            load(curr_compare_data_file, "-regexp", "^compare_")
+            compare_qc_corrs_table = grab_corr_sampling(compare_Edge_GM_corr, compare_FD_GM_corr, ...
+                    compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, ...
+                    compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, samps);
+    
+    
+            % Stack it into group cell array!
+            if m == 1
+                group_compare_qc_corrs_table{h} = compare_qc_corrs_table;
+            else
+                % if there is an error here, check qc folders of a couple
+                % instances and make sure there are the same number of
+                % relevant file comparison files.
+                group_compare_qc_corrs_table{h} = [group_compare_qc_corrs_table{h}; compare_qc_corrs_table];
+            end                         
         end
     else
         group_compare_qc_corrs_table = {};

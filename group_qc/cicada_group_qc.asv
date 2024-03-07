@@ -1,4 +1,4 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, file_tag, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the output dir for group qc
@@ -27,7 +27,7 @@ end
 
 % now check that all lists are the same length, and that all are lists of
 % char arrays
-if ~isequal(length(sub_ids), length(ses_id_s), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
+if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
     fprintf('Your lists are different lengths... quitting\n')
     return
 end
@@ -72,7 +72,7 @@ for h = 1:size(compare_image_info,1)
     compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
     compare_tag = compare_tag{:};
     photo_fol = [output_dir, '/qc_photos_', compare_tag];
-    qc_photo_fols{h} = photo_fol; % for use for later for copy and past
+    qc_photo_fols{h} = photo_fol; % for potential use for later for copy and paste
     if not(isfolder(photo_fol))
         mkdir(photo_fol)
     else
@@ -111,8 +111,8 @@ background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm15
 network_file = [cicada_home, '/templates/network_template_', task_name, '.nii.gz'];
 
 % convert gm probability into a mask at .67
-gm_mni_prob = niftiread(gm_mni_prob_file);
-gm_mni_thresh = gm_mni_prob_file > 0.67;
+%gm_mni_prob = niftiread(gm_mni_prob_file);
+%gm_mni_thresh = gm_mni_prob_file > 0.67;
 gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
 gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
 
@@ -124,7 +124,7 @@ Group_QC = struct;
 m = 1;
 bd = 1;
 cicada_dir = cicada_home; % just for naming
-
+num_runs = length(sub_ids);
 for idx = 1:num_runs
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
@@ -149,7 +149,7 @@ for idx = 1:num_runs
     % Make sure task directory exists
     task_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
     if ~isfolder(task_dir)
-        fprintf('   Cannot find task directory at ', task_dir, '. Skipping...\n')
+        fprintf(['   Cannot find task directory at ', task_dir, '. Skipping...\n'])
         continue;
     end
 
