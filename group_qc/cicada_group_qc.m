@@ -1,64 +1,52 @@
-% script to run group qc of cicada files
-% This will all be based on the same .csv you used for initial cicada runs.
+function cicada_group_qc(cicada_home, group_qc_home, task_name, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+% function to run group qc
+% cicada_home: is the cicada home directory, the general home input folder
+% group_qc_home: the output dir for group qc
+% task_name: The task id for the group qc data, e.g. 'visual_run-01', or
+% 'rest'
+% sub_ids, ses_ids, excludes, outliers, adjusteds, and
+% task_event_files should all be cell arrays of characters of the same number of
+% rows. This function will loop through each row of them all and match them
+% for the call. 
+% file_tag: needs to be unique to the type of denoised/cleaned file you are
+% putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
+% sub_ids e.g., {'102', '102', '103'}
+% ses_ids e.g., {'01', '02', '01'}
+% excludes (either 0 or 1 for exclude) e.g., {'0', '1', '0'}
+% outliers (either 0 or 1 for outlier) e.g., {'0', '1', '0'}
+% adjusteds (either 0 or 1 for manually IC adjusted) e.g., {'0', '1', '0'}
+% task_event_files should contain paths to the task_event_file(s)
+% (optional)
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clearvars
-%%%%%%%%%%%%%%%%%%%%%%%%%% SET UP %%%%%%%%%%%%%%%%%%%%%%%%%%
-file_tag = 'auto'; % a tag that is unique to the type of denoised file. E.g., 'auto', 'manual', '8p', '9p', etc.
-cicada_csv = '/Users/keithdodd/Work/awesome/documents/cicada_runs/cicada_runs.csv'; % As described above, change as needed
-rerun_melodic_regardless = 0; % 0 will not rerun melodic if it is found in default space. 1 will rerun regardless
-cicada_wrapper_dir = '/Users/keithdodd/Work/code/CICADA/wrappers';
-task_name = 'rest'; % should only be on one task for group qc
-redo_melodic = 0; % 0 is to not redo if it is already done. 1 redoes it even if already done.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% need to make sure CICADA folder and subfolders are added to path!
-CICADA_group_scripts_dir = fileparts(mfilename('fullpath')); % this gives current script path
-addpath(CICADA_group_scripts_dir); % current location to path 
-
-% make sure everything is read as a cell array of char vector from the .csv
-% for consistency
-opts = detectImportOptions(cicada_csv);
-opts = setvartype(opts, 'char');  
-
-cicada_runs_table = readtable(cicada_csv, opts); % now read in the actual inputs!
-cicada_runs = cicada_runs_table(strcmp(cicada_runs_table.task_name, task_name),:);
-num_runs = size(cicada_runs,1);
-
-fprintf('###########################################\n')
-fprintf(['Running for ', num2str(num_runs), ' number of runs!\n'])
-
-% read variables, make sure excel has these columns
-cicada_dirs = cicada_runs.cicada_dir;
-output_dirs = cicada_runs.group_qc_dir; % Add this to your excel
-sub_ids = cicada_runs.sub_id;
-ses_ids = cicada_runs.ses_id;
-task_names = cicada_runs.task_name;
-initial_outliers = cicada_runs.initial_outlier; % data that was unusable from the get-go
-denoising_outliers = cicada_runs.denoising_outlier; % data where denoising was unable to save the data, or is deemed to throw out for other reasons
-% NOTE: An example for using denoising_outlier might be when the data
-% exceeds movement thresholds, or if CICADA marked outliers, and you want
-% to apply this same outlier list (manually) here. The point is, you, or a
-% program, determines outliers due to thresholds and this is where you can
-% manually mark that. The data will still be a part of group_qc, but for
-% future analyses, you can use this list to not include them.
-manually_adjusteds = cicada_runs.manually_adjusted; % data you have tried to save with manual ICA selection
-task_event_files = cicada_runs.task_events_file;
-
-% check that group_qc_dir and cicada_dir are the same for everyone (it should be)
-if ~(sum(strcmp(output_dirs, output_dirs{1})) == length(output_dirs))
-    fprintf('Group QC directory is not the same for everyone!\n')
-    return;
+% if no task_event_file_list is given (e.g., it is all resting state) then
+% create an empty cell array of chars the same length as sub_id_list
+if ~exist('task_event_files', 'var') || isempty(task_event_files)
+    task_event_files = cell(size(sub_ids));
+    task_event_files(:) = {''}; 
 end
 
-if ~(sum(strcmp(cicada_dirs, cicada_dirs{1})) == length(cicada_dirs))
-    fprintf('CICADA directory is not the same for everyone!\n')
-    return;
+% now check that all lists are the same length, and that all are lists of
+% char arrays
+if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
+    fprintf('Your lists are different lengths... quitting\n')
+    return
+end
+
+test_class = {''};
+
+if ~isequal(class(test_class), class(sub_ids), class(ses_ids), class(excludes), class(outliers), class(adjusteds), class(task_event_files))
+    fprintf('Your lists are not all cell arrays \n')
+    return
+end
+
+if ~isequal(class(test_class{1}), class(sub_ids{1}), class(ses_ids{1}), class(excludes{1}), class(outliers{1}), class(adjusteds{1}), class(task_event_files{1}))
+    fprintf('Your lists do not contain all chars (should be cell arrays of characters!) \n')
+    return
 end
 
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
-output_dir = [output_dirs{1}, '/', task_name]; % because they should ALL be the same, and specified to task
+output_dir = [group_qc_home, '/', task_name]; % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -69,7 +57,7 @@ end
 % manual 
 
 % go into first participant's info to extract the correct naming:
-first_task_dir = [cicada_dirs{1}, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
+first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
 
 % make sure that the dir call actually found the file(s) of images that
@@ -84,7 +72,7 @@ for h = 1:size(compare_image_info,1)
     compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
     compare_tag = compare_tag{:};
     photo_fol = [output_dir, '/qc_photos_', compare_tag];
-    qc_photo_fols{h} = photo_fol; % for use for later for copy and past
+    qc_photo_fols{h} = photo_fol; % for potential use for later for copy and paste
     if not(isfolder(photo_fol))
         mkdir(photo_fol)
     else
@@ -120,11 +108,11 @@ cd([cicada_group_qc_dir, '/..'])
 cicada_path = pwd;
 gm_mni_prob_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_gm_tal_nlin_asym_09c.nii.gz'];
 background_file = [cicada_path, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz'];
-network_file = [cicada_dirs{1}, '/templates/network_template_', task_name, '.nii.gz'];
+network_file = [cicada_home, '/templates/network_template_', task_name, '.nii.gz'];
 
 % convert gm probability into a mask at .67
-gm_mni_prob = niftiread(gm_mni_prob_file);
-gm_mni_thresh = gm_mni_prob_file > 0.67;
+%gm_mni_prob = niftiread(gm_mni_prob_file);
+%gm_mni_thresh = gm_mni_prob_file > 0.67;
 gm_mni_thresh_info = niftiinfo(gm_mni_prob_file);
 gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a file later
 
@@ -135,16 +123,14 @@ Group_QC = struct;
 % within the for loop 
 m = 1;
 bd = 1;
-
+cicada_dir = cicada_home; % just for naming
+num_runs = length(sub_ids);
 for idx = 1:num_runs
-    cicada_dir = cicada_dirs{idx}; % should be the same for all
-    output_dir = [output_dirs{idx}, '/', task_name]; % should be the same for all
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
-    task_name = task_names{idx}; % should be the same for all 
-    bad_data = initial_outliers{idx}; % needs to be '1' for bad data, or '0' for OK data
-    manually_adjusted = manually_adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
-    denoising_outlier = denoising_outliers{idx};
+    bad_data = excludes{idx}; % needs to be '1' for bad data, or '0' for OK data
+    manually_adjusted = adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
+    denoising_outlier = outliers{idx};
     task_event_file = task_event_files{idx};
 
     fprintf(['\nRunning sub ', sub_id, ' ses ', ses_id, ' task ', task_name, '\n'])
@@ -163,7 +149,7 @@ for idx = 1:num_runs
     % Make sure task directory exists
     task_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
     if ~isfolder(task_dir)
-        fprintf('   Cannot find task directory at ', task_dir, '. Skipping...\n')
+        fprintf(['   Cannot find task directory at ', task_dir, '. Skipping...\n'])
         continue;
     end
 
@@ -538,7 +524,7 @@ elseif redo_melodic == 1
     % Also go through melodic output and calculate overlap % of IC to each
     % network between the 7 networks, which can be useful
     networks_combined = niftiread(network_file);
-    networks_info = niftiinfo(network_file);
+    %networks_info = niftiinfo(network_file);
     
     % Break it up into the 7 networks in the 4th dimension
     networks = zeros([size(networks_combined),7]);
@@ -590,7 +576,7 @@ elseif redo_melodic == 1
         curr_dice = 0;
         curr_network_dices = dice_IC_network(:,i1);
         curr_network = networks(:,:,:,i1);
-        [a, b] = sort(curr_network_dices, 'descend');
+        [~, b] = sort(curr_network_dices, 'descend');
     
         % initialize
         curr_IC_prob_cum = zeros(size(networks(:,:,:,1)));
