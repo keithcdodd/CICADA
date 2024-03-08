@@ -1,7 +1,9 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
-% group_qc_home: the output dir for group qc
+% group_qc_home: the general group qc output dir
+% output_dirname: what name do you want for your output directory? This
+% will end up like the following: group_qc_home/task_name/output_dirname
 % task_name: The task id for the group qc data, e.g. 'visual_run-01', or
 % 'rest'
 % sub_ids, ses_ids, excludes, outliers, adjusteds, and
@@ -46,7 +48,7 @@ end
 
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
-output_dir = [group_qc_home, '/', task_name]; % because they should ALL be the same, and specified to task
+output_dir = [group_qc_home, '/', task_name, '/', output_dirname]; % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -125,6 +127,7 @@ m = 1;
 bd = 1;
 cicada_dir = cicada_home; % just for naming
 num_runs = length(sub_ids);
+bad_data_prefixes = ''; % initialize
 for idx = 1:num_runs
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};

@@ -52,6 +52,15 @@ if ~isfile([task_dir, '/funcmask.nii.gz'])
     return;
 end
 
+if isfile([task_dir, '/funcmask_constrained.nii.gz'])
+    data_mask = [task_dir, '/funcmask_constrained.nii.gz']; % use it if it is already there. This allows a user to make their own ahead of time
+else
+    funcfile = [task_dir, '/funcfile.nii.gz'];
+    funcmask = [task_dir, '/funcmask.nii.gz'];
+    anatmask = [task_dir, '/region_masks/anatmask_resam.nii.gz'];
+    data_mask = make_constrained_funcmask(task_dir, funcfile, funcmask, anatmask, 1);
+end
+
 data_mask = [task_dir, '/funcmask.nii.gz'];
 
 % grab the resampled GM mni region mask (to use for

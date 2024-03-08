@@ -305,15 +305,15 @@ echo "    Creating New Funcmask To Include Outer Areas Of Brain!"
 funcmask="${output_dir}/funcmask_orig.nii.gz" # func brain mask, but will relabel to get final one in next few lines
 funcfile_nomask="${output_dir}/${funcfilename}_unmasked.nii.gz" # functional file unmasked version
 
-# First, calculate a good resampled anatomy mask if you did not already
-flirt -ref "${funcmask}" -in "${anatmask}" -out "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -usesqform -applyxfm
-fslmaths "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -bin "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz"
+# First, calculate a good resampled anatomy mask if you did not already. Do not make anatmask_resam temporary because potentially useful later.
+flirt -ref "${funcmask}" -in "${anatmask}" -out "${output_regionmask_dir}/anatmask_resam.nii.gz" -usesqform -applyxfm
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/anatmask_resam.nii.gz"
 
 # now find max of orig funcmask and anatmask_resam - helps make sure we do not leave out part of brain - this could be a large func mask
-fslmaths "${funcmask}" -max "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" "${output_dir}/max_anatmask_tmp_funcmask.nii.gz"
+fslmaths "${funcmask}" -max "${output_regionmask_dir}/anatmask_resam.nii.gz" "${output_dir}/max_anatmask_tmp_funcmask.nii.gz"
 
 # second, now create a smoothed anatmask and a lightly thresholded unmasked functional file, helps keep us within reasonable boundaries
-fslmaths "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -s 6 -thr 0.1 -bin "${output_dir}/anatmask_resam_tmp_smoothed.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -s 6 -thr 0.1 -bin "${output_dir}/anatmask_resam_tmp_smoothed.nii.gz"
 fslmaths "${funcfile_nomask}" -Tmean -thrP 5 -bin "${output_dir}/funcfile_unmasked_tmp_thrP5.nii.gz"
 
 # finally, multiply the smoothed anatmask and lightly thresholded unmasked funcfile to the combined mask to get final funcmask
@@ -335,11 +335,11 @@ flirt -ref "${funcmask}" -in "${WMprob}" -out "${output_regionmask_dir}/WMprob_t
 flirt -ref "${funcmask}" -in "${CSFprob}" -out "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -usesqform -applyxfm
 
 # calculate susceptibility mask first then edge
-fslmaths "${funcfile}" -Tmean -uthrp 20 -thr 0 -bin -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
+fslmaths "${funcfile}" -Tmean -uthrp 20 -thr 0 -bin -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 
 # Now calculate edge after removing susceptibility. Perimeter of funcmask, but not including susceptibility areas (i.e., edge must have strong enough signal)
 fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz"
-fslmaths "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz"
 fslmaths ${funcmask} -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/Edge_mask.nii.gz"
 
@@ -352,7 +352,7 @@ fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regi
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
 # Can calculate an "inner CSF" by multiplying by an eroded anatmask_resam -- this may be helpful for a more target inner CSF measure. This could be in contrast to OutbrainOnly
-fslmaths "${output_regionmask_dir}/anatmask_tmp_resam.nii.gz" -ero -mul ${funcmask} -bin "${output_regionmask_dir}/anatmask_resam_tmp_eroded.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -mul ${funcmask} -bin "${output_regionmask_dir}/anatmask_resam_tmp_eroded.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_resam_tmp_eroded.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
 
 # Calculate WMorCSF, GMorCSF, and GMorWM regions
