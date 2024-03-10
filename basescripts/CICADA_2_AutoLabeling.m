@@ -76,7 +76,7 @@ anatmask = [anatmask_info.folder, '/', anatmask_info.name];
 % Now make a constrained funcmask that will be useful for calculating a
 % group mask later! Uses kmeans clustering into 7 groups, removes lowest
 % group for a more constrained funcmask.
-make_constrained_funcmask(output_dir, funcfile, funcmask, anatmask, 1, []);
+make_constrained_funcmask(output_dir, funcfile, funcmask, 1, []);
 
 % initialize
 Tables = struct;

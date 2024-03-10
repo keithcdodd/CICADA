@@ -58,7 +58,7 @@ else
     funcfile = [task_dir, '/funcfile.nii.gz'];
     funcmask = [task_dir, '/funcmask.nii.gz'];
     anatmask = [task_dir, '/region_masks/anatmask_resam.nii.gz'];
-    data_mask = make_constrained_funcmask(task_dir, funcfile, funcmask, anatmask, 1);
+    data_mask = make_constrained_funcmask(task_dir, funcfile, funcmask, 1);
 end
 
 data_mask = [task_dir, '/funcmask.nii.gz'];

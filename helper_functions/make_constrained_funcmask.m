@@ -1,4 +1,4 @@
-function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, anatmask, use_kmeans, percent)
+function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, use_kmeans, percent)
 % This will make a constrained smaller funcmask then what is used in
 % CICADA. The purpose is to use this constrained funcmask to help with
 % group funcmask generation. This is needed because CICADA funcmask needs a
@@ -7,8 +7,6 @@ function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, 
 % analysis.
 % General idea is to remove darkest voxels from CICADA the tmean of the 
 % funcfile  and then multiply by funcmask & anatmask. 
-% NOTE: Anatmask should already be resampled to funcmask. e.g., with fsl flirt.
-% Suggested to just use anatmask_resam in region_masks folder from CICADA
 %
 % Default method to find darkest voxels is with kmeans with 7 clusters.
 % However, one can turn kmeans off (use_kmeans = 0;) and then give a percent
@@ -20,6 +18,12 @@ function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, 
 % This can be helpful to run during standard CICADA, AND during group QC
 % (so the user can easily change how the group_funcmask is calculated after
 % CICADA is run).
+
+% get path to templates
+helper_function_dir = fileparts(mfilename('fullpath')); % this gives current script path
+cd([helper_function_dir, '/../'])
+cicada_script_dir = pwd;
+mni_anatmask = [cicada_script_dir, '/templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_mask.nii.gz'];
 
 if ~isfolder(output_dir)
     mkdir(output_dir)
@@ -35,16 +39,22 @@ if ~isfile(funcmask)
     return
 end
 
-if ~isfile(anatmask)
-    fprintf(['Cannot find anatmask at ', anatmask, '\n'])
+if ~isfile(mni_anatmask)
+    fprintf(['Cannot find mni_anatmask at ', mni_anatmask, '\n'])
     return
 end
 
 
 cd(output_dir)
 
-% Multiply funcfile by anatmask & then get temporal mean
-funcfile_anatmask_command = ['fslmaths ', funcfile, ' -mul ', funcmask, ' -mul ', anatmask ' -Tmean ' output_dir, '/tmean_funcfile_anatmasked.nii.gz'];
+% first, flirt the mni_anatmask to funcfile space. mni_anatmask is better
+% than subject anatmask in terms of retaining center slice of brain. Therefore, slightly better
+% for group analysis.
+command = ['flirt -ref ', funcmask, ' -in ', mni_anatmask, ' -out ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -usesqform -applyxfm'];
+call_fsl(command)
+
+% Multiply funcfile by mni_anatmask & then get temporal mean
+funcfile_anatmask_command = ['fslmaths ', funcfile, ' -mul ', funcmask, ' -mul ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -Tmean ' output_dir, '/tmean_funcfile_anatmasked.nii.gz'];
 call_fsl(funcfile_anatmask_command);
 tmean_funcfile_anatmask = [output_dir, '/tmean_funcfile_anatmasked.nii.gz'];
 

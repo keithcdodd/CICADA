@@ -6,7 +6,6 @@ function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, compare_file
 % wm_prob, and csf_prob, as well as task_events_file (if task data).
 % can skip variables with [] input
 
-
 % need to make sure CICADA folder and subfolders are added to path!
 Auto_CICADA_dir = fileparts(mfilename('fullpath')); % this gives current script path
 basescript_path = [Auto_CICADA_dir, '/../basescripts'];
