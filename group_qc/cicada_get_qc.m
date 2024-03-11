@@ -61,7 +61,7 @@ else
     data_mask = make_constrained_funcmask(task_dir, funcfile, funcmask, 1);
 end
 
-data_mask = [task_dir, '/funcmask.nii.gz'];
+%data_mask = [task_dir, '/funcmask.nii.gz'];
 
 % grab the resampled GM mni region mask (to use for
 % signalandnoise_overlap)

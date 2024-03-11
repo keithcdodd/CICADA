@@ -50,8 +50,10 @@ cd(output_dir)
 % first, flirt the mni_anatmask to funcfile space. mni_anatmask is better
 % than subject anatmask in terms of retaining center slice of brain. Therefore, slightly better
 % for group analysis.
-command = ['flirt -ref ', funcmask, ' -in ', mni_anatmask, ' -out ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -usesqform -applyxfm'];
-call_fsl(command)
+command_1 = ['flirt -ref ', funcmask, ' -in ', mni_anatmask, ' -out ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -usesqform -applyxfm'];
+command_2 = ['fslmaths ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -bin ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz'];
+call_fsl(command_1);
+call_fsl(command_2);
 
 % Multiply funcfile by mni_anatmask & then get temporal mean
 funcfile_anatmask_command = ['fslmaths ', funcfile, ' -mul ', funcmask, ' -mul ', output_dir, '/region_masks/mni_anatmask_resam.nii.gz -Tmean ' output_dir, '/tmean_funcfile_anatmasked.nii.gz'];
@@ -76,12 +78,12 @@ end
 
 % don't do kmeans, but no percent given, go to 20% default
 if (use_kmeans == 0) && ~exist('percent', 'var')
-    percent = 20; % default to 20% cut off, but this is kind of high
+    percent = 20; % default to 20% cut off
 end
 
 % basically, do kmeans unless kmeans==0 and percent value makes sense
 if ~exist('percent', 'var') || use_kmeans ~= 0 || ~isa(percent, 'double') || percent > 99 || percent < 1
-    fprintf('Doing kmeans to determine low data regions\n')
+    fprintf('Doing kmeans to determine low data regions. Do not worry if convergence is not met. It is of little importance.\n')
     % Get 5 points of quantiles
     Q = quantile(tmean_vals, [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1]);
     % Now use kmeans clustering to find the darkest voxels (suscept-like):
@@ -91,7 +93,7 @@ if ~exist('percent', 'var') || use_kmeans ~= 0 || ~isa(percent, 'double') || per
     min_voxel_list_idx = val_idx == min_voxel_value_idx;
     voxel_val_cutoff = max(tmean_vals(min_voxel_list_idx)); % find the cut off value
 else
-    Q = quantile(tmean_vals, percent);
+    Q = quantile(tmean_vals, percent/100);
     voxel_val_cutoff = Q;
 
 end

@@ -14,10 +14,10 @@ fprintf('Creating Figures\n')
 
 
 if isempty(denoised_GM_mean)
-    figure('Position', [50, 50, 2000, 900])
+    figure('Position', [50, 250, 2000, 900])
     t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    figure('Position', [50, 50, 2000, 700])
+    figure('Position', [50, 50, 2000, 900])
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
