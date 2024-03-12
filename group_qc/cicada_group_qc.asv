@@ -1,7 +1,9 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
-% group_qc_home: the output dir for group qc
+% group_qc_home: the general group qc output dir
+% output_dirname: what name do you want for your output directory? This
+% will end up like the following: group_qc_home/task_name/output_dirname
 % task_name: The task id for the group qc data, e.g. 'visual_run-01', or
 % 'rest'
 % sub_ids, ses_ids, excludes, outliers, adjusteds, and
@@ -46,7 +48,7 @@ end
 
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
-output_dir = [group_qc_home, '/', task_name]; % because they should ALL be the same, and specified to task
+output_dir = [group_qc_home, '/', task_name, '/', output_dirname]; % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -59,12 +61,27 @@ end
 % go into first participant's info to extract the correct naming:
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+% there would be 0 matches too, if file_tag is only a compare_tag (e.g.,
+% 8p)
+
+comparison_only = 0;
 
 % make sure that the dir call actually found the file(s) of images that
 % compare to your cleaned file of interest (given the file tag)
 if size(compare_image_info,1) == 0
-    fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
-    return;
+    % check if it exists as a compare only instead
+    compare_image_compareonly_info = dir([first_task_dir, '/qc/sub*ses*task*vs*', file_tag, '*qc_plots.jpg']); 
+    
+    if size(compare_image_compareonly_info,1) == 0
+        fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
+        return;
+    else
+        % OK, so the group qc is being run on a file type that has only
+        % ever been used as a comparison
+        comparison
+    end
+
+    
 end
 
 % Ok, NOW this should make appropriate photo folders
@@ -125,6 +142,7 @@ m = 1;
 bd = 1;
 cicada_dir = cicada_home; % just for naming
 num_runs = length(sub_ids);
+bad_data_prefixes = ''; % initialize
 for idx = 1:num_runs
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
@@ -229,8 +247,8 @@ for idx = 1:num_runs
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
-    [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
-    [~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
+    [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
     % to get compare_qc_corrs_table, you should loop through when you do
     % your qc photos and make a cell array of stacked tables if there is
     % more than one comparison
@@ -239,6 +257,7 @@ for idx = 1:num_runs
     % (Group_QC struct)
     cleaned_data_list{m} = cleaned_data;
     data_mask_list{m} = data_mask;
+    data_signal_mask_list{m} = data_signal_mask;
     signalandnoise_overlap_list{m} = signalandnoise_overlap;
     denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
@@ -251,29 +270,32 @@ for idx = 1:num_runs
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_vals.mat']); % specific to file tag of interest, can be multiples
     if ~isempty(compare_file)
         for h = 1:size(compare_image_info,1)
-        curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
-        compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
-        compare_tag = compare_tag{:};
-        compare_tags{h} = compare_tag; % this should be the same for everyone, so it is OK that we overwrite
-
-        photo_fol = [output_dir, '/qc_photos_', compare_tag];
-        copyfile(curr_compare_image_file, photo_fol)
-
-        % We will also want to grab current compare qc corrs table, and if
-        % there are multiple, stack them into a cell array
-        curr_compare_data_file = [compare_data_info(h).folder, '/', compare_data_info(h).name];
-        load(curr_compare_data_file, "-regexp", "^compare_")
-        compare_qc_corrs_table = grab_corr_sampling(compare_Edge_GM_corr, compare_FD_GM_corr, ...
-                compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, ...
-                compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, samps);
-
-
-        % Stack it into group cell array!
-        if m == 1
-            group_compare_qc_corrs_table{h} = compare_qc_corrs_table;
-        else
-            group_compare_qc_corrs_table{h} = [group_compare_qc_corrs_table{h}; compare_qc_corrs_table];
-        end
+            curr_compare_image_file = [compare_image_info(h).folder, '/', compare_image_info(h).name];
+            compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+            compare_tag = compare_tag{:};
+            compare_tags{h} = compare_tag; % this should be the same for everyone, so it is OK that we overwrite
+    
+            photo_fol = [output_dir, '/qc_photos_', compare_tag];
+            copyfile(curr_compare_image_file, photo_fol)
+    
+            % We will also want to grab current compare qc corrs table, and if
+            % there are multiple, stack them into a cell array
+            curr_compare_data_file = [compare_data_info(h).folder, '/', compare_data_info(h).name];
+            load(curr_compare_data_file, "-regexp", "^compare_")
+            compare_qc_corrs_table = grab_corr_sampling(compare_Edge_GM_corr, compare_FD_GM_corr, ...
+                    compare_DVARS_GM_corr, compare_Outbrain_GM_corr, compare_WMCSF_GM_corr, ...
+                    compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, samps);
+    
+    
+            % Stack it into group cell array!
+            if m == 1
+                group_compare_qc_corrs_table{h} = compare_qc_corrs_table;
+            else
+                % if there is an error here, check qc folders of a couple
+                % instances and make sure there are the same number of
+                % relevant file comparison files.
+                group_compare_qc_corrs_table{h} = [group_compare_qc_corrs_table{h}; compare_qc_corrs_table];
+            end                         
         end
     else
         group_compare_qc_corrs_table = {};
@@ -461,6 +483,16 @@ merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', str
 funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ', output_dir, '/group_funcmask.nii.gz'];
 [~, ~] = call_fsl(funcmask_overlap_command);
 
+% do the same thing, but for the data_signal_mask_list (if it exists)
+if ~isempty(data_signal_mask_list)
+    merge_funcmasks_signal_command = ['fslmerge -a ', output_dir, '/signal_funcmasks.nii.gz ', strjoin(data_signal_mask_list(image_keep))];
+    [~, ~] = call_fsl(merge_funcmasks_signal_command);
+    
+    % and calculate a Tmin of data masks (where there is funcmask overlap
+    % across all subects)
+    funcmask_signal_overlap_command = ['fslmaths ', output_dir, '/signal_funcmasks.nii.gz -Tmin ', output_dir, '/group_signal_funcmask.nii.gz'];
+    [~, ~] = call_fsl(funcmask_signal_overlap_command);
+end
 
 % Run Group MELODIC
 % First, make text file of the image names

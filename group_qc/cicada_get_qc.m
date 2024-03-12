@@ -1,4 +1,4 @@
-function [cleaned_file, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
+function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -52,6 +52,8 @@ if ~isfile([task_dir, '/funcmask.nii.gz'])
     return;
 end
 
+% grab constrained funcmask if it exists too (only within brain, and not
+% susceptibility low data)
 if isfile([task_dir, '/funcmask_constrained.nii.gz'])
     data_mask = [task_dir, '/funcmask_constrained.nii.gz']; % use it if it is already there. This allows a user to make their own ahead of time
 else
@@ -61,13 +63,21 @@ else
     data_mask = make_constrained_funcmask(task_dir, funcfile, funcmask, 1);
 end
 
-%data_mask = [task_dir, '/funcmask.nii.gz'];
+% If a data_signal_mask exists, grab it (areas where signal ICs generally overlap
+% with it)
+data_signal_mask_path = [task_dir, '/funcmask_CICADA_', cicada_type, '_signal_constrained.nii.gz'];
+if isfile(data_signal_mask_path)
+    data_signal_mask = data_signal_mask_path; % constrains based on where solid signal was generally captured
+else
+    fprintf(['Could not find a data_signal_mask at ' data_signal_mask_path, '\n'])
+    data_signal_mask = ''; % one does not exist, but this should not occur if it is CICADA
+end
 
 % grab the resampled GM mni region mask (to use for
 % signalandnoise_overlap)
 gm_mni_prob_info = dir([task_dir, '/region_masks/GM_prob.nii.gz']);
 if size(gm_mni_prob_info,1) ~= 1
-    fprintf('Cannot find gm probability file inr region masks folder \n')
+    fprintf('Cannot find gm probability file in region masks folder \n')
     return;
 end
 gm_mni_prob = [gm_mni_prob_info.folder, '/', gm_mni_prob_info.name];
@@ -207,13 +217,13 @@ else
     % Now we can combine everything in to a large table!
     % OK, now can combine all of this as a row of values
 
-    qc_array = {cleaned_file_info.name, sub_id, ses_id, task_name, meanRMS, ...
+    qc_array = {cleaned_file, cleaned_file_info.name, sub_id, ses_id, task_name, meanRMS, ...
         medFD, meanFD, perc_FD_above_thresh, Any_FD_above_thresh, medDVARS, ...
         Data.numvolumes, NotGM_GM_median, NotGM_GM_sd, GM_GM_median, GM_GM_sd, DVARS_GM_median, DVARS_GM_sd, ...
         FD_GM_median, FD_GM_sd, CSF_GM_median, CSF_GM_sd, WMCSF_GM_median, WMCSF_GM_sd, ...
         Outbrain_GM_median, Outbrain_GM_sd, Edge_GM_median, Edge_GM_sd};
     
-    qc_labels = ["image_names", "subject", "session", "task", "meanRMS", ...
+    qc_labels = ["image_path", "image_names", "subject", "session", "task", "meanRMS", ...
         "median_FD", "mean_FD", "Percent_FD_gt_point2mm","AnyFD_gt_5mm", "median_DVARS", ...
         "numvolumes", "NotGM_GM_median", "NotGM_GM_sd", "GM_GM_median", "GM_GM_sd", ...
         "DVARS_GM_median", "DVARS_GM_sd", "FD_GM_median", "FD_GM_sd", ...

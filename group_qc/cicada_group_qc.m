@@ -61,27 +61,43 @@ end
 % go into first participant's info to extract the correct naming:
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
+% there would be 0 matches too, if file_tag is only a compare_tag (e.g.,
+% 8p)
 
+comparison_only = 0; % to change in following if else statement
 % make sure that the dir call actually found the file(s) of images that
 % compare to your cleaned file of interest (given the file tag)
 if size(compare_image_info,1) == 0
-    fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
-    return;
+    % check if it exists as a compare only instead
+    compare_image_compareonly_info = dir([first_task_dir, '/qc/sub*ses*task*vs*', file_tag, '*qc_plots.jpg']); 
+    
+    if size(compare_image_compareonly_info,1) == 0
+        fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
+        return;
+    else
+        % OK, so the group qc is being run on a file type that has only
+        % ever been used as a comparison
+        comparison_only = 1;
+    end
 end
 
-% Ok, NOW this should make appropriate photo folders
-for h = 1:size(compare_image_info,1)
+% Ok, NOW this should make appropriate photo folders. If it is comparison
+% only, then do not need
+if comparison_only == 0
+    for h = 1:size(compare_image_info,1)
     compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
     compare_tag = compare_tag{:};
     photo_fol = [output_dir, '/qc_photos_', compare_tag];
     qc_photo_fols{h} = photo_fol; % for potential use for later for copy and paste
-    if not(isfolder(photo_fol))
-        mkdir(photo_fol)
-    else
-        rmdir(photo_fol, 's')
-        mkdir(photo_fol)
+        if not(isfolder(photo_fol))
+            mkdir(photo_fol)
+        else
+            rmdir(photo_fol, 's')
+            mkdir(photo_fol)
+        end
     end
 end
+
 
 % Now go into first cleaned_dir in order to extract if these are CICADA
 % files or not
@@ -232,8 +248,8 @@ for idx = 1:num_runs
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
-    [cleaned_data, data_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
-    [~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
+    [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
     % to get compare_qc_corrs_table, you should loop through when you do
     % your qc photos and make a cell array of stacked tables if there is
     % more than one comparison
@@ -242,6 +258,7 @@ for idx = 1:num_runs
     % (Group_QC struct)
     cleaned_data_list{m} = cleaned_data;
     data_mask_list{m} = data_mask;
+    data_signal_mask_list{m} = data_signal_mask;
     signalandnoise_overlap_list{m} = signalandnoise_overlap;
     denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
@@ -467,6 +484,16 @@ merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', str
 funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ', output_dir, '/group_funcmask.nii.gz'];
 [~, ~] = call_fsl(funcmask_overlap_command);
 
+% do the same thing, but for the data_signal_mask_list (if it exists)
+if ~isempty(data_signal_mask_list)
+    merge_funcmasks_signal_command = ['fslmerge -a ', output_dir, '/signal_funcmasks.nii.gz ', strjoin(data_signal_mask_list(image_keep))];
+    [~, ~] = call_fsl(merge_funcmasks_signal_command);
+    
+    % and calculate a Tmin of data masks (where there is funcmask overlap
+    % across all subects)
+    funcmask_signal_overlap_command = ['fslmaths ', output_dir, '/signal_funcmasks.nii.gz -Tmin ', output_dir, '/group_signal_funcmask.nii.gz'];
+    [~, ~] = call_fsl(funcmask_signal_overlap_command);
+end
 
 % Run Group MELODIC
 % First, make text file of the image names

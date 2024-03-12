@@ -1,23 +1,23 @@
-function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, use_kmeans, percent)
+function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, use_outliers, percent)
 % This will make a constrained smaller funcmask then what is used in
 % CICADA. The purpose is to use this constrained funcmask to help with
 % group funcmask generation. This is needed because CICADA funcmask needs a
 % large funcmask to help find sources of noise. However, this is not a
 % great funcmask for analysis. This function makes a better funcmask for
 % analysis.
-% General idea is to remove darkest voxels from CICADA the tmean of the 
-% funcfile  and then multiply by funcmask & anatmask. 
+% General idea is to remove darkest voxels from CICADA funcfile tmean (anatmasked)
 %
-% Default method to find darkest voxels is with kmeans with 7 clusters.
-% However, one can turn kmeans off (use_kmeans = 0;) and then give a percent
+% Default method to find darkest voxels is with matlab isoutlier.
+% However, one can turn kmeans off (use_outliers = 0;) and then give a percent
 % (e.g. percent=20) to determine what percent cut off to decide are the
 % darkest voxels ("susceptibility like") e.g., percent=20 would remove voxels below 20%
 % quantile of funcfile that is masked by anatmask.
-% use_kmeans and percent are both optional inputs. It is assumed use_kmeans is 1
-% (do kmeans) and percent is not used ([])
+% use_outliers and percent are both optional inputs. It is assumed use_outliers is 1
+% (do isoutlier) and percent is not used ([])
 % This can be helpful to run during standard CICADA, AND during group QC
 % (so the user can easily change how the group_funcmask is calculated after
 % CICADA is run).
+% using isoutlier method will remove minimal amount of voxels
 
 % get path to templates
 helper_function_dir = fileparts(mfilename('fullpath')); % this gives current script path
@@ -68,34 +68,33 @@ tmean_vals = tmean_funcfile_data(tmean_funcfile_data > 0); % puts it into a list
 
 % do kmeans if percent value does not make sense
 if ~exist('use_kmeans', 'var') && ~exist('percent', 'var')
-    use_kmeans = 1; percent = [];
+    use_outliers = 1; percent = [];
 end
 
 % only don't do kmeans if explicitely set to 0 as a double
-if isa(use_kmeans, 'double') || use_kmeans ~= 0
-    use_kmeans = 1;
+if isa(use_outliers, 'double') || use_outliers ~= 0
+    use_outliers = 1;
 end
 
 % don't do kmeans, but no percent given, go to 20% default
-if (use_kmeans == 0) && ~exist('percent', 'var')
+if (use_outliers == 0) && ~exist('percent', 'var')
     percent = 20; % default to 20% cut off
 end
 
 % basically, do kmeans unless kmeans==0 and percent value makes sense
-if ~exist('percent', 'var') || use_kmeans ~= 0 || ~isa(percent, 'double') || percent > 99 || percent < 1
-    fprintf('Doing kmeans to determine low data regions. Do not worry if convergence is not met. It is of little importance.\n')
-    % Get 5 points of quantiles
-    Q = quantile(tmean_vals, [0, 0.17, 0.33, 0.5, 0.67, 0.83, 1]);
-    % Now use kmeans clustering to find the darkest voxels (suscept-like):
-    [val_idx, val_C] = kmeans(tmean_vals, 7, 'Start', [Q(1); Q(2); Q(3); Q(4); Q(5); Q(6); Q(7)], 'MaxIter', 10000);
-    save('contrained_funcmask_vals', 'tmean_vals', 'Q', 'val_idx', 'val_C')
-    min_voxel_value_idx = find(val_C == min(val_C));
-    min_voxel_list_idx = val_idx == min_voxel_value_idx;
-    voxel_val_cutoff = max(tmean_vals(min_voxel_list_idx)); % find the cut off value
+if ~exist('percent', 'var') || use_outliers ~= 0 || ~isa(percent, 'double') || percent > 99 || percent < 1
+    fprintf('Determining low data regions. \n')
+    % Use isoutlier to find minimum values within anatmasked funcfile
+    low_signal_voxels = isoutlier(tmean_vals) & (tmean_vals < median(tmean_vals));
+    if sum(low_signal_voxels == 0)
+        voxel_val_cutoff = 0; % if there are no outliers, just keep it positive
+    else
+        voxel_val_cutoff = max(tmean_vals(low_signal_voxels));
+    end
+    
 else
     Q = quantile(tmean_vals, percent/100);
     voxel_val_cutoff = Q;
-
 end
 
 funcmask_constrained_data = single(tmean_funcfile_data > voxel_val_cutoff);
