@@ -148,6 +148,7 @@ if [ "${brain_network_template}" == "x" ]; then
   # assume template is same location as CICADA script directory
   brain_network_template="${template_dir}/cortical_subcortical_functional_atlas_guzman-Velez-2022_3mm.nii.gz"
 fi
+# mel_fol being set to x tells it to re run it regardless
 if [ "${mel_fol}" = "x" ]; then
   mel_fol="${output_dir}/melodic"
   echo "Melodic folder not found. Will be run and stored in output directory: ${mel_fol}"
@@ -159,17 +160,17 @@ if [ "${mel_fol}" = "x" ]; then
 fi
 echo
 # Finally, list what you have
->&2 echo "output_dir  : ${output_dir}"
->&2 echo "funcfile   : ${funcfile} "
->&2 echo "funcmask   : ${funcmask}"
->&2 echo "confoundsfile   : ${confoundsfile}"
->&2 echo "anatfile   : ${anatfile}"
->&2 echo "anatmask   : ${anatmask}"
->&2 echo "gm_prob   : ${gm_prob}"
->&2 echo "wm_prob  : ${wm_prob}"
->&2 echo "csf_prob   : ${csf_prob}"
->&2 echo "mel_fol   : ${mel_fol}"
->&2 echo "script_dir   : ${script_dir}"
+>&2 echo "output_dir: ${output_dir}"
+>&2 echo "funcfile: ${funcfile} "
+>&2 echo "funcmask: ${funcmask}"
+>&2 echo "confoundsfile: ${confoundsfile}"
+>&2 echo "anatfile: ${anatfile}"
+>&2 echo "anatmask: ${anatmask}"
+>&2 echo "gm_prob: ${gm_prob}"
+>&2 echo "wm_prob: ${wm_prob}"
+>&2 echo "csf_prob: ${csf_prob}"
+>&2 echo "mel_fol: ${mel_fol}"
+>&2 echo "script_dir: ${script_dir}"
 echo
 
 # Now check that these options all exist/work!
@@ -351,11 +352,30 @@ fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thr 0.67 -bin "${output_regi
 fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_mask.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
-# Can calculate an "inner CSF" by multiplying by an eroded anatmask_resam -- this may be helpful for a more target inner CSF measure. This could be in contrast to OutbrainOnly
-fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -mul ${funcmask} -bin "${output_regionmask_dir}/anatmask_resam_tmp_eroded.nii.gz"
-fslmaths "${output_regionmask_dir}/anatmask_resam_tmp_eroded.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
+# Make an extended GM_prob which goes more into outbrain, just so this can be more taken into account
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -bin "${output_regionmask_dir}/GM_tmp_allmask.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -fmean -sub "${output_regionmask_dir}/GM_tmp_allmask.nii.gz" -thr 0 "${output_regionmask_dir}/GM_tmp_outerprob.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_tmp_outerprob.nii.gz" -add "${output_regionmask_dir}/GM_prob.nii.gz" "${output_regionmask_dir}/GM_extended_prob.nii.gz" # this is GM probability, but extended out a little bit. Useful for better QC testing (e.g., grab outbrain not potentially impacted by GM)
 
-# Calculate WMorCSF, GMorCSF, and GMorWM regions
+# Can calculate an "inner CSF" by multiplying by an eroded anatmask_resam -- this may be helpful for a more target inner CSF measure. This could be in contrast to OutbrainOnly
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -mul ${funcmask} -bin "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
+
+# Also do inner WM, this will be useful to make subepe mask
+fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_mask.nii.gz"
+
+# OK, now get subepe by fmean both innercsf and inner wm, multiplying, and scaling
+##### Working here 03/16/2024
+fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -mul "${output_regionmask_dir}/InnerCSF_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz"
+fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -mul "${output_regionmask_dir}/InnerWM_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz"
+fslmaths "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz" -mul "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz" -mul 4 "${output_regionmask_dir}/Subepe_tmp_prob.nii.gz"
+range_vals=($(fslstats ${output_regionmask_dir}/Subepe_tmp_prob.nii.gz -l 0.01 -r))
+fslmaths "${output_regionmask_dir}/Subepe_tmp_prob.nii.gz" -div "${range_vals[1]}" "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz" -thr 1 -bin "${output_regionmask_dir}/Subepe_almost_tmp_mask.nii.gz" # binarize anything above 1
+fslmaths "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz" -uthr 1 -add "${output_regionmask_dir}/Subepe_almost_tmp_mask.nii.gz" "${output_regionmask_dir}/Subepe_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/Subepe_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
+
+# Calculate WMorCSF, GMorCSF, and GMorWM regions, can be helpful
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WMorCSF_mask.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz"
@@ -370,12 +390,12 @@ fslmaths "${output_regionmask_dir}/GMorWM_mask.nii.gz" -sub "${output_regionmask
 
 # Subependymal is WMandCSF plus a dilation into white matter
 # first, dilate into WM
-fslmaths "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -dilM -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz"
+#fslmaths "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -dilM -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz"
 # now combine them:
-fslmaths "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz" -add "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
+#fslmaths "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz" -add "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
 
 # we can make WM final mask more accurate for signal now by removing Subepe from it
-fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_adj_mask.nii.gz"
 
 # Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise
 fslmaths "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -sub "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -mul ${funcmask} -thr 0 "${output_regionmask_dir}/GMWMlenient_tmp_prob.nii.gz"
@@ -414,7 +434,7 @@ echo "      Functional Space Masks are Computed"
 # relabel these for easier future coding
 Edgemask="${output_regionmask_dir}/Edge_mask.nii.gz"
 GMmask="${output_regionmask_dir}/GM_mask.nii.gz"
-WMmask="${output_regionmask_dir}/WM_mask.nii.gz"
+WMmask="${output_regionmask_dir}/WM_adj_mask.nii.gz" # so it does not include Subepe
 CSFmask="${output_regionmask_dir}/CSF_mask.nii.gz"
 InnerCSFmask="${output_regionmask_dir}/InnerCSF_mask.nii.gz"
 Outbrainmask="${output_regionmask_dir}/Outbrain_mask.nii.gz"

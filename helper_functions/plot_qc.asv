@@ -1,9 +1,9 @@
-function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_Outbrain_corr, ...
-    denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, ...
-    compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_Outbrain_corr, ...
-    compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, ...
-    orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_Outbrain_corr, ...
-    orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, ...
+function plot_qc(denoised_Edge_GM_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_GM_corr, ...
+    denoised_WMCSF_GM_corr, denoised_CSF_GM_corr, denoised_NotGM_GM_corr, denoised_GM_GM_corr, ...
+    compare_Edge_GM_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_GM_corr, ...
+    compare_WMCSF_GM_corr, compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_corr, ...
+    orig_Edge_GM_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_GM_corr, ...
+    orig_WMCSF_GM_corr, orig_CSF_GM_corr, orig_NotGM_GM_corr, orig_GM_GM_corr, ...
     denoised_GM_mean, compare_GM_mean, orig_GM_mean, title_string, qc_plot_dest, denoised_name)
 
 % Plot QC results!
@@ -30,17 +30,17 @@ title(t, title_string, 'Interpreter', 'none')
 % of that
 nexttile
 hold on
-title('Edge Correlation', 'Interpreter', 'none')
-histogram(orig_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_Edge_Edge_corr)
-    histogram(compare_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-    histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+title('Edge and GM Correlation', 'Interpreter', 'none')
+histogram(orig_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_Edge_GM_corr)
+    histogram(compare_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
+xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
 xlim([-1, 1]);
@@ -51,7 +51,7 @@ hold off
 % is robust against overall movement.
 nexttile
 hold on
-title('FD to GM Correlation', 'Interpreter', 'none')
+title('FD and GM Correlation', 'Interpreter', 'none')
 histogram(orig_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 if ~isempty(compare_FD_GM_corr)
     histogram(compare_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
@@ -61,9 +61,7 @@ else
     histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0, 'DisplayName','r = 0')
 xlim([-1, 1]);
 hold off
 
@@ -74,7 +72,7 @@ hold off
 % movement)
 nexttile
 hold on
-title('DVARS to GM Correlation', 'Interpreter', 'none')
+title('DVARSGM Corr ', 'Interpreter', 'none')
 histogram(orig_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 if ~isempty(compare_DVARS_GM_corr)
     histogram(compare_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
@@ -84,9 +82,7 @@ else
     histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -95,19 +91,17 @@ hold off
 % of that
 nexttile
 hold on
-title('Outbrain Correlation', 'Interpreter', 'none')
-histogram(orig_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_Outbrain_Outbrain_corr)
-    histogram(compare_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-    histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+title('Outbrain-GM Corr ', 'Interpreter', 'none')
+histogram(orig_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_Outbrain_GM_corr)
+    histogram(compare_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -116,19 +110,17 @@ hold off
 % of that
 nexttile
 hold on
-title('WMCSF Correlation', 'Interpreter', 'none')
-histogram(orig_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_WMCSF_WMCSF_corr)
-    histogram(compare_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-    histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+title('WMCSF-GM Corr ', 'Interpreter', 'none')
+histogram(orig_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_WMCSF_GM_corr)
+    histogram(compare_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -138,19 +130,17 @@ hold off
 % of that
 nexttile
 hold on
-title('CSF Correlation', 'Interpreter', 'none')
-histogram(orig_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_CSF_CSF_corr)
-    histogram(compare_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-    histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+title('CSF-GM Corr ', 'Interpreter', 'none')
+histogram(orig_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_CSF_GM_corr)
+    histogram(compare_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -159,19 +149,17 @@ hold off
 % of that. Want to see the denoised and orig be significantly different
 nexttile
 hold on
-title('NotGM Correlation', 'Interpreter', 'none')
-histogram(orig_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_NotGM_NotGM_corr)
-    histogram(compare_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-    histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+title('NotGM-GM Corr ', 'Interpreter', 'none')
+histogram(orig_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_NotGM_GM_corr)
+    histogram(compare_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -183,7 +171,7 @@ colorord = get(gca, 'colororder');
 
 nexttile
 hold on
-title('GM Correlation', 'Interpreter', 'none')
+title('GM-GM Corr', 'Interpreter', 'none')
 histogram(orig_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
 if ~isempty(compare_GM_GM_corr)
     histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
@@ -193,9 +181,7 @@ else
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
-%xline(0, 'DisplayName','r = 0')
-xlabel('Correlation (r)')
-ylabel('Frequency')
+xline(0)
 xlim([-1, 1]);
 hold off
 
@@ -210,8 +196,6 @@ if ~isempty(denoised_GM_mean)
     plot(detrend(compare_GM_mean,2), 'LineWidth', 1.5)
     plot(detrend(denoised_GM_mean,2), 'LineWidth', 1.5)
     legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-    xlabel('Timepoints')
-    ylabel('Signal')
     xlim([0, length(orig_GM_mean)])
     hold off
 end

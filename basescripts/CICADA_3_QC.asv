@@ -59,7 +59,7 @@ tr = orig_info.PixelDimensions(4);
 
 % check if comparing auto or manual, can base this off of cleaned file name
 % then load relevant files from cicada
-if contains(cleaned_file, 'manual')
+if contains(cleaned_file, '_CICADA_manual_')
     if isfile([cleaned_dir, '/../ic_manual_selection/DecisionVariables_Manual.mat'])
         load([cleaned_dir, '/../ic_manual_selection/DecisionVariables_Manual.mat']) %#ok<LOAD> 
         ic_select = 'manual';
@@ -68,7 +68,7 @@ if contains(cleaned_file, 'manual')
         fprintf('Cannot find ../ic_manual_selection/DecisionVariables_Manual.mat \n')
         return
     end
-elseif contains(cleaned_file, 'auto')
+elseif contains(cleaned_file, '_CICADA_auto_')
     if isfile([cleaned_dir, '/../ic_auto_selection/DecisionVariables_Auto.mat'])
         load([cleaned_dir, '/../ic_auto_selection/DecisionVariables_Auto.mat']) %#ok<LOAD> 
         ic_select = 'auto';
@@ -94,24 +94,24 @@ if ~strcmp(cicada_type, 'none')
     DOF_estimate_final = Data.numvolumes .* Results.percent_variance_kept; %#ok<NODEF,USENS> 
     Results.num_ICs_kept = length(Results.signal_ICs);
     Results.num_ICs_total = length(Results.ICs);
-    fprintf(['Estimate of Final DOF for ', cicada_file_info.name, ' is %.2f\n'], DOF_estimate_final)
+    fprintf(['Estimate of Final DOF for ', cleaned_file_info.name, ' is %.2f\n'], DOF_estimate_final)
 end
 
 
 
 % Now, we can get the relevant correlation values and such!
-fprintf(['Running comparison of ', cicada_file_info.name, ' to ', dir(compare_file).name, '\n'])   
+fprintf(['Running comparison of ', cleaned_file_info.name, ' to ', dir(compare_file).name, '\n'])   
 
-[denoised_Edge_GM_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_GM_corr, ...
-    denoised_WMCSF_GM_corr, denoised_CSF_GM_corr, denoised_NotGM_GM_corr, denoised_GM_GM_autocorr, ...
+[denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_Outbrain_corr, ...
+    denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, ...
     denoised_GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
 
-[compare_Edge_GM_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_GM_corr, ...
-    compare_WMCSF_GM_corr, compare_CSF_GM_corr, compare_NotGM_GM_corr, compare_GM_GM_autocorr, ...
+[compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_Outbrain_corr, ...
+    compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, ...
     compare_GM_mean] = CICADA_fileQC(compare_file, orig_file);
 
-[orig_Edge_GM_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_GM_corr, ...
-    orig_WMCSF_GM_corr, orig_CSF_GM_corr, orig_NotGM_GM_corr, orig_GM_GM_autocorr, ...
+[orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_Outbrain_corr, ...
+    orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, ...
     orig_GM_mean] = CICADA_fileQC(orig_file, orig_file);
 
 
@@ -119,158 +119,189 @@ fprintf(['Running comparison of ', cicada_file_info.name, ' to ', dir(compare_fi
 if ~isfolder([cleaned_dir, '/../qc'])
     mkdir([cleaned_dir, '/../qc'])
 end
-delete([cleaned_dir, '/../qc/*']) % delete old files to save potential space
 cd([cleaned_dir, '/../qc'])
 
 % extract naming tags
-cicada_tag = extractBetween(cleaned_file_info.name, [task_dir_name, '_'], '_bold.nii.gz');
-cicada_tag = cicada_tag{:}; % need to expand it to just be char array
+cleaned_tag = extractBetween(cleaned_file_info.name, [task_dir_name, '_'], '_bold.nii.gz');
+cleaned_tag = cleaned_tag{:}; % need to expand it to just be char array
 compare_tag = extractBetween(dir(compare_file).name, [task_dir_name, '_'], '_bold.nii.gz');
 compare_tag = compare_tag{:}; % need to expand it to just be char array
 orig_tag = 'orig';
 prefix = [subj_dir_name, '_', ses_dir_name, '_task-', task_dir_name];
 
-qc_naming = [prefix, '_', cicada_tag, '_vs_', compare_tag]; 
+qc_naming = [prefix, '_', cleaned_tag, '_vs_', compare_tag]; 
 qc_vals = [qc_naming, '_qc_vals.mat'];
 qc_plots = [qc_naming, '_qc_plots.jpg'];
 
+% get R2 data to prep for testing:
+[denoised_Edge_Edge_r2, denoised_Edge_Edge_p, denoised_FD_GM_r2, denoised_FD_GM_p, denoised_DVARS_GM_r2, denoised_DVARS_GM_p, ...
+    denoised_Outbrain_Outbrain_r2, denoised_Outbrain_Outbrain_p, denoised_WMCSF_WMCSF_r2, denoised_WMCSF_WMCSF_p, denoised_CSF_CSF_r2, denoised_CSF_CSF_p, ...
+    denoised_NotGM_NotGM_r2, denoised_NotGM_NotGM_p, denoised_GM_GM_r2, denoised_GM_GM_p] = ...
+    get_r2_data(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, ...
+    denoised_Outbrain_Outbrain_corr, denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, ...
+    denoised_NotGM_NotGM_corr, denoised_GM_GM_corr);
+
+
+corr_R2_labels = {'NotGM_NotGM_R2', 'GM_GM_R2', 'Outbrain_Outbrain_R2', 'Edge_Edge_R2', ...
+    'WMCSF_WMCSF_R2', 'CSF_CSF_R2', 'DVARS_GM_R2', 'FD_GM_R2'};
+denoised_corr_p_values = [denoised_NotGM_NotGM_p, denoised_GM_GM_p, denoised_Outbrain_Outbrain_p, ...
+    denoised_Edge_Edge_p, denoised_WMCSF_WMCSF_p, denoised_CSF_CSF_p, denoised_DVARS_GM_p, denoised_FD_GM_p];
+denoised_R2_mean = [mean(denoised_NotGM_NotGM_r2), mean(denoised_GM_GM_r2), mean(denoised_Outbrain_Outbrain_r2), ...
+    mean(denoised_Edge_Edge_r2), mean(denoised_WMCSF_WMCSF_r2), mean(denoised_CSF_CSF_r2), ...
+    mean(denoised_DVARS_GM_r2), mean(denoised_FD_GM_r2)];
+denoised_corr_stats_table = array2table([denoised_R2_mean; denoised_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
+
+
+[compare_Edge_Edge_r2, compare_Edge_Edge_p, compare_FD_GM_r2, compare_FD_GM_p, compare_DVARS_GM_r2, compare_DVARS_GM_p, ...
+    compare_Outbrain_Outbrain_r2, compare_Outbrain_Outbrain_p, compare_WMCSF_WMCSF_r2, compare_WMCSF_WMCSF_p, compare_CSF_CSF_r2, compare_CSF_CSF_p, ...
+    compare_NotGM_NotGM_r2, compare_NotGM_NotGM_p, compare_GM_GM_r2, compare_GM_GM_p] = ...
+    get_r2_data(compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, ...
+    compare_Outbrain_Outbrain_corr, compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, ...
+    compare_NotGM_NotGM_corr, compare_GM_GM_corr);
+
+compare_corr_p_values = [compare_NotGM_NotGM_p, compare_GM_GM_p, compare_Outbrain_Outbrain_p, ...
+    compare_Edge_Edge_p, compare_WMCSF_WMCSF_p, compare_CSF_CSF_p, compare_DVARS_GM_p, compare_FD_GM_p];
+compare_R2_mean = [mean(compare_NotGM_NotGM_r2), mean(compare_GM_GM_r2), mean(compare_Outbrain_Outbrain_r2), ...
+    mean(compare_Edge_Edge_r2), mean(compare_WMCSF_WMCSF_r2), mean(compare_CSF_CSF_r2), ...
+    mean(compare_DVARS_GM_r2), mean(compare_FD_GM_r2)];
+compare_corr_stats_table = array2table([compare_R2_mean; compare_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
+
+
+[orig_Edge_Edge_r2, orig_Edge_Edge_p, orig_FD_GM_r2, orig_FD_GM_p, orig_DVARS_GM_r2, orig_DVARS_GM_p, ...
+    orig_Outbrain_Outbrain_r2, orig_Outbrain_Outbrain_p, orig_WMCSF_WMCSF_r2, orig_WMCSF_WMCSF_p, orig_CSF_CSF_r2, orig_CSF_CSF_p, ...
+    orig_NotGM_NotGM_r2, orig_NotGM_NotGM_p, orig_GM_GM_r2, orig_GM_GM_p] = ...
+    get_r2_data(orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, ...
+    orig_Outbrain_Outbrain_corr, orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, ...
+    orig_NotGM_NotGM_corr, orig_GM_GM_corr);
+
+orig_corr_p_values = [orig_NotGM_NotGM_p, orig_GM_GM_p, orig_Outbrain_Outbrain_p, ...
+    orig_Edge_Edge_p, orig_WMCSF_WMCSF_p, orig_CSF_CSF_p, orig_DVARS_GM_p, orig_FD_GM_p];
+orig_R2_mean = [mean(orig_NotGM_NotGM_r2), mean(orig_GM_GM_r2), mean(orig_Outbrain_Outbrain_r2), ...
+    mean(orig_Edge_Edge_r2), mean(orig_WMCSF_WMCSF_r2), mean(orig_CSF_CSF_r2), ...
+    mean(orig_DVARS_GM_r2), mean(orig_FD_GM_r2)];
+orig_corr_stats_table = array2table([orig_R2_mean; orig_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
+
+% Now, you can test if the R2 mean values are different between groups!
+% first, denoised vs orig
+[~, denoised_orig_NotGM_NotGM_R2_p] = ttest2(denoised_NotGM_NotGM_r2, orig_NotGM_NotGM_r2);
+[~, denoised_orig_GM_GM_R2_p] = ttest2(denoised_GM_GM_r2, orig_GM_GM_r2);
+[~, denoised_orig_Outbrain_Outbrain_R2_p] = ttest2(denoised_Outbrain_Outbrain_r2, orig_Outbrain_Outbrain_r2);
+[~, denoised_orig_Edge_Edge_R2_p] = ttest2(denoised_Edge_Edge_r2, orig_Edge_Edge_r2);
+[~, denoised_orig_WMCSF_WMCSF_R2_p] = ttest2(denoised_WMCSF_WMCSF_r2, orig_WMCSF_WMCSF_r2);
+[~, denoised_orig_CSF_CSF_R2_p] = ttest2(denoised_CSF_CSF_r2, orig_CSF_CSF_r2);
+[~, denoised_orig_DVARS_GM_R2_p] = ttest2(denoised_DVARS_GM_r2, orig_DVARS_GM_r2);
+[~, denoised_orig_FD_GM_R2_p] = ttest2(denoised_FD_GM_r2, orig_FD_GM_r2);
+
+% denoised vs compare
+[~, denoised_compare_NotGM_NotGM_R2_p] = ttest2(denoised_NotGM_NotGM_r2, compare_NotGM_NotGM_r2);
+[~, denoised_compare_GM_GM_R2_p] = ttest2(denoised_GM_GM_r2, compare_GM_GM_r2);
+[~, denoised_compare_Outbrain_Outbrain_R2_p] = ttest2(denoised_Outbrain_Outbrain_r2, compare_Outbrain_Outbrain_r2);
+[~, denoised_compare_Edge_Edge_R2_p] = ttest2(denoised_Edge_Edge_r2, compare_Edge_Edge_r2);
+[~, denoised_compare_WMCSF_WMCSF_R2_p] = ttest2(denoised_WMCSF_WMCSF_r2, compare_WMCSF_WMCSF_r2);
+[~, denoised_compare_CSF_CSF_R2_p] = ttest2(denoised_CSF_CSF_r2, compare_CSF_CSF_r2);
+[~, denoised_compare_DVARS_GM_R2_p] = ttest2(denoised_DVARS_GM_r2, compare_DVARS_GM_r2);
+[~, denoised_compare_FD_GM_R2_p] = ttest2(denoised_FD_GM_r2, compare_FD_GM_r2);
+
+% compare vs orig
+[~, orig_compare_NotGM_NotGM_R2_p] = ttest2(orig_NotGM_NotGM_r2, compare_NotGM_NotGM_r2);
+[~, orig_compare_GM_GM_R2_p] = ttest2(orig_GM_GM_r2, compare_GM_GM_r2);
+[~, orig_compare_Outbrain_Outbrain_R2_p] = ttest2(orig_Outbrain_Outbrain_r2, compare_Outbrain_Outbrain_r2);
+[~, orig_compare_Edge_Edge_R2_p] = ttest2(orig_Edge_Edge_r2, compare_Edge_Edge_r2);
+[~, orig_compare_WMCSF_WMCSF_R2_p] = ttest2(orig_WMCSF_WMCSF_r2, compare_WMCSF_WMCSF_r2);
+[~, orig_compare_CSF_CSF_R2_p] = ttest2(orig_CSF_CSF_r2, compare_CSF_CSF_r2);
+[~, orig_compare_DVARS_GM_R2_p] = ttest2(orig_DVARS_GM_r2, compare_DVARS_GM_r2);
+[~, orig_compare_FD_GM_R2_p] = ttest2(orig_FD_GM_r2, compare_FD_GM_r2);
+
+% combine them
+R2_p_labels = {'denoised_orig_NotGM_NotGM_R2_p', 'denoised_orig_GM_GM_R2_p', 'denoised_orig_Outbrain_Outbrain_R2_p', ...
+    'denoised_orig_Edge_GM_R2_p', 'denoised_orig_WMCSF_GM_R2_p', 'denoised_orig_CSF_GM_R2_p', ...
+    'denoised_orig_DVARS_GM_R2_p', 'denoised_orig_FD_GM_R2_p', 'denoised_compare_NotGM_GM_R2_p', ...
+    'denoised_compare_GM_GM_R2_p', 'denoised_compare_Outbrain_GM_R2_p', 'denoised_compare_Edge_GM_R2_p', ...
+    'denoised_compare_WMCSF_GM_R2_p', 'denoised_compare_CSF_GM_R2_p', 'denoised_compare_DVARS_GM_R2_p', ...
+    'denoised_compare_FD_GM_R2_p', 'orig_compare_NotGM_GM_R2_p', ...
+    'orig_compare_GM_GM_R2_p', 'orig_compare_Outbrain_GM_R2_p', 'orig_compare_Edge_GM_R2_p', ...
+    'orig_compare_WMCSF_GM_R2_p', 'orig_compare_CSF_GM_R2_p', 'orig_compare_DVARS_GM_R2_p', ...
+    'orig_compare_FD_GM_R2_p'};
+% p-values
+comparing_R2_p = [denoised_orig_NotGM_NotGM_R2_p, denoised_orig_GM_GM_R2_p, denoised_orig_Outbrain_Outbrain_R2_p, ...
+    denoised_orig_Edge_Edge_R2_p, denoised_orig_WMCSF_WMCSF_R2_p, denoised_orig_CSF_CSF_R2_p, ...
+    denoised_orig_DVARS_GM_R2_p, denoised_orig_FD_GM_R2_p, denoised_compare_NotGM_NotGM_R2_p, ...
+    denoised_compare_GM_GM_R2_p, denoised_compare_Outbrain_Outbrain_R2_p, denoised_compare_Edge_Edge_R2_p, ...
+    denoised_compare_WMCSF_WMCSF_R2_p, denoised_compare_CSF_CSF_R2_p, denoised_compare_DVARS_GM_R2_p, ...
+    denoised_compare_FD_GM_R2_p, orig_compare_NotGM_NotGM_R2_p, ...
+    orig_compare_GM_GM_R2_p, orig_compare_Outbrain_Outbrain_R2_p, orig_compare_Edge_Edge_R2_p, ...
+    orig_compare_WMCSF_WMCSF_R2_p, orig_compare_CSF_CSF_R2_p, orig_compare_DVARS_GM_R2_p, ...
+    orig_compare_FD_GM_R2_p];
+
+% combine into table
+comparing_R2_p_table = array2table(comparing_R2_p, 'VariableNames', R2_p_labels);
+
 % save relevant plotting variables
 fprintf('Saving Relevant QC Data\n')
-title_string = [prefix, ': ', cicada_tag, ', ', compare_tag, ', & ', orig_tag];
-save('qc_vals', 'orig_NotGM_GM_corr', 'compare_NotGM_GM_corr', 'denoised_NotGM_GM_corr', ...
-     'orig_GM_GM_autocorr', 'compare_GM_GM_autocorr', 'denoised_GM_GM_autocorr', ...
-     'orig_Outbrain_GM_corr', 'compare_Outbrain_GM_corr', 'denoised_Outbrain_GM_corr', ...
-     'orig_Edge_GM_corr', 'compare_Edge_GM_corr', 'denoised_Edge_GM_corr', ...
-     'orig_WMCSF_GM_corr', 'compare_WMCSF_GM_corr', 'denoised_WMCSF_GM_corr', ...
-     'orig_CSF_GM_corr', 'compare_CSF_GM_corr', 'denoised_CSF_GM_corr', ...
+title_string = [prefix, ': ', cleaned_tag, ', ', compare_tag, ', & ', orig_tag];
+if ~strcmp(cicada_type, 'none')
+    save(qc_vals, 'orig_NotGM_NotGM_corr', 'compare_NotGM_NotGM_corr', 'denoised_NotGM_NotGM_corr', ...
+     'orig_GM_GM_corr', 'compare_GM_GM_corr', 'denoised_GM_GM_corr', ...
+     'orig_Outbrain_Outbrain_corr', 'compare_Outbrain_Outbrain_corr', 'denoised_Outbrain_Outbrain_corr', ...
+     'orig_Edge_Edge_corr', 'compare_Edge_Edge_corr', 'denoised_Edge_Edge_corr', ...
+     'orig_WMCSF_WMCSF_corr', 'compare_WMCSF_WMCSF_corr', 'denoised_WMCSF_WMCSF_corr', ...
+     'orig_CSF_CSF_corr', 'compare_CSF_CSF_corr', 'denoised_CSF_CSF_corr', ...
      'orig_DVARS_GM_corr', 'compare_DVARS_GM_corr', 'denoised_DVARS_GM_corr', ...
      'orig_FD_GM_corr', 'compare_FD_GM_corr', 'denoised_FD_GM_corr', ...
-     'denoised_GM_mean', 'compare_GM_mean', 'orig_GM_mean', ...
-     'title_string', 'orig_tag', 'compare_tag', 'cicada_tag',...
-     'ic_select', 'DOF_estimate_final', 'Results', 'tr', 'Data', 'Tables') %#ok<USENS> 
+     'orig_NotGM_NotGM_r2', 'compare_NotGM_NotGM_r2', 'denoised_NotGM_NotGM_r2', ...
+     'orig_GM_GM_r2', 'compare_GM_GM_corr', 'denoised_GM_GM_corr', ...
+     'orig_Outbrain_Outbrain_r2', 'compare_Outbrain_Outbrain_r2', 'denoised_Outbrain_Outbrain_r2', ...
+     'orig_Edge_Edge_r2', 'compare_Edge_Edge_r2', 'denoised_Edge_Edge_r2', ...
+     'orig_WMCSF_WMCSF_r2', 'compare_WMCSF_WMCSF_r2', 'denoised_WMCSF_WMCSF_r2', ...
+     'orig_CSF_CSF_r2', 'compare_CSF_CSF_r2', 'denoised_CSF_CSF_r2', ...
+     'orig_DVARS_GM_r2', 'compare_DVARS_GM_r2', 'denoised_DVARS_GM_r2', ...
+     'orig_FD_GM_r2', 'compare_FD_GM_r2', 'denoised_FD_GM_r2', ...
+     'orig_corr_stats_table', 'compare_corr_stats_table', 'denoised_corr_stats_table', ...
+     'comparing_R2_p_table', ...
+     'orig_GM_mean', 'compare_GM_mean', 'denoised_GM_mean', ...
+     'title_string', 'orig_tag', 'compare_tag', 'cleaned_tag',...
+     'cicada_type', 'ic_select', 'DOF_estimate_final', 'Results', 'tr', 'Data', 'Tables') %#ok<USENS> 
+else
+    save(qc_vals, 'orig_NotGM_NotGM_corr', 'compare_NotGM_NotGM_corr', 'denoised_NotGM_NotGM_corr', ...
+     'orig_GM_GM_corr', 'compare_GM_GM_corr', 'denoised_GM_GM_corr', ...
+     'orig_Outbrain_Outbrain_corr', 'compare_Outbrain_Outbrain_corr', 'denoised_Outbrain_Outbrain_corr', ...
+     'orig_Edge_Edge_corr', 'compare_Edge_Edge_corr', 'denoised_Edge_Edge_corr', ...
+     'orig_WMCSF_WMCSF_corr', 'compare_WMCSF_WMCSF_corr', 'denoised_WMCSF_WMCSF_corr', ...
+     'orig_CSF_CSF_corr', 'compare_CSF_CSF_corr', 'denoised_CSF_CSF_corr', ...
+     'orig_DVARS_GM_corr', 'compare_DVARS_GM_corr', 'denoised_DVARS_GM_corr', ...
+     'orig_FD_GM_corr', 'compare_FD_GM_corr', 'denoised_FD_GM_corr', ...
+     'orig_NotGM_NotGM_r2', 'compare_NotGM_NotGM_r2', 'denoised_NotGM_NotGM_r2', ...
+     'orig_GM_GM_r2', 'compare_GM_GM_corr', 'denoised_GM_GM_corr', ...
+     'orig_Outbrain_Outbrain_r2', 'compare_Outbrain_Outbrain_r2', 'denoised_Outbrain_Outbrain_r2', ...
+     'orig_Edge_Edge_r2', 'compare_Edge_Edge_r2', 'denoised_Edge_Edge_r2', ...
+     'orig_WMCSF_WMCSF_r2', 'compare_WMCSF_WMCSF_r2', 'denoised_WMCSF_WMCSF_r2', ...
+     'orig_CSF_CSF_r2', 'compare_CSF_CSF_r2', 'denoised_CSF_CSF_r2', ...
+     'orig_DVARS_GM_r2', 'compare_DVARS_GM_r2', 'denoised_DVARS_GM_r2', ...
+     'orig_FD_GM_r2', 'compare_FD_GM_r2', 'denoised_FD_GM_r2', ...
+     'orig_corr_stats_table', 'compare_corr_stats_table', 'denoised_corr_stats_table', ...
+     'comparing_R2_p_table', ...
+     'orig_GM_mean', 'compare_GM_mean', 'denoised_GM_mean', ...
+     'title_string', 'orig_tag', 'compare_tag', 'cleaned_tag',...
+     'tr') %#ok<USENS> 
+end
+
 
 % Now, in the future, if you want to replot anything, you should have
 % everything you need by loading the qc_values.mat file, and then run just
 % the figure stuff below
+denoised_name = 'CICADA';
+if strcmp(cicada_type, 'none')
+    % if it is not CICADA, label the cleaned file more appropriately
+    denoised_name = cleaned_tag;
+end
+plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_Outbrain_corr, ...
+    denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, ...
+    compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_Outbrain_corr, ...
+    compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, ...
+    orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_Outbrain_corr, ...
+    orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, ...
+    denoised_GM_mean, compare_GM_mean, orig_GM_mean, title_string, qc_plots, denoised_name)
 
-fprintf('Creating Figures\n')
-figure('Position', [50, 50, 2000, 900])
-t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
-title(t, title_string, 'Interpreter', 'none')
-
-% GM_Edge corr: Want to see a tighter distribution, centered near
-% 0, if original is significantly right shifted, want to see less
-% of that
-nexttile
-hold on
-title('Edge-GM Corr ', 'Interpreter', 'none')
-histogram(orig_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_Edge_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_fd corr: Want to see a shift toward center for denoised
-% (removal of noise/sudden GS signal shift in GM). Suggests it
-% is robust against overall movement.
-nexttile
-hold on
-title('FD-GM Corr ', 'Interpreter', 'none')
-histogram(orig_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_dvars corr: Want to see a shift toward center for denoised
-% (removal of noise/sudden GS signal shift in GM). Suggests it
-% is robust against global signal changes (including large
-% movement)
-nexttile
-hold on
-title('DVARS-GM Corr ', 'Interpreter', 'none')
-histogram(orig_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_Outbrain corr: Want to see a tighter distribution, centered near
-% 0, if original is significantly right shifted, want to see less
-% of that
-nexttile
-hold on
-title('Outbrain-GM Corr ', 'Interpreter', 'none')
-histogram(orig_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_Outbrain_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_WMCSF corr: Want to see a tighter distribution, centered near
-% 0, if original is significantly right shifted, want to see less
-% of that
-nexttile
-hold on
-title('WMCSF-GM Corr ', 'Interpreter', 'none')
-histogram(orig_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_WMCSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_CSF corr: Want to see a tighter distribution, centered near
-% 0, if original is significantly right shifted, want to see less
-% of that
-nexttile
-hold on
-title('CSF-GM Corr ', 'Interpreter', 'none')
-histogram(orig_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_CSF_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_NotGM corr: Want to see a tighter distribution, centered near
-% 0, if original is significantly right shifted, want to see less
-% of that. Want to see the denoised and orig be significantly different
-nexttile
-hold on
-title('NotGM-GM Corr ', 'Interpreter', 'none')
-histogram(orig_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(compare_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-histogram(denoised_NotGM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% GM_GM autocorr to orig: Want to see signal correlations maintained, in comparison to
-% GM_NotGM corr, but still reduced (removed erroneous/global correlations).
-% get color order right to match other plots
-colorord = get(gca, 'colororder');
-
-nexttile
-hold on
-title('GM-GM Auto Corr to Orig', 'Interpreter', 'none')
-histogram(compare_GM_GM_autocorr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
-histogram(denoised_GM_GM_autocorr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
-legend('compare', 'CICADA', 'Interpreter', 'none')
-hold off
-
-% Plot GS changes before and after Denoising - it is easier to
-% detrend it all first for comparison
-nexttile
-hold on
-title('Mean GM Signal (Detrended)', 'Interpreter', 'none')
-plot(detrend(orig_GM_mean,2), 'LineWidth', 1.5)
-plot(detrend(compare_GM_mean,2), 'LineWidth', 1.5)
-plot(detrend(denoised_GM_mean,2), 'LineWidth', 1.5)
-legend('orig', 'compare', 'CICADA', 'Interpreter', 'none')
-xlim([0, length(orig_GM_mean)])
-hold off
-
-
-fprintf('Saving Figure\n')
-exportgraphics(t, qc_plots, 'Resolution', 300)
 
 fprintf('\n')
 end

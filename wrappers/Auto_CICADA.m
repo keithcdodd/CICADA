@@ -1,4 +1,4 @@
-function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, compare_file, task_events_file, mel_fol, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
+function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
 % Make this into a function that does name=value, and specify what inputs
 % are required. 
 % Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
@@ -60,6 +60,10 @@ if ~exist('confoundsfile', 'var') || ~ischar(confoundsfile)
 end
 
 % Now check for non-necessary variables
+if ~exist('redo_mel', 'var') || (redo_mel ~= 0 && redo_mel ~=1)
+    redo_mel = 0; % default is to not redo melodic
+end
+
 if ~exist('compare_file', 'var') || ~ischar(compare_file)
     fprintf('Will compare to standard 8 parameter \n')
     compare_file='x'; % need it to be something that you can catch. 'x' is good.
@@ -90,8 +94,14 @@ if ~exist('csf_prob', 'var') || ~ischar(csf_prob)
 end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol)
-    fprintf('Will put Melodic in standard location \n')
-    mel_fol='x'; % initialize it the same way the bash script would
+    fprintf('Melodic will be in the standard location \n')
+    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic']; % give it default location
+end
+
+% change mel_fol if redo melodic is a 1
+if redo_mel == 1
+    fprintf('Will run a new Melodic instance.\n')
+    mel_fol = 'x'; % initilaize it the same was as the basescript would
 end
 
 fprintf('\n\n')

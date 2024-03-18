@@ -1,0 +1,61 @@
+function get_r2_data(Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, ...
+    WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, timeseries_n)
+
+% Get R2 data from correlations
+
+% there are two "n"s here: timeseries n gives n sampling that was used to
+% determine each r, vs n for beta is the number of r correlations sampled
+% to make the r distribution
+
+k = 2; % k is 2 for simple scatter or r from correlating two things
+
+% calculate n for each sampling
+Edge_n = length(Edge_GM_corr);
+FD_n = length(FD_GM_corr);
+DVARS_n = length(DVARS_GM_corr);
+Outbrain_n = length(Outbrain_GM_corr);
+WMCSF_n = length(WMCSF_GM_corr);
+CSF_n = length(CSF_GM_corr);
+NotGM_n = length(NotGM_GM_corr);
+GM_n = length(GM_GM_corr);
+
+
+% Convert r to R2
+Edge_r2 = Edge_GM_corr.^2;
+FD_r2 = FD_GM_corr.^2;
+DVARS_r2 = DVARS_GM_corr.^2;
+Outbrain_r2 = Outbrain_GM_corr.^2;
+WMCSF_r2 = WMCSF_GM_corr.^2;
+CSF_r2 = CSF_GM_corr.^2;
+NotGM_r2 = NotGM_GM_corr.^2;
+GM_r2 = GM_GM_corr.^2;
+
+% idea: vartest r plots for variance differences
+% use beta cdf to determine if R2 is significant
+
+% Convert R2s to Fs (good for comparing against each other, i.e., two sample testing)
+% df1 = k; df2 = timeseries_n-(k+1); % should be the same for all of them
+% Edge_f = ((Edge_r2) ./ (1-Edge_r2)) .* (df2 / df1);
+% FD_f = ((FD_r2) ./ (1-FD_r2)) .* (df2 / df1);
+% DVARS_f = ((DVARS_r2) ./ (1-DVARS_r2)) .* (df2 / df1);
+% Outbrain_f = ((Outbrain_r2) ./ (1-Outbrain_r2)) .* (df2 / df1);
+% WMCSF_f = ((WMCSF_r2) ./ (1-WMCSF_r2)) .* (df2 / df1);
+% CSF_f = ((CSF_r2) ./ (1-CSF_r2)) .* (df2 / df1);
+% NotGM_f = ((NotGM_r2) ./ (1-NotGM_r2)) .* (df2 / df1);
+% GM_f = ((GM_r2) ./ (1-GM_r2)) .* (df2 / df1);
+
+
+% Calculate p value of mean r2 from beta distribution beta( (k-1)/2 , (n-k) / 2)
+% good for comparing to null of no significant r2 (i.e., one sample
+% testing). Is the mean R2 significant?
+Edge_p = betacdf(mean(Edge_r2), (k-1)/2, (Edge_n-k)/2, 'upper');
+FD_p = betacdf(mean(FD_r2), (k-1)/2, (FD_n-k)/2, 'upper');
+DVARS_p = betacdf(mean(DVARS_r2), (k-1)/2, (DVARS_n-k)/2, 'upper');
+Outbrain_p = betacdf(mean(Outbrain_r2), (k-1)/2, (Outbrain_n-k)/2, 'upper');
+WMCSF_p = betacdf(mean(WMCSF_r2), (k-1)/2, (WMCSF_n-k)/2, 'upper');
+CSF_p = betacdf(mean(CSF_r2), (k-1)/2, (CSF_n-k)/2, 'upper');
+NotGM_p = betacdf(mean(NotGM_r2), (k-1)/2, (NotGM_n-k)/2, 'upper');
+GM_p = betacdf(mean(GM_r2), (k-1)/2, (GM_n-k)/2, 'upper');
+
+
+end

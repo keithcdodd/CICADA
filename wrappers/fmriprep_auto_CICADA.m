@@ -1,4 +1,4 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, task_events_file, compare_file, mel_fol)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them. 
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
@@ -18,6 +18,10 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_nam
 % you can supply that here
 
 % Now check for non-necessary variables
+if ~exist('redo_mel', 'var') || (redo_mel ~= 0 && redo_mel ~=1)
+    redo_mel = 0; % default is to not redo melodic
+end
+
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file=[];
     compare_file_record = 'Standard 8 parameter compare';
@@ -41,7 +45,7 @@ else
 end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
-    mel_fol=[]; % will end up using default
+    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic']; % will look in default location
 elseif ~isfolder(mel_fol)
     fprintf(['MELODIC folder not found at ', mel_fol, '\n'])
     mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic'];
@@ -101,6 +105,6 @@ fprintf(['melodic folder: ', mel_fol, '\n\n'])
 % For melodic folder, we can just check if the melodic folder exists, does
 % it have one of the final inputs?
 
-Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, compare_file, task_events_file, mel_fol, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
+Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
 
 end
