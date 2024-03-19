@@ -19,7 +19,7 @@ if isempty(denoised_GM_mean)
     figure('Position', [50, 250, 2000, 900])
     t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    figure('Position', [50, 50, 1900, 1000])
+    figure('Position', [50, 50, 1700, 1000])
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 

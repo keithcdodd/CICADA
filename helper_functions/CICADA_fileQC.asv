@@ -1,4 +1,4 @@
-function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
+function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % function [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % An Inner Base script, called upon by script 3, to get relevant QC
 % information
@@ -80,6 +80,8 @@ fprintf('Calculating Relevant Correlations\n')
 % something funky happens and the sizes do not fully align with Edge
 % Voxels. Very close (probably related to thresholding values and minor 
 % smoothing meaning some voxels that are all 0s for one, are not for the other.)
+
+% For GM compared to other region
 GM_randperm = randperm(size(denoised_GM, 1));
 GM_Edge_randperm = randperm(size(denoised_GM_Edge, 1));
 GM_Outbrain_randperm = randperm(size(denoised_GM_Outbrain, 1));
@@ -87,31 +89,42 @@ GM_WMCSF_randperm = randperm(size(denoised_GM_WMCSF, 1));
 GM_CSF_randperm = randperm(size(denoised_GM_CSF, 1));
 GM_Suscept_randperm = randperm(size(denoised_GM_Suscept, 1));
 GM_NotGM_randperm = randperm(size(denoised_GM_NotGM, 1));
-NotGM_randperm = randperm(size(denoised_NotGM_GM, 1));
-Outbrain_randperm = randperm(size(denoised_Outbrain_GM, 1));
-Edge_randperm = randperm(size(denoised_Edge_GM, 1));
-WMCSF_randperm = randperm(size(denoised_WMCSF_GM, 1));
-CSF_randperm = randperm(size(denoised_CSF_GM, 1));
-Suscept_randperm = randperm(size(denoised_Suscept_GM, 1));
+
+% For other region compared to GM
+NotGM_GM_randperm = randperm(size(denoised_NotGM_GM, 1));
+Outbrain_GM_randperm = randperm(size(denoised_Outbrain_GM, 1));
+Edge_GM_randperm = randperm(size(denoised_Edge_GM, 1));
+WMCSF_GM_randperm = randperm(size(denoised_WMCSF_GM, 1));
+CSF_GM_randperm = randperm(size(denoised_CSF_GM, 1));
+Suscept_GM_randperm = randperm(size(denoised_Suscept_GM, 1));
+
+% for region compared to itself:
+NotGM_randperm = randperm(size(denoised_NotGM, 1));
+Outbrain_randperm = randperm(size(denoised_Outbrain, 1));
+Edge_randperm = randperm(size(denoised_Edge, 1));
+WMCSF_randperm = randperm(size(denoised_WMCSF, 1));
+CSF_randperm = randperm(size(denoised_CSF, 1));
+Suscept_randperm = randperm(size(denoised_Suscept, 1));
 
 % Now get all the relevant correlations:
 perms = 200;
-Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_randperm, perms);
+Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_GM_randperm, perms);
 FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 19900); % make it same sampling as others
 DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 19900);
-Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_randperm, perms);
-WMCSF_GM_corr = createHistData(denoised_GM_WMCSF, denoised_WMCSF_GM, GM_WMCSF_randperm, WMCSF_randperm, perms);
-CSF_GM_corr = createHistData(denoised_GM_CSF, denoised_CSF_GM, GM_CSF_randperm, CSF_randperm, perms);
-NotGM_GM_corr = createHistData(denoised_GM_NotGM, denoised_NotGM_GM, GM_NotGM_randperm, NotGM_randperm, perms);
+Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_GM_randperm, perms);
+WMCSF_GM_corr = createHistData(denoised_GM_WMCSF, denoised_WMCSF_GM, GM_WMCSF_randperm, WMCSF_GM_randperm, perms);
+CSF_GM_corr = createHistData(denoised_GM_CSF, denoised_CSF_GM, GM_CSF_randperm, CSF_GM_randperm, perms);
+NotGM_GM_corr = createHistData(denoised_GM_NotGM, denoised_NotGM_GM, GM_NotGM_randperm, NotGM_GM_randperm, perms);
 GM_GM_corr = createHistData(denoised_GM, denoised_GM, GM_randperm, GM_randperm, perms);
-
+Suscept_GM_corr = createHistData(denoised_GM_Suscept, denoised_Suscept_GM, GM_Suscept_randperm, Suscept_GM_randperm, perms);
 
 % Getting more of the same regions
 Edge_Edge_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
-Outbrain_Outbrain_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
-WMCSF_WMCSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
-CSF_CSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
+Outbrain_Outbrain_corr = createHistData(denoised_Outbrain, denoised_Outbrain, Outbrain_randperm, Outbrain_randperm, perms);
+WMCSF_WMCSF_corr = createHistData(denoised_WMCSF, denoised_WMCSF, WMCSF_randperm, WMCSF_randperm, perms);
+CSF_CSF_corr = createHistData(denoised_CSF, denoised_CSF, CSF_randperm, CSF_randperm, perms);
 NotGM_NotGM_corr = createHistData(denoised_NotGM, denoised_NotGM, NotGM_randperm, NotGM_randperm, perms);
+Suscept_Suscept_corr = createHistData(denoised_Suscept, denoised_Suscept, Suscept_randperm, Suscept_randperm, perms);
 
 
 GM_mean = denoised_GM_mean;
