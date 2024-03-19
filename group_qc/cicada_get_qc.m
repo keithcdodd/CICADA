@@ -109,7 +109,7 @@ meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
 % actual cleaned file
 orig_file_info = dir([cleaned_dir, '/*orig*.nii.gz']);
 orig_file = [cleaned_dir, '/', orig_file_info.name];
-[Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
+[Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
 
 % grab niftiinfo to grab tr for later
 cleaned_file_niftiinfo = niftiinfo(cleaned_file);
@@ -237,6 +237,6 @@ end
 % Grab a sampling of the correlation values, because otherwise it might
 % become too much
 samps = 500;
-qc_corrs_table = grab_corr_sampling(Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, samps);
+qc_corrs_table = grab_corr_sampling(Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, samps);
 
 end

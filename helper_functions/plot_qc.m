@@ -1,9 +1,9 @@
 function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_Outbrain_corr, ...
-    denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, ...
+    denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, denoised_Suscept_Suscept_corr, ...
     compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_Outbrain_corr, ...
-    compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, ...
+    compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, compare_Suscept_Suscept_corr, ...
     orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, orig_Outbrain_Outbrain_corr, ...
-    orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, ...
+    orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, orig_Suscept_Suscept_corr, ...
     denoised_GM_mean, compare_GM_mean, orig_GM_mean, title_string, qc_plot_dest, denoised_name)
 
 % Plot QC results!
@@ -19,8 +19,8 @@ if isempty(denoised_GM_mean)
     figure('Position', [50, 250, 2000, 900])
     t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    figure('Position', [50, 50, 2000, 900])
-    t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
+    figure('Position', [50, 50, 1900, 1000])
+    t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
 title(t, title_string, 'Interpreter', 'none')
@@ -154,6 +154,29 @@ ylabel('Frequency')
 xlim([-1, 1]);
 hold off
 
+% Suscept corr: Want to see a tighter distribution, centered near
+% 0, if original is significantly right shifted, want to see less
+% of that. Want to see the denoised and orig be significantly different
+% does not need to be as drastic as others, as susceptibility regions
+% include GM and can be a bit subjective
+nexttile
+hold on
+title('Susceptibility Correlation', 'Interpreter', 'none')
+histogram(orig_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+if ~isempty(compare_Suscept_Suscept_corr)
+    histogram(compare_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+else
+    histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
+end
+%xline(0, 'DisplayName','r = 0')
+xlabel('Correlation (r)')
+ylabel('Frequency')
+xlim([-1, 1]);
+hold off
+
 % GM_NotGM corr: Want to see a tighter distribution, centered near
 % 0, if original is significantly right shifted, want to see less
 % of that. Want to see the denoised and orig be significantly different
@@ -203,7 +226,7 @@ hold off
 if ~isempty(denoised_GM_mean)
     % Plot GS changes before and after Denoising - it is easier to
     % detrend it all first for comparison
-    nexttile
+    nexttile([1 3])
     hold on
     title('Mean GM Signal (Detrended)', 'Interpreter', 'none')
     plot(detrend(orig_GM_mean,2), 'LineWidth', 1.5)

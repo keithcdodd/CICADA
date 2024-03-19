@@ -1,4 +1,4 @@
-function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
+function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % function [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % An Inner Base script, called upon by script 3, to get relevant QC
 % information
@@ -43,6 +43,7 @@ WMCSF_prob_file = [cleaned_dir, '/../region_masks/Subepe_prob.nii.gz'];
 CSF_prob_file = [cleaned_dir, '/../region_masks/CSF_prob.nii.gz'];
 Edge_prob_file = [cleaned_dir, '/../region_masks/Edge_prob.nii.gz'];
 Outbrain_prob_file = [cleaned_dir, '/../region_masks/OutbrainOnly_prob.nii.gz'];
+Suscept_prob_file = [cleaned_dir, '/../region_masks/Susceptibility_prob.nii.gz'];
 funcmask = [cleaned_dir, '/../funcmask.nii.gz'];
 if isfile([cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']) == 1
     NotGM_prob_file = [cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']; % this is a better estimate if we calculated it
@@ -61,6 +62,7 @@ fprintf('Calculating Denoised Data\n')
 [denoised_GM_Outbrain, denoised_Outbrain_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, Outbrain_prob_file);
 [denoised_GM_WMCSF, denoised_WMCSF_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, WMCSF_prob_file);
 [denoised_GM_CSF, denoised_CSF_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, CSF_prob_file);
+[denoised_GM_Suscept, denoised_Suscept_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, Suscept_prob_file);
 
 % testing with doing more of the same region
 [denoised_NotGM, ~, ~] = getData_sameregion(denoised_file_data, funcmask, NotGM_prob_file);
@@ -68,14 +70,7 @@ fprintf('Calculating Denoised Data\n')
 [denoised_Outbrain, ~, ~] = getData_sameregion(denoised_file_data, funcmask, Outbrain_prob_file);
 [denoised_WMCSF, ~, ~] = getData_sameregion(denoised_file_data, funcmask, WMCSF_prob_file);
 [denoised_CSF, ~, ~] = getData_sameregion(denoised_file_data, funcmask, CSF_prob_file);
-
-% and then grab just GM for orig data if needed
-%[orig_GM, orig_GM_mean, ~] = getData_sameregion(orig_file_data, funcmask, GM_prob_file);
-%[orig_GM_NotGM, orig_NotGM, ~, ~, ~, ~] = getData(orig_file_data, funcmask, GM_prob_file, NotGM_prob_file);
-%[~, orig_Edge, ~, ~, ~, ~] = getData(orig_file_data, funcmask, GM_prob_file, Edge_prob_file);
-%[~, orig_Outbrain, ~, ~, ~, ~] = getData(orig_file_data, funcmask, GM_prob_file, Outbrain_prob_file);
-%[~, orig_WMCSF, ~, ~, ~, ~] = getData(orig_file_data, funcmask, GM_prob_file, WMCSF_prob_file);
-%[~, orig_CSF, ~, ~, ~, ~] = getData(orig_file_data, funcmask, GM_prob_file, CSF_prob_file);
+[denoised_Suscept, ~, ~] = getData_sameregion(denoised_file_data, funcmask, Suscept_prob_file);
 
 % Now compute relevant correlations, and some others that we don't use, but
 % one could make use of if they desired
@@ -90,29 +85,34 @@ GM_Edge_randperm = randperm(size(denoised_GM_Edge, 1));
 GM_Outbrain_randperm = randperm(size(denoised_GM_Outbrain, 1));
 GM_WMCSF_randperm = randperm(size(denoised_GM_WMCSF, 1));
 GM_CSF_randperm = randperm(size(denoised_GM_CSF, 1));
+GM_Suscept_randperm = randperm(size(denoised_GM_Suscept, 1));
 GM_NotGM_randperm = randperm(size(denoised_GM_NotGM, 1));
 NotGM_randperm = randperm(size(denoised_NotGM_GM, 1));
 Outbrain_randperm = randperm(size(denoised_Outbrain_GM, 1));
 Edge_randperm = randperm(size(denoised_Edge_GM, 1));
 WMCSF_randperm = randperm(size(denoised_WMCSF_GM, 1));
 CSF_randperm = randperm(size(denoised_CSF_GM, 1));
+Suscept_randperm = randperm(size(denoised_Suscept_GM, 1));
 
 % Now get all the relevant correlations:
-Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_randperm, 500);
-FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 10000);
-DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 10000);
-Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_randperm, 500);
-WMCSF_GM_corr = createHistData(denoised_GM_WMCSF, denoised_WMCSF_GM, GM_WMCSF_randperm, WMCSF_randperm, 500);
-CSF_GM_corr = createHistData(denoised_GM_CSF, denoised_CSF_GM, GM_CSF_randperm, CSF_randperm, 500);
-NotGM_GM_corr = createHistData(denoised_GM_NotGM, denoised_NotGM_GM, GM_NotGM_randperm, NotGM_randperm, 500);
-GM_GM_corr = createHistData(denoised_GM, denoised_GM, GM_randperm, GM_randperm, 500);
+perms = 200;
+Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_randperm, perms);
+FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 19900); % make it same sampling as others
+DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 19900);
+Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_randperm, perms);
+WMCSF_GM_corr = createHistData(denoised_GM_WMCSF, denoised_WMCSF_GM, GM_WMCSF_randperm, WMCSF_randperm, perms);
+CSF_GM_corr = createHistData(denoised_GM_CSF, denoised_CSF_GM, GM_CSF_randperm, CSF_randperm, perms);
+NotGM_GM_corr = createHistData(denoised_GM_NotGM, denoised_NotGM_GM, GM_NotGM_randperm, NotGM_randperm, perms);
+GM_GM_corr = createHistData(denoised_GM, denoised_GM, GM_randperm, GM_randperm, perms);
+Suscept_GM_corr = createHistData(denoised_GM_Suscept, denoised_Suscept_GM, GM_Suscept_randperm, Suscept_randperm, perms);
 
 % Getting more of the same regions
-Edge_Edge_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, 500);
-Outbrain_Outbrain_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, 500);
-WMCSF_WMCSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, 500);
-CSF_CSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, 500);
-NotGM_NotGM_corr = createHistData(denoised_NotGM, denoised_NotGM, NotGM_randperm, NotGM_randperm, 500);
+Edge_Edge_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
+Outbrain_Outbrain_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
+WMCSF_WMCSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
+CSF_CSF_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
+NotGM_NotGM_corr = createHistData(denoised_NotGM, denoised_NotGM, NotGM_randperm, NotGM_randperm, perms);
+Suscept_Suscept_corr = createHistData(denoised_Suscept, denoised_Suscept, Suscept_randperm, Suscept_randperm, perms);
 
 
 GM_mean = denoised_GM_mean;
@@ -128,7 +128,7 @@ func_data = funcfile_data;
 funcmask_data = niftiread(funcmask);
 
 gm_mask = logical(gm_prob_data > 0.67 & funcmask_data == 1 & region_prob_data == 0 );
-region_mask = logical(region_prob_data > 0.67 & funcmask_data == 1 & gm_prob_data < 0.01 );
+region_mask = logical(region_prob_data > 0.67 & funcmask_data == 1 & gm_prob_data < 0.05 );
 func_mask = logical(funcmask_data == 1);
 
 % Select the timeseries for GM and region and global signal
