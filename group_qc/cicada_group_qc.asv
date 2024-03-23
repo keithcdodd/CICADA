@@ -187,13 +187,6 @@ for idx = 1:num_runs
         continue;
     end
 
-    % look for funcmask
-    funcmask = [task_dir, '/funcmask.nii.gz'];
-    if ~isfile(funcmask)
-        fprintf(['   Cannot find funcmask at ', task_dir, '. Skipping...\n'])
-        continue;
-    end
-
     % cicada type determines if we default from pulling from cleaned_auto
     % or cleaned_manual. Manually adjusted ('1') would mean pull from manual too.
     cleaned_dir = [task_dir, '/cleaned'];
@@ -268,11 +261,11 @@ for idx = 1:num_runs
     end
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
-    cleaned_file = detrend_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel);
-    orig_file = detrend_smooth(orig_file, data_dir, funcmask, smoothing_kernel);
+    cleaned_file = detrend_smooth(cleaned_file, data_dir, smoothing_kernel);
+    orig_file = detrend_smooth(orig_file, data_dir, smoothing_kernel);
     % do the same to the compare_file, if it exists
     if ~isempty(compare_file)
-        compare_file = detrend_smooth(compare_file, funcmask, data_dir, smoothing_kernel);
+        compare_file = detrend_smooth(compare_file, data_dir, smoothing_kernel);
     end
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
@@ -284,11 +277,6 @@ for idx = 1:num_runs
     else
         compare_qc_corrs_table = table();
     end
-
-    % now, to save space, we should delete the orig and compare data from
-    % data dir
-    delete(compare_file)
-    delete(orig_file)
 
 
     % then we need to be adding this information into the group qc stuff
@@ -434,24 +422,27 @@ ocorrt = group_orig_qc_corrs_table;
 
 % see if we have compare data to deal with here
 if ~isempty(group_compare_qc_corrs_table)
-    
-    ccorrt = group_compare_qc_corrs_table;
 
     
-    % Set appropriate titles and destination
-    title_string = ['Group_QC_' compare_tag];
-    qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
-    
-    % now we can plot
-    plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
-        dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, dcorrt.Suscept_Suscept_Corr, ...
-        ccorrt.Edge_GM_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_GM_Corr, ...
-        ccorrt.WMCSF_GM_Corr, ccorrt.CSF_GM_Corr, ccorrt.NotGM_GM_Corr, ccorrt.GM_GM_AutoCorr, ccorrt.Suscept_Suscept_Corr, ...
-        ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
-        ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ocorrt.Suscept_Suscept_Corr, ...
-        [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
+    for h = 1:size(group_compare_qc_corrs_table,2)
+        ccorrt = group_compare_qc_corrs_table{h};
 
-
+        % get current compare tag:
+        curr_compare_tag = compare_tags{h}; % will say both cleaned file name AND compare file name
+        
+        % Set appropriate titles and destination
+        title_string = ['Group_QC_' curr_compare_tag];
+        qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
+        
+        % now we can plot
+        plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
+            dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, dcorrt.Suscept_Suscept_Corr, ...
+            ccorrt.Edge_GM_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_GM_Corr, ...
+            ccorrt.WMCSF_GM_Corr, ccorrt.CSF_GM_Corr, ccorrt.NotGM_GM_Corr, ccorrt.GM_GM_AutoCorr, ccorrt.Suscept_Suscept_Corr, ...
+            ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
+            ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ocorrt.Suscept_Suscept_Corr, ...
+            [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
+    end
 else
     % we can plot now! There is no compare data
     title_string = ['Group_QC_' cleaned_file_tag, '_vs_orig'];

@@ -98,13 +98,13 @@ if ~strcmp(cicada_type, 'none')
 end
 
 
-
 % Now, we can get the relevant correlation values and such!
 fprintf(['Running comparison of ', cleaned_file_info.name, ' to ', dir(compare_file).name, '\n'])   
 
 [denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, denoised_Outbrain_Outbrain_corr, ...
     denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr, ...
     denoised_Suscept_Suscept_corr, denoised_GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
+
 
 [compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, compare_Outbrain_Outbrain_corr, ...
     compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr, ...
@@ -136,49 +136,48 @@ qc_plots = [qc_naming, '_qc_plots.jpg'];
 % get R2 data to prep for testing:
 [denoised_Edge_Edge_r2, denoised_Edge_Edge_p, denoised_FD_GM_r2, denoised_FD_GM_p, denoised_DVARS_GM_r2, denoised_DVARS_GM_p, ...
     denoised_Outbrain_Outbrain_r2, denoised_Outbrain_Outbrain_p, denoised_WMCSF_WMCSF_r2, denoised_WMCSF_WMCSF_p, denoised_CSF_CSF_r2, denoised_CSF_CSF_p, ...
-    denoised_NotGM_NotGM_r2, denoised_NotGM_NotGM_p, denoised_GM_GM_r2, denoised_GM_GM_p] = ...
+    denoised_Suscept_Suscept_r2, denoised_Suscept_Suscept_p, denoised_NotGM_NotGM_r2, denoised_NotGM_NotGM_p, denoised_GM_GM_r2, denoised_GM_GM_p] = ...
     get_r2_data(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM_corr, ...
     denoised_Outbrain_Outbrain_corr, denoised_WMCSF_WMCSF_corr, denoised_CSF_CSF_corr, ...
-    denoised_NotGM_NotGM_corr, denoised_GM_GM_corr);
-
+    denoised_Suscept_Suscept_corr, denoised_NotGM_NotGM_corr, denoised_GM_GM_corr);
 
 corr_R2_labels = {'NotGM_NotGM_R2', 'GM_GM_R2', 'Outbrain_Outbrain_R2', 'Edge_Edge_R2', ...
-    'WMCSF_WMCSF_R2', 'CSF_CSF_R2', 'DVARS_GM_R2', 'FD_GM_R2'};
+    'WMCSF_WMCSF_R2', 'CSF_CSF_R2', 'Suscept_Suscept_R2', 'DVARS_GM_R2', 'FD_GM_R2'};
 denoised_corr_p_values = [denoised_NotGM_NotGM_p, denoised_GM_GM_p, denoised_Outbrain_Outbrain_p, ...
-    denoised_Edge_Edge_p, denoised_WMCSF_WMCSF_p, denoised_CSF_CSF_p, denoised_DVARS_GM_p, denoised_FD_GM_p];
+    denoised_Edge_Edge_p, denoised_WMCSF_WMCSF_p, denoised_CSF_CSF_p, denoised_Suscept_Suscept_p, denoised_DVARS_GM_p, denoised_FD_GM_p];
 denoised_R2_mean = [mean(denoised_NotGM_NotGM_r2), mean(denoised_GM_GM_r2), mean(denoised_Outbrain_Outbrain_r2), ...
     mean(denoised_Edge_Edge_r2), mean(denoised_WMCSF_WMCSF_r2), mean(denoised_CSF_CSF_r2), ...
-    mean(denoised_DVARS_GM_r2), mean(denoised_FD_GM_r2)];
+    mean(denoised_Suscept_Suscept_r2), mean(denoised_DVARS_GM_r2), mean(denoised_FD_GM_r2)];
 denoised_corr_stats_table = array2table([denoised_R2_mean; denoised_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
 
 
 [compare_Edge_Edge_r2, compare_Edge_Edge_p, compare_FD_GM_r2, compare_FD_GM_p, compare_DVARS_GM_r2, compare_DVARS_GM_p, ...
     compare_Outbrain_Outbrain_r2, compare_Outbrain_Outbrain_p, compare_WMCSF_WMCSF_r2, compare_WMCSF_WMCSF_p, compare_CSF_CSF_r2, compare_CSF_CSF_p, ...
-    compare_NotGM_NotGM_r2, compare_NotGM_NotGM_p, compare_GM_GM_r2, compare_GM_GM_p] = ...
+    compare_Suscept_Suscept_r2, compare_Suscept_Suscept_p, compare_NotGM_NotGM_r2, compare_NotGM_NotGM_p, compare_GM_GM_r2, compare_GM_GM_p] = ...
     get_r2_data(compare_Edge_Edge_corr, compare_FD_GM_corr, compare_DVARS_GM_corr, ...
     compare_Outbrain_Outbrain_corr, compare_WMCSF_WMCSF_corr, compare_CSF_CSF_corr, ...
-    compare_NotGM_NotGM_corr, compare_GM_GM_corr);
+    compare_Suscept_Suscept_corr, compare_NotGM_NotGM_corr, compare_GM_GM_corr);
 
 compare_corr_p_values = [compare_NotGM_NotGM_p, compare_GM_GM_p, compare_Outbrain_Outbrain_p, ...
-    compare_Edge_Edge_p, compare_WMCSF_WMCSF_p, compare_CSF_CSF_p, compare_DVARS_GM_p, compare_FD_GM_p];
+    compare_Edge_Edge_p, compare_WMCSF_WMCSF_p, compare_CSF_CSF_p, compare_Suscept_Suscept_p, compare_DVARS_GM_p, compare_FD_GM_p];
 compare_R2_mean = [mean(compare_NotGM_NotGM_r2), mean(compare_GM_GM_r2), mean(compare_Outbrain_Outbrain_r2), ...
     mean(compare_Edge_Edge_r2), mean(compare_WMCSF_WMCSF_r2), mean(compare_CSF_CSF_r2), ...
-    mean(compare_DVARS_GM_r2), mean(compare_FD_GM_r2)];
+    mean(compare_Suscept_Suscept_r2), mean(compare_DVARS_GM_r2), mean(compare_FD_GM_r2)];
 compare_corr_stats_table = array2table([compare_R2_mean; compare_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
 
 
 [orig_Edge_Edge_r2, orig_Edge_Edge_p, orig_FD_GM_r2, orig_FD_GM_p, orig_DVARS_GM_r2, orig_DVARS_GM_p, ...
     orig_Outbrain_Outbrain_r2, orig_Outbrain_Outbrain_p, orig_WMCSF_WMCSF_r2, orig_WMCSF_WMCSF_p, orig_CSF_CSF_r2, orig_CSF_CSF_p, ...
-    orig_NotGM_NotGM_r2, orig_NotGM_NotGM_p, orig_GM_GM_r2, orig_GM_GM_p] = ...
+    orig_Suscept_Suscept_r2, orig_Suscept_Suscept_p, orig_NotGM_NotGM_r2, orig_NotGM_NotGM_p, orig_GM_GM_r2, orig_GM_GM_p] = ...
     get_r2_data(orig_Edge_Edge_corr, orig_FD_GM_corr, orig_DVARS_GM_corr, ...
     orig_Outbrain_Outbrain_corr, orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, ...
-    orig_NotGM_NotGM_corr, orig_GM_GM_corr);
+    orig_Suscept_Suscept_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr);
 
 orig_corr_p_values = [orig_NotGM_NotGM_p, orig_GM_GM_p, orig_Outbrain_Outbrain_p, ...
-    orig_Edge_Edge_p, orig_WMCSF_WMCSF_p, orig_CSF_CSF_p, orig_DVARS_GM_p, orig_FD_GM_p];
+    orig_Edge_Edge_p, orig_WMCSF_WMCSF_p, orig_CSF_CSF_p, orig_Suscept_Suscept_p, orig_DVARS_GM_p, orig_FD_GM_p];
 orig_R2_mean = [mean(orig_NotGM_NotGM_r2), mean(orig_GM_GM_r2), mean(orig_Outbrain_Outbrain_r2), ...
     mean(orig_Edge_Edge_r2), mean(orig_WMCSF_WMCSF_r2), mean(orig_CSF_CSF_r2), ...
-    mean(orig_DVARS_GM_r2), mean(orig_FD_GM_r2)];
+    mean(orig_Suscept_Suscept_r2), mean(orig_DVARS_GM_r2), mean(orig_FD_GM_r2)];
 orig_corr_stats_table = array2table([orig_R2_mean; orig_corr_p_values], 'RowNames', {'R2 Mean', 'R2 p'}, 'VariableNames', corr_R2_labels);
 
 % Now, you can test if the R2 mean values are different between groups!
@@ -236,6 +235,43 @@ comparing_R2_p = [denoised_orig_NotGM_NotGM_R2_p, denoised_orig_GM_GM_R2_p, deno
 % combine into table
 comparing_R2_p_table = array2table(comparing_R2_p, 'VariableNames', R2_p_labels);
 
+% compare smoothed standard deviations, because the thresholded mapping of
+% it can be useful to demonstrate how GM signal is impacted
+fprintf('Running Comparison of Standard Deviations\n')
+command_1_denoised = ['fslmaths ', cleaned_file, ' -s 3 -mul ../funcmask -Tstd tmp_denoised_std.nii.gz'];
+command_1_compare = ['fslmaths ', compare_file, ' -s 3 -mul ../funcmask -Tstd tmp_compare_std.nii.gz'];
+command_1_orig = ['fslmaths ', orig_file, ' -s 3 -mul ../funcmask -Tstd tmp_orig_std.nii.gz'];
+
+command_2_denoised = ['fslmaths tmp_denoised_std.nii.gz -div tmp_orig_std.nii.gz ', cleaned_tag, '_std_prob.nii.gz'];
+command_2_compare = ['fslmaths tmp_compare_std.nii.gz -div tmp_orig_std.nii.gz ', compare_tag, '_std_prob.nii.gz'];
+
+command_3_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GM_mask.nii.gz tpm_', cleaned_tag, '_std_GMmasked.nii.gz'];
+command_3_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GM_mask.nii.gz tmp_', compare_tag, '_std_GMmasked.nii.gz'];
+command_4_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGM_mask.nii.gz tmp_', cleaned_tag, '_std_NotGMmasked.nii.gz'];
+command_4_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGM_mask.nii.gz tmp_', compare_tag, '_std_NotGMmasked.nii.gz'];
+
+call_fsl(command_1_denoised);
+call_fsl(command_1_compare);
+call_fsl(command_1_orig);
+call_fsl(command_2_denoised);
+call_fsl(command_2_compare);
+call_fsl(command_3_denoised);
+call_fsl(command_3_compare);
+call_fsl(command_4_denoised);
+call_fsl(command_4_compare);
+
+% Calculate and grab GM vs Not GM overlap values
+denoised_GM_masked = niftiread([cleaned_tag, '_std_GMmasked.nii.gz']);
+denoised_NotGM_masked = niftiread([cleaned_tag, '_std_NotGMmasked.nii.gz']);
+compare_GM_masked = niftiread([compare_tag, '_std_GMmasked.nii.gz']);
+compare_NotGM_masked = niftiread([compare_tag, '_std_NotGMmasked.nii.gz']);
+
+denoised_GM_NotGM_ratio = sum(denoised_GM_masked, "all") / (sum(denoised_NotGM_masked, "all") + sum(denoised_GM_masked, "all"));
+compare_GM_NotGM_ratio = sum(compare_GM_masked, "all") / (sum(compare_NotGM_masked, "all") + sum(compare_GM_masked, "all"));
+
+delete tmp*.nii.gz
+
+
 % save relevant plotting variables
 fprintf('Saving Relevant QC Data\n')
 title_string = [prefix, ': ', cleaned_tag, ', ', compare_tag, ', & ', orig_tag];
@@ -258,6 +294,7 @@ if ~strcmp(cicada_type, 'none')
      'orig_FD_GM_r2', 'compare_FD_GM_r2', 'denoised_FD_GM_r2', ...
      'orig_corr_stats_table', 'compare_corr_stats_table', 'denoised_corr_stats_table', ...
      'comparing_R2_p_table', ...
+     'denoised_GM_NotGM_ratio', 'compare_GM_NotGM_ratio', ...
      'orig_GM_mean', 'compare_GM_mean', 'denoised_GM_mean', ...
      'title_string', 'orig_tag', 'compare_tag', 'cleaned_tag',...
      'cicada_type', 'ic_select', 'DOF_estimate_final', 'Results', 'tr', 'Data', 'Tables') %#ok<USENS> 
@@ -280,15 +317,19 @@ else
      'orig_FD_GM_r2', 'compare_FD_GM_r2', 'denoised_FD_GM_r2', ...
      'orig_corr_stats_table', 'compare_corr_stats_table', 'denoised_corr_stats_table', ...
      'comparing_R2_p_table', ...
+     'denoised_GM_NotGM_ratio', 'compare_GM_NotGM_ratio', ...
      'orig_GM_mean', 'compare_GM_mean', 'denoised_GM_mean', ...
      'title_string', 'orig_tag', 'compare_tag', 'cleaned_tag',...
      'tr') %#ok<USENS> 
 end
 
 
+
+
 % Now, in the future, if you want to replot anything, you should have
 % everything you need by loading the qc_values.mat file, and then run just
 % the figure stuff below
+fprintf('Plotting QC\n')
 denoised_name = 'CICADA';
 if strcmp(cicada_type, 'none')
     % if it is not CICADA, label the cleaned file more appropriately

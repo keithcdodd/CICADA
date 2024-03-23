@@ -14,7 +14,6 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 
 fprintf('Creating Figures\n')
 
-
 if isempty(denoised_GM_mean)
     figure('Position', [50, 250, 2000, 900])
     t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
@@ -29,21 +28,27 @@ title(t, title_string, 'Interpreter', 'none')
 % 0, if original is significantly right shifted, want to see less
 % of that
 nexttile
+colorord = get(gca, 'colororder'); % this has to be after the nexttile call because of some weird Matlab bug
 hold on
 title('Edge Correlation', 'Interpreter', 'none')
-histogram(orig_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_Edge_Edge_corr)
+if ~isempty(compare_Edge_Edge_corr) && (range(orig_Edge_Edge_corr) > 0.01)
+    histogram(orig_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_Edge_Edge_corr) < 0.01)
+    histogram(compare_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % GM_fd corr: Want to see a shift toward center for denoised
@@ -58,15 +63,14 @@ if ~isempty(compare_FD_GM_corr)
     histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
-
 
 % GM_dvars corr: Want to see a shift toward center for denoised
 % (removal of noise/sudden GS signal shift in GM). Suggests it
@@ -81,13 +85,13 @@ if ~isempty(compare_DVARS_GM_corr)
     histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % GM_Outbrain corr: Want to see a tighter distribution, centered near
@@ -96,19 +100,24 @@ hold off
 nexttile
 hold on
 title('Outbrain Correlation', 'Interpreter', 'none')
-histogram(orig_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_Outbrain_Outbrain_corr)
+if ~isempty(compare_Outbrain_Outbrain_corr) && (range(orig_Outbrain_Outbrain_corr) > 0.01)
+    histogram(orig_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_Outbrain_Outbrain_corr) < 0.01)
+    histogram(compare_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % GM_WMCSF corr: Want to see a tighter distribution, centered near
@@ -117,19 +126,24 @@ hold off
 nexttile
 hold on
 title('WMCSF Correlation', 'Interpreter', 'none')
-histogram(orig_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_WMCSF_WMCSF_corr)
+if ~isempty(compare_WMCSF_WMCSF_corr) && (range(orig_WMCSF_WMCSF_corr) > 0.01)
+    histogram(orig_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_WMCSF_WMCSF_corr) < 0.01)
+    histogram(compare_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 
@@ -139,19 +153,24 @@ hold off
 nexttile
 hold on
 title('CSF Correlation', 'Interpreter', 'none')
-histogram(orig_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_CSF_CSF_corr)
+if ~isempty(compare_CSF_CSF_corr) && (range(orig_CSF_CSF_corr) > 0.01)
+    histogram(orig_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_CSF_CSF_corr) < 0.01)
+    histogram(compare_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % Suscept corr: Want to see a tighter distribution, centered near
@@ -162,19 +181,24 @@ hold off
 nexttile
 hold on
 title('Susceptibility Correlation', 'Interpreter', 'none')
-histogram(orig_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_Suscept_Suscept_corr)
+if ~isempty(compare_Suscept_Suscept_corr) && (range(orig_Suscept_Suscept_corr) > 0.01)
+    histogram(orig_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_Suscept_Suscept_corr) < 0.01)
+    histogram(compare_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % GM_NotGM corr: Want to see a tighter distribution, centered near
@@ -183,43 +207,51 @@ hold off
 nexttile
 hold on
 title('NotGM Correlation', 'Interpreter', 'none')
-histogram(orig_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_NotGM_NotGM_corr)
+if ~isempty(compare_NotGM_NotGM_corr) && (range(orig_NotGM_NotGM_corr) > 0.01)
+    histogram(orig_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(compare_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_NotGM_NotGM_corr) < 0.01)
+    histogram(compare_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
+    histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
-    histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(orig_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 
 % GM_GM corr to orig: Want to see signal correlations maintained, in comparison to
 % GM_NotGM corr, but still reduced (removed erroneous/global correlations).
 % get color order right to match other plots
-colorord = get(gca, 'colororder');
-
 nexttile
 hold on
 title('GM Correlation', 'Interpreter', 'none')
-histogram(orig_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
-if ~isempty(compare_GM_GM_corr)
+if ~isempty(compare_GM_GM_corr) && (range(orig_GM_GM_corr) > 0.01)
+    histogram(orig_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
+    legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+elseif (range(orig_GM_GM_corr) < 0.01)
     histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
-    legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
+    legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none')
 else
+    histogram(orig_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none')
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-xlim([-1, 1]);
+%xlim([-1, 1]);
 hold off
 
 % for single subject, you have one more plot to make
@@ -238,7 +270,6 @@ if ~isempty(denoised_GM_mean)
     xlim([0, length(orig_GM_mean)])
     hold off
 end
-
 
 fprintf('Saving Figure\n')
 exportgraphics(t, qc_plot_dest, 'Resolution', 300)

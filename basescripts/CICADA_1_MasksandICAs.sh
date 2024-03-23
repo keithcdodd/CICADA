@@ -336,10 +336,12 @@ flirt -ref "${funcmask}" -in "${WMprob}" -out "${output_regionmask_dir}/WMprob_t
 flirt -ref "${funcmask}" -in "${CSFprob}" -out "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -usesqform -applyxfm
 
 # calculate susceptibility mask first then edge
-fslmaths "${funcfile}" -Tmean -thr 0 "${output_regionmask_dir}/funcfile_tmp_tmean_thresholded.nii.gz"
+fslmaths "${funcfile}" -Tmean -thr 0 -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" -mul "${funcmask}" "${output_regionmask_dir}/funcfile_tmp_tmean_thresholded.nii.gz"
 range_vals=($(fslstats ${output_regionmask_dir}/funcfile_tmp_tmean_thresholded.nii.gz -l 0.01 -r))
 fslmaths "${output_regionmask_dir}/funcfile_tmp_tmean_thresholded.nii.gz" -div "${range_vals[1]}" "${output_regionmask_dir}/Suscept_almost_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/Suscept_almost_tmp_prob.nii.gz" -mul -1 -add 0.5 -thr 0 -mul 2 -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" "${output_regionmask_dir}/Susceptibility_prob.nii.gz" # keep it within brain anatomy, and also weird math so below 0.5 becomes 0
+fslmaths "${output_regionmask_dir}/Suscept_almost_tmp_prob.nii.gz" -mul -1 -add 0.5 -thr 0 -mul 2 -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" "${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz" # keep it within brain anatomy, and also weird math so below 0.5 becomes 0
+range_vals=($(fslstats ${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz -R)) # maximum value is OK here
+fslmaths "${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz" -div "${range_vals[1]}" "${output_regionmask_dir}/Susceptibility_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 #fslmaths "${funcfile}" -Tmean -uthrp 20 -thr 0 -bin -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 
