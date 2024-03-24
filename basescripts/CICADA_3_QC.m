@@ -238,17 +238,17 @@ comparing_R2_p_table = array2table(comparing_R2_p, 'VariableNames', R2_p_labels)
 % compare smoothed standard deviations, because the thresholded mapping of
 % it can be useful to demonstrate how GM signal is impacted
 fprintf('Running Comparison of Standard Deviations\n')
-command_1_denoised = ['fslmaths ', cleaned_file, ' -s 3 -mul ../funcmask -Tstd tmp_denoised_std.nii.gz'];
-command_1_compare = ['fslmaths ', compare_file, ' -s 3 -mul ../funcmask -Tstd tmp_compare_std.nii.gz'];
-command_1_orig = ['fslmaths ', orig_file, ' -s 3 -mul ../funcmask -Tstd tmp_orig_std.nii.gz'];
+command_1_denoised = ['fslmaths ', cleaned_file, ' -s 2 -mul ../funcmask -Tstd tmp_denoised_std.nii.gz'];
+command_1_compare = ['fslmaths ', compare_file, ' -s 2 -mul ../funcmask -Tstd tmp_compare_std.nii.gz'];
+command_1_orig = ['fslmaths ', orig_file, ' -s 2 -mul ../funcmask -Tstd tmp_orig_std.nii.gz'];
 
 command_2_denoised = ['fslmaths tmp_denoised_std.nii.gz -div tmp_orig_std.nii.gz ', cleaned_tag, '_std_prob.nii.gz'];
 command_2_compare = ['fslmaths tmp_compare_std.nii.gz -div tmp_orig_std.nii.gz ', compare_tag, '_std_prob.nii.gz'];
 
-command_3_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GM_mask.nii.gz tpm_', cleaned_tag, '_std_GMmasked.nii.gz'];
-command_3_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GM_mask.nii.gz tmp_', compare_tag, '_std_GMmasked.nii.gz'];
-command_4_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGM_mask.nii.gz tmp_', cleaned_tag, '_std_NotGMmasked.nii.gz'];
-command_4_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGM_mask.nii.gz tmp_', compare_tag, '_std_NotGMmasked.nii.gz'];
+command_3_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GMWMlenient_mask.nii.gz tmp_', cleaned_tag, '_std_GMmasked.nii.gz'];
+command_3_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/GMWMlenient_mask.nii.gz tmp_', compare_tag, '_std_GMmasked.nii.gz'];
+command_4_denoised = ['fslmaths ', cleaned_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGMorWM_mask.nii.gz tmp_', cleaned_tag, '_std_NotGMmasked.nii.gz'];
+command_4_compare = ['fslmaths ', compare_tag, '_std_prob.nii.gz -thrP 90 -bin -mul ../region_masks/NotGMorWM_mask.nii.gz tmp_', compare_tag, '_std_NotGMmasked.nii.gz'];
 
 call_fsl(command_1_denoised);
 call_fsl(command_1_compare);
@@ -261,13 +261,13 @@ call_fsl(command_4_denoised);
 call_fsl(command_4_compare);
 
 % Calculate and grab GM vs Not GM overlap values
-denoised_GM_masked = niftiread([cleaned_tag, '_std_GMmasked.nii.gz']);
-denoised_NotGM_masked = niftiread([cleaned_tag, '_std_NotGMmasked.nii.gz']);
-compare_GM_masked = niftiread([compare_tag, '_std_GMmasked.nii.gz']);
-compare_NotGM_masked = niftiread([compare_tag, '_std_NotGMmasked.nii.gz']);
+denoised_GM_masked = niftiread(['tmp_', cleaned_tag, '_std_GMmasked.nii.gz']);
+denoised_NotGM_masked = niftiread(['tmp_', cleaned_tag, '_std_NotGMmasked.nii.gz']);
+compare_GM_masked = niftiread(['tmp_', compare_tag, '_std_GMmasked.nii.gz']);
+compare_NotGM_masked = niftiread(['tmp_', compare_tag, '_std_NotGMmasked.nii.gz']);
 
-denoised_GM_NotGM_ratio = sum(denoised_GM_masked, "all") / (sum(denoised_NotGM_masked, "all") + sum(denoised_GM_masked, "all"));
-compare_GM_NotGM_ratio = sum(compare_GM_masked, "all") / (sum(compare_NotGM_masked, "all") + sum(compare_GM_masked, "all"));
+denoised_GM_NotGM_ratio = sum(denoised_GM_masked, "all") / (sum(denoised_NotGM_masked, "all") + sum(denoised_GM_masked, "all"))
+compare_GM_NotGM_ratio = sum(compare_GM_masked, "all") / (sum(compare_NotGM_masked, "all") + sum(compare_GM_masked, "all"))
 
 delete tmp*.nii.gz
 

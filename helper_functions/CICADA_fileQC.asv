@@ -1,4 +1,4 @@
-function [Edge_Edge_var, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_var, WMCSF_WMCSF_var, CSF_CSF_var, NotGM_NotGM_var, GM_GM_var, Suscept_Suscept_var, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
+function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % function [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % An Inner Base script, called upon by script 3, to get relevant QC
 % information
@@ -119,10 +119,10 @@ Suscept_randperm = randperm(size(denoised_Suscept, 1));
 
 % Now get all the relevant correlations:
 % perms should be at least 1000, but can go lower IF region is smaller
-perms = 1000;
+perms = 10000;
 %Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_GM_randperm, perms);
-FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 1000); % make it same sampling as others
-DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 1000);
+FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 10000); % make it same sampling as others
+DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 10000);
 %Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_GM_randperm, perms);
 %WMCSF_GM_corr = createHistData(denoised_GM_WMCSF, denoised_WMCSF_GM, GM_WMCSF_randperm, WMCSF_GM_randperm, perms);
 %CSF_GM_corr = createHistData(denoised_GM_CSF, denoised_CSF_GM, GM_CSF_randperm, CSF_GM_randperm, perms);
@@ -237,13 +237,13 @@ perms = min([size(compare_region_var,1), size(orig_region_var, 1), perms]); % sh
 compare_orig_var_comp = compare_region_var(region_randperm(1:perms),:)' ./ orig_region_var(region_randperm(1:perms),:)'; % divide denoised variance by orig variance
 
 % make into a column, get rid of Inf values, and make size of perms
-compare_orig_var_comp = ~isinf(compare_orig_var_comp); % gets rid of inf and also makes it into a column
+compare_orig_var_comp = compare_orig_var_comp(~isinf(compare_orig_var_comp)); % gets rid of inf and also makes it into a column
 
 % make it size of perms
-
-compare_orig_corr = compare_orig_corr(compare_orig_corr_randperms(1:perms)); % make it length of perms
-
 compare_orig_var_randperms = randperm(length(compare_orig_var_comp));
+nums = min(length(compare_orig_var_comp), 10000);
+compare_orig_var_comp = compare_orig_var_comp(compare_orig_var_randperms(1:nums)); % make it 10000 max, because otherwise too much big data
+
 end
 
 function [GM_conf1D_corr] = createHistConf1DData(GM, conf, GM_randperm, perms)

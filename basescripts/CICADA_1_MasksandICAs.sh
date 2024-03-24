@@ -342,22 +342,22 @@ fslmaths "${output_regionmask_dir}/funcfile_tmp_tmean_thresholded.nii.gz" -div "
 fslmaths "${output_regionmask_dir}/Suscept_almost_tmp_prob.nii.gz" -mul -1 -add 0.5 -thr 0 -mul 2 -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" "${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz" # keep it within brain anatomy, and also weird math so below 0.5 becomes 0
 range_vals=($(fslstats ${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz -R)) # maximum value is OK here
 fslmaths "${output_regionmask_dir}/Susceptibility_tmp_prob.nii.gz" -div "${range_vals[1]}" "${output_regionmask_dir}/Susceptibility_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 #fslmaths "${funcfile}" -Tmean -uthrp 20 -thr 0 -bin -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 
 # Now calculate edge after removing susceptibility. Perimeter of funcmask, but not including susceptibility areas (i.e., edge must have strong enough signal)
 fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz"
-fslmaths ${funcmask} -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/Edge_mask.nii.gz"
+fslmaths ${funcmask} -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Edge_mask.nii.gz"
 
 ### Calculate GM, WM, and CSF by subtracting out Edge (perimeter) and susceptibility
-fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_mask.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/GM_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_mask.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/WM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WM_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_mask.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GM_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/WM_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
 # Make an extended GM_prob which goes more into outbrain, just so this can be more taken into account
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -bin "${output_regionmask_dir}/GM_tmp_allmask.nii.gz"
@@ -384,11 +384,11 @@ fslmaths "${output_regionmask_dir}/Subepe_prob.nii.gz" -thrP 67 -bin "${output_r
 
 # Calculate WMorCSF, GMorCSF, and GMorWM regions, can be helpful
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WMorCSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WMorCSF_mask.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/GMorCSF_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/WM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/GMorWM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMorCSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/WM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorWM_prob.nii.gz" # don't include subepe in there! It is different
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMorWM_mask.nii.gz"
 
 # The aboves are or statements, but we need "and" statements for specific boundaries
 fslmaths "${output_regionmask_dir}/WMorCSF_mask.nii.gz" -sub "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WMandCSF_mask.nii.gz"
@@ -397,16 +397,16 @@ fslmaths "${output_regionmask_dir}/GMorWM_mask.nii.gz" -sub "${output_regionmask
 
 # Subependymal is WMandCSF plus a dilation into white matter
 # first, dilate into WM
-#fslmaths "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -dilM -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz"
+#fslmaths "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -dilM -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz"
 # now combine them:
 #fslmaths "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz" -add "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
 
 # we can make WM final mask more accurate for signal now by removing Subepe from it
 fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_adj_mask.nii.gz"
 
-# Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise
-fslmaths "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -sub "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -mul ${funcmask} -thr 0 "${output_regionmask_dir}/GMWMlenient_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMWMlenient_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz"
+# Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise.
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/WM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -mul ${funcmask} -thr 0 "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz"
 
 # also make versions that do not worry about removing edge and susceptibility, in case you want those later
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" "${output_regionmask_dir}/Anatprob_tmp_resam.nii.gz"
@@ -414,27 +414,28 @@ fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -add "${output_regio
 
 ### Calculate a Not GM mask (like global signal, but without GM)
 fslmaths "${funcmask}" -sub "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/NotGM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/NotGM_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/NotGM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/NotGM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/NotGM_mask.nii.gz"
 
 # Also calculate a not GM OR WM mask
-fslmaths "${funcmask}" -sub "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/NotGMorWM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/NotGMorWM_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/NotGMorWM_mask.nii.gz"
+fslmaths "${funcmask}" -sub "${output_regionmask_dir}/GMorWM_prob.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/NotGMorWM_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/NotGMorWM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/NotGMorWM_mask.nii.gz"
 
 ### Calculate Inbrain & Outbrain: funcmask outside of anatomical inbrain+CSF+WMCSF. Inbrain should not include WMCSF or susceptibility, since these regions cannot be trusted.
 # inbrain is simply GMorWM (minus Subepe), especially since this already removes edge and susceptibility and anatomy outside of funcmask
-fslmaths "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -thr 0.67 -bin -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Inbrain_mask.nii.gz"
+# subepe should have already been removed, but it doesn't hurt to double check
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -thrP 67 -bin -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Inbrain_mask.nii.gz"
 # outbrain includes, but is not limited to, CSF. Need to remove GMorWM from funcmask. Outbrain only will also remove edge and susceptibility
 # all of outbrain will include edge, susceptibility, and subepe
-fslmaths "${output_regionmask_dir}/GMorWM_tmp_prob.nii.gz" -thr 0.33 "${output_regionmask_dir}/InbrainMainly_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/InbrainMainly_tmp_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/InbrainMainly_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -thrP 33 "${output_regionmask_dir}/InbrainMainly_tmp_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/InbrainMainly_tmp_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/InbrainMainly_mask.nii.gz"
 
 fslmaths "${funcmask}" -sub "${output_regionmask_dir}/InbrainMainly_tmp_prob.nii.gz" -thr 0 "${output_regionmask_dir}/Outbrain_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/Outbrain_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Outbrain_mask.nii.gz"
 
 # outbrainonly ideally does not include susceptibility, edge, csf, or Subepe. We can approximate this pretty well!
 # This makes it so that full funcmask coverage should include: Edge + Suscept + OutbrainOnly + CSF + Subepe + Inbrain
-fslmaths "${output_regionmask_dir}/Outbrain_mask.nii.gz" -sub "${output_regionmask_dir}/CSF_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -sub "${output_regionmask_dir}/Edge_mask.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz" -thr 0.67 -bin "${output_regionmask_dir}/OutbrainOnly_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -sub "${output_regionmask_dir}/CSF_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/OutbrainOnly_mask.nii.gz"
 
 
 echo "      Functional Space Masks are Computed"

@@ -39,7 +39,7 @@ confounds_fd = table2array(allconfounds(:,{'framewise_displacement'}));
 
 % Get GM prob mask and create GM mask and not GM mask for denoised
 % and original files
-GM_prob_file = [cleaned_dir, '/../region_masks/GM_extended_prob.nii.gz']; % reaches further into other regions
+GM_prob_file = [cleaned_dir, '/../region_masks/GMWMlenient_prob.nii.gz']; % can reach into WM that directly neighbors GM, which often corresponds with smooth signal
 WMCSF_prob_file = [cleaned_dir, '/../region_masks/Subepe_prob.nii.gz'];
 CSF_prob_file = [cleaned_dir, '/../region_masks/CSF_prob.nii.gz'];
 Edge_prob_file = [cleaned_dir, '/../region_masks/Edge_prob.nii.gz'];
@@ -47,7 +47,8 @@ Outbrain_prob_file = [cleaned_dir, '/../region_masks/OutbrainOnly_prob.nii.gz'];
 Suscept_prob_file = [cleaned_dir, '/../region_masks/Susceptibility_prob.nii.gz'];
 funcmask = [cleaned_dir, '/../funcmask.nii.gz'];
 if isfile([cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']) == 1
-    NotGM_prob_file = [cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']; % this is a better estimate if we calculated it
+    NotGM_prob_file = [cleaned_dir, '/../region_masks/NotGMorWM_prob.nii.gz']; % this is a better estimate if we calculated it, won't penalize (or give benefit to) strictly WM
+    % NotGM_prob_file = [cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']; % this is a better estimate if we calculated it
 else
     NotGM_prob_file = [cleaned_dir, '/../region_masks/NotGMorWM_prob.nii.gz']; % Makes sure not including anything that could be signal, removes WM too
 end
