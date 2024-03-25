@@ -1,4 +1,4 @@
-function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
+function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(cleaned_dir, denoised_file, orig_file)
 % function [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % An Inner Base script, called upon by script 3, to get relevant QC
 % information
@@ -17,7 +17,7 @@ if ~isfile(orig_file)
 end
 
 denoised_file_info = dir(denoised_file);
-cleaned_dir = denoised_file_info.folder;
+%cleaned_dir = denoised_file_info.folder;
 cd(cleaned_dir)
 
 denoised_file_data = niftiread(denoised_file);

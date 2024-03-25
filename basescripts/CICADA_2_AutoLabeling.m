@@ -883,15 +883,15 @@ signal_and_noise_overlap = thresholded_signal - noise_alone; % should just be 1 
 % write out the masks of highest probability
 niftiwrite(noise_prob_1D, 'NoiseICOverlap', noise_prob_info, 'Compressed', true)
 niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', true)
-niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
-niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
+%niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
+%niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
 % We can use the SignalICOverlap file to calculate approximate regions that provided
 % BOLD signal capture. This could be useful for group GM mask calculations
 % later (e.g., focus on regions that are well captured across all images)
-call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
-call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
+call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
+call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_CICADA_auto_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
 
 % Write out the max noise ICs where we are in gray matter and noise is
 % currently more represented, and vice versa. Can help in identifying
@@ -928,6 +928,7 @@ movefile *SignalIC* ic_auto_selection
 movefile *NoiseIC* ic_auto_selection
 movefile *IC_auto_checker.* ic_auto_selection
 movefile *_auto_* ic_auto_selection
+movefile ic_auto_selection/*signal_constrained* ./
 movefile *regressors* regressors_timeseries
 movefile *timeseries.* regressors_timeseries
 % move confounds back out though so it is easier to find

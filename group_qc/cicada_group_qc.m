@@ -239,6 +239,7 @@ for idx = 1:num_runs
     end
 
     cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
+    cleaned_dir = cleaned_file_info.folder;
 
     % And get a helpful cleaned_file_tag 
     cleaned_file_tag = extractBetween(cleaned_file_info.name, [task_name, '_'], '_bold.nii.gz');
@@ -253,7 +254,7 @@ for idx = 1:num_runs
     end
     orig_file = [orig_file_info.folder, '/', orig_file_info.name];
 
-    compare_file_info = dir([cleaned_dir, '/*', cleaned_file_tag, '*_8p_*.nii.gz']); % need to make sure this is not the same as cleaned file
+    compare_file_info = dir([cleaned_dir, '/sub*ses*task*', task_name, '*_8p_*.nii.gz']); % need to make sure this is not the same as cleaned file
     % make sure only one file is grabbed
     if size(compare_file_info,1) ~= 1
         fprintf('Are there no _8p_ files (or more than one) in cleaned dir?\n')
@@ -269,7 +270,7 @@ for idx = 1:num_runs
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     cleaned_file = detrend_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel);
-    orig_file = detrend_smooth(orig_file, data_dir, funcmask, smoothing_kernel);
+    orig_file = detrend_smooth(orig_file, funcmask, data_dir, smoothing_kernel);
     % do the same to the compare_file, if it exists
     if ~isempty(compare_file)
         compare_file = detrend_smooth(compare_file, funcmask, data_dir, smoothing_kernel);
@@ -277,10 +278,10 @@ for idx = 1:num_runs
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
-    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file);
-    [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(orig_file);
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
+    [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
     if ~isempty(compare_file)
-        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(compare_file);
+        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
     else
         compare_qc_corrs_table = table();
     end
@@ -335,6 +336,7 @@ for idx = 1:num_runs
    
     m = m+1; % increment successful counter
 end
+fprintf('\n Done with calculating subject data\n')
 
 % record the bad data that was not even looked at, for easy reference later:
 Group_QC.bad_data_prefixes = bad_data_prefixes;
@@ -443,12 +445,12 @@ if ~isempty(group_compare_qc_corrs_table)
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
     % now we can plot
-    plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
-        dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, dcorrt.Suscept_Suscept_Corr, ...
-        ccorrt.Edge_GM_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_GM_Corr, ...
-        ccorrt.WMCSF_GM_Corr, ccorrt.CSF_GM_Corr, ccorrt.NotGM_GM_Corr, ccorrt.GM_GM_AutoCorr, ccorrt.Suscept_Suscept_Corr, ...
-        ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
-        ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ocorrt.Suscept_Suscept_Corr, ...
+    plot_qc(dcorrt.Edge_Edge_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_Outbrain_Corr, ...
+        dcorrt.WMCSF_WMCSF_Corr, dcorrt.CSF_CSF_Corr, dcorrt.NotGM_NotGM_Corr, dcorrt.GM_GM_Corr, dcorrt.Suscept_Suscept_Corr, ...
+        ccorrt.Edge_Edge_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_Outbrain_Corr, ...
+        ccorrt.WMCSF_WMCSF_Corr, ccorrt.CSF_CSF_Corr, ccorrt.NotGM_NotGM_Corr, ccorrt.GM_GM_Corr, ccorrt.Suscept_Suscept_Corr, ...
+        ocorrt.Edge_Edge_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_Outbrain_Corr, ...
+        ocorrt.WMCSF_WMCSF_Corr, ocorrt.CSF_CSF_Corr, ocorrt.NotGM_NotGM_Corr, ocorrt.GM_GM_Corr, ocorrt.Suscept_Suscept_Corr, ...
         [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 
 
@@ -458,11 +460,11 @@ else
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
 
-    plot_qc(dcorrt.Edge_GM_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_GM_Corr, ...
-            dcorrt.WMCSF_GM_Corr, dcorrt.CSF_GM_Corr, dcorrt.NotGM_GM_Corr, dcorrt.GM_GM_AutoCorr, dcorrt.Suscept_Suscept_AutoCorr, ...
+    plot_qc(dcorrt.Edge_Edge_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_Outbrain_Corr, ...
+            dcorrt.WMCSF_WMCSF_Corr, dcorrt.CSF_CSF_Corr, dcorrt.NotGM_NotGM_Corr, dcorrt.GM_GM_Corr, dcorrt.Suscept_Suscept_Corr, ...
             [], [], [], [], [], [], [], [], ...
-            ocorrt.Edge_GM_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_GM_Corr, ...
-            ocorrt.WMCSF_GM_Corr, ocorrt.CSF_GM_Corr, ocorrt.NotGM_GM_Corr, ocorrt.GM_GM_AutoCorr, ocorrt.Suscept_Suscept_AutoCorr, ...
+            ocorrt.Edge_Edge_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_Outbrain_Corr, ...
+            ocorrt.WMCSF_WMCSF_Corr, ocorrt.CSF_CSF_Corr, ocorrt.NotGM_NotGM_Corr, ocorrt.GM_GM_Corr, ocorrt.Suscept_Suscept_Corr, ...
             [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 end
 

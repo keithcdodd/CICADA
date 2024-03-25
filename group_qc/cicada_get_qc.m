@@ -1,4 +1,4 @@
-function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_file)
+function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -8,9 +8,6 @@ if not(isfile(cleaned_file))
     fprintf(['Denoised file ', cleaned_file, 'does not exist\n'])
     return;
 end
-
-cleaned_file_info = dir(cleaned_file);
-cleaned_dir = cleaned_file_info.folder;
 
 % Get cleaned dir, task dir, ses_dir, and sub_dir
 cd(cleaned_dir)
@@ -25,7 +22,8 @@ sub_dir = pwd;
 [~,sub_id,~]=fileparts(pwd);
 cd(cleaned_dir)
 
-
+% and get cleaned file info
+cleaned_file_info = dir(cleaned_file); % mainly for the name
 
 % figure out if cleaned file is a cicada file
 if contains(cleaned_file, 'CICADA')
@@ -109,7 +107,7 @@ meanRMS = mean(RMS(2:end)); % Add this into qc_group_array
 % actual cleaned file
 orig_file_info = dir([cleaned_dir, '/*orig*.nii.gz']);
 orig_file = [cleaned_dir, '/', orig_file_info.name];
-[Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(cleaned_file, orig_file);
+[Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(cleaned_dir, cleaned_file, orig_file);
 
 % grab niftiinfo to grab tr for later
 cleaned_file_niftiinfo = niftiinfo(cleaned_file);

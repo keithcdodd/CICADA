@@ -38,7 +38,7 @@ CSF_CSF_corr = CSF_CSF_corr(CSF_GMrandperm);
 WMCSF_WMCSF_corr = WMCSF_WMCSF_corr(WMCSF_GMrandperm);
 Outbrain_Outbrain_corr = Outbrain_Outbrain_corr(Outbrain_GMrandperm);
 Edge_Edge_corr = Edge_Edge_corr(Edge_GMrandperm);
-Suscept_Suscept_corr = Suscept_Suscept_corr(Edge_GMrandperm);
+Suscept_Suscept_corr = Suscept_Suscept_corr(Suscept_GMrandperm);
 
 qc_corrs_array = [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr];
 qc_corrs_labels = {'Edge_Edge_Corr', 'FD_GM_Corr', ...
