@@ -229,13 +229,13 @@ if [ ! -f ${brain_network_template} ]; then
   exit
 fi
 
-# if output dir does not exist, make it (do not delete the whole thing because it may contain a melodic folder that you want)
+# if output dir does not exist, make it (do not delete the whole thing because it may contain a melodic folder or log file that you want)
 if [ ! -d "${output_dir}" ]; then
   mkdir -p ${output_dir}
 fi
 
 
-# let's keep logs of everything:
+# let's keep logs of everything in this script:
 echo
 echo "Running First CICADA Script for ${output_dir}!"
 date
@@ -372,7 +372,6 @@ fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_
 fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_mask.nii.gz"
 
 # OK, now get subepe by fmean both innercsf and inner wm, multiplying, and scaling
-##### Working here 03/16/2024
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -mul "${output_regionmask_dir}/InnerCSF_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz"
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -mul "${output_regionmask_dir}/InnerWM_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz"
 fslmaths "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz" -mul "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz" -mul 4 "${output_regionmask_dir}/Subepe_tmp_prob.nii.gz"
@@ -404,9 +403,9 @@ fslmaths "${output_regionmask_dir}/GMorWM_mask.nii.gz" -sub "${output_regionmask
 # we can make WM final mask more accurate for signal now by removing Subepe from it
 fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_adj_mask.nii.gz"
 
-# Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise.
-fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/WM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -mul ${funcmask} -thr 0 "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz"
+# Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise. Need to sub WM mask and subepe mask not prob here to maintain GMWM leniency
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/WM_adj_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -mul ${funcmask} "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 67 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # include adding in GM mask again in case small spots were removed from thresholding
 
 # also make versions that do not worry about removing edge and susceptibility, in case you want those later
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" "${output_regionmask_dir}/Anatprob_tmp_resam.nii.gz"

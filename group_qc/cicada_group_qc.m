@@ -66,11 +66,9 @@ end
 % all in the future. There is only 8p compare if auto, but 8p and auto if
 % manual 
 
-% go into first participant's info to extract the correct naming:
+% go into first participant's info to extract the correct naming, just compare to 8p here for ease:
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
-compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*_qc_plots.jpg']); % specific to file tag of interest, can be multiples
-% there would be 0 matches too, if file_tag is only a compare_tag (e.g.,
-% 8p)
+compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest, can be multiples
 
 comparison_only = 0; % to change in following if else statement
 % make sure that the dir call actually found the file(s) of images that
@@ -462,7 +460,7 @@ else
 
     plot_qc(dcorrt.Edge_Edge_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_Outbrain_Corr, ...
             dcorrt.WMCSF_WMCSF_Corr, dcorrt.CSF_CSF_Corr, dcorrt.NotGM_NotGM_Corr, dcorrt.GM_GM_Corr, dcorrt.Suscept_Suscept_Corr, ...
-            [], [], [], [], [], [], [], [], ...
+            [], [], [], [], [], [], [], [], [], ...
             ocorrt.Edge_Edge_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_Outbrain_Corr, ...
             ocorrt.WMCSF_WMCSF_Corr, ocorrt.CSF_CSF_Corr, ocorrt.NotGM_NotGM_Corr, ocorrt.GM_GM_Corr, ocorrt.Suscept_Suscept_Corr, ...
             [], [], [], title_string, qc_plots_dest, cleaned_file_tag)

@@ -44,6 +44,16 @@ if ~exist('output_dir', 'var') || ~ischar(output_dir)
     return;
 end
 
+% now create a diary log in output dir and record everything per output:
+log_dir = [output_dir, '/logs'];
+if isfolder(log_dir)
+    rmdir(log_dir, 's')
+end
+mkdir(log_dir)
+date_label = char(datetime('today'));
+diaryfile = [log_dir, '/Auto_CICADA_', date_label, '_log'];
+diary(diaryfile)
+
 if ~exist('funcfile', 'var') || ~ischar(funcfile)
     fprintf('ERROR: Missing a funcfile specification or is not a character array!\n')
     return;
@@ -104,6 +114,8 @@ if redo_mel == 1
     mel_fol = 'x'; % initilaize it the same was as the basescript would
 end
 
+% Keep a diary log of output
+
 fprintf('\n\n')
 %%%%%%%%%%%%%% ACTUALLY DO THE THINGS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_dir, ...
@@ -123,6 +135,8 @@ fprintf('Done with CICADA_2\n\n')
 fprintf('Running: CICADA_3_QC \n')
 CICADA_3_QC(cleaned_file, compare_file)
 fprintf('Done with CICADA_3\n\n')
+
+diary off
 
 end
 

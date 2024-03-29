@@ -984,9 +984,9 @@ end
 
 % for good measure, put in a copy of the original with similar naming in cleaned dir - Good for comparisons in QC script
 copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
-movefile('*CICADA*.nii.gz', cleaned_dir)
-movefile('*8p*.nii.gz', cleaned_dir)
-movefile('*9p*.nii.gz', cleaned_dir)
+movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**8p*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**9p*.nii.gz', cleaned_dir)
 
 % get cleaned_filename
 cleaned_file_info = dir([cleaned_dir, '/*CICADA*auto*.nii.gz']);

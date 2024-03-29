@@ -15,8 +15,8 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 fprintf('Creating Figures\n')
 
 if isempty(denoised_GM_mean)
-    figure('Position', [50, 250, 2000, 900])
-    t = tiledlayout(2,4, 'Padding', 'compact', 'TileSpacing', 'compact');
+    figure('Position', [50, 200, 1400, 1000])
+    t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
     figure('Position', [50, 50, 1700, 1000])
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
