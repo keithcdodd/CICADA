@@ -136,7 +136,7 @@ Suscept_Suscept_median = median(Suscept_Suscept_corr, "omitnan");
 Suscept_Suscept_sd = std(Suscept_Suscept_corr, "omitnan");
 
 % Also calculate and grab a tstd and grab per region
-call_fsl(['fslmaths ', cleaned_file, ' -Tstd -mul ', funcmask, ' ', task_dir, '/', naming_id, '_tstd.nii.gz']);
+call_fsl(['fslmaths ', cleaned_data, ' -Tstd -mul ', funcmask, ' ', task_dir, '/', naming_id, '_tstd.nii.gz']);
 tstd = [task_dir, '/', naming_id, '_tstd.nii.gz']; % standard deviation in time of subject. Can be helpful to look at
 % And then grab variances from fileQC
 GM_mean_var = mean_var_table.GM_mean_var;
@@ -257,7 +257,7 @@ else
         "CSF_CSF_median", "CSF_CSF_sd", "WMCSF_WMCSF_median", "WMCSF_WMCSF_sd", ...
         "Outbrain_Outbrain_median", "Outbrain_Outbrain_sd", "Edge_Edge_median", "Edge_Edge_sd", ...
         "Suscept_Suscept_median", "Suscept_Suscept_sd", "NotGM_mean_var", "GM_mean_var", ...
-        "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_mean_var_prop"];
+        "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_tstd_prop"];
     
     qc_table = cell2table(qc_array, 'VariableNames', qc_labels);
 end

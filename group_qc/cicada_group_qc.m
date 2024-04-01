@@ -104,21 +104,26 @@ if comparison_only == 0
     end
 end
 
-% Create a data folder 
+% Create a data folder, don't delete old one
 data_dir = [output_dir, '/data'];
 if isfolder(data_dir)
     rmdir(data_dir, 's')
 end
 mkdir(data_dir)
 
-
 % Now go into first cleaned_dir in order to extract if these are CICADA
 % files or not
 first_cleaned_dir = [first_task_dir, '/cleaned'];
+
+% a fail safe for funcmasks
+if ~isempty(dir([first_cleaned_dir, '/funcmask*']))
+    movefile([first_cleaned_dir, '/funcmask*'], [first_cleaned_dir, '/..'])
+end
+
 first_image_info = dir([first_cleaned_dir, '/*', file_tag, '*.nii.gz']); % specific to file tag of interest, should be only ONE file
 
 if size(first_image_info,1) ~= 1
-    fprintf(['File tag', file_tag, ', is either not specific enough to only grab one file, or grabs no files. \n'])
+    fprintf(['File tag ', file_tag, ', is either not specific enough to only grab one file, or grabs no files. \n'])
     return;
 end
 
@@ -202,12 +207,18 @@ for idx = 1:num_runs
         continue;
     end
 
+    % a fail safe for funcmasks
+    if ~isempty(dir([cleaned_dir, '/funcmask*']))
+        movefile([cleaned_dir, '/funcmask*'], [cleaned_dir, '/..'])
+    end
+
     % if manually adjusted, will need to pull from manual for this task
     % instance
 
     % first grab general file tag and see if it contains CICADA in it:
     test_cleaned_file_info = dir([cleaned_dir, '/*', file_tag, '*.nii.gz']);
 
+    
     % make sure only one file is grabbed
     if size(test_cleaned_file_info,1) ~= 1
         fprintf('Either your file_tag is not specific enough (grabs more than one file) OR no files match with file_tag\n')
@@ -267,6 +278,7 @@ for idx = 1:num_runs
     end
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
+    fprintf('Detrending & Smoothing Data and Copying to Group Data Folder...\n')
     cleaned_file = detrend_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel);
     orig_file = detrend_smooth(orig_file, funcmask, data_dir, smoothing_kernel);
     % do the same to the compare_file, if it exists
@@ -276,19 +288,19 @@ for idx = 1:num_runs
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
-    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
-    [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
+    fprintf('Now calculating QC\n')
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, tstd, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
+    [~, ~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
     if ~isempty(compare_file)
-        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
+        [~, ~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
     else
         compare_qc_corrs_table = table();
     end
-
+    
     % now, to save space, we should delete the orig and compare data from
     % data dir
     delete(compare_file)
     delete(orig_file)
-
 
     % then we need to be adding this information into the group qc stuff
     % (Group_QC struct)
@@ -296,6 +308,7 @@ for idx = 1:num_runs
     data_mask_list{m} = data_mask;
     data_signal_mask_list{m} = data_signal_mask;
     signalandnoise_overlap_list{m} = signalandnoise_overlap;
+    tstd_list{m} = tstd;
     denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
 
@@ -352,8 +365,9 @@ final_qc_corrs_table = group_qc_corrs_table;
 if cicada == 1
     % Number of total ICs (if very low -- bad data all round)
     Group_QC.low_number_total_ics = (isoutlier(final_qc_table.number_total_ics, "median")) & (final_qc_table.number_total_ics < mean(final_qc_table.number_kept_ics));
-    % Low GM coverage, regular and dice
-    Group_QC.low_gm_coverage = (isoutlier(final_qc_table.gm_coverage, "median")) & (final_qc_table.gm_coverage < mean(final_qc_table.gm_coverage));
+    % Low GM coverage, regular and dice 'gm_coverage_by_signal', 'signal_overlap_with_gm'
+    Group_QC.low_gm_coverage_by_signal = (isoutlier(final_qc_table.gm_coverage_by_signal, "median")) & (final_qc_table.gm_coverage_by_signal < mean(final_qc_table.gm_coverage_by_signal));
+    Group_QC.low_signal_overlap_with_gm = (isoutlier(final_qc_table.signal_overlap_with_gm, "median")) & (final_qc_table.signal_overlap_with_gm < mean(final_qc_table.signal_overlap_with_gm));
     Group_QC.low_gm_dice = (isoutlier(final_qc_table.gm_signal_dice, "median")) & (final_qc_table.gm_signal_dice < mean(final_qc_table.gm_signal_dice));
     
     % Fraction Signal Variance Kept (low would suggest there are very few good 
@@ -383,25 +397,39 @@ if cicada == 1
     end
     
     
-    % DVARS_Corr
+    % High DVARS_Corr
     Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.DVARS_GM_median), "median")) & (abs(final_qc_table.DVARS_GM_median) > median(abs(final_qc_table.DVARS_GM_median)));
     
-    % FD_Corr
+    % High FD_Corr
     Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_median), "median")) & (abs(final_qc_table.FD_GM_median) > median(abs(final_qc_table.FD_GM_median)));
+
+    % Low GM_NotGM_mean_var_prop (high GM variance and low NotGM variance
+    % would occur in high signal and low noise data)
+    Group_QC.low_GM_NotGM_mean_var_prop = (isoutlier(final_qc_table.GM_NotGM_mean_var_prop, "median")) & (final_qc_table.GM_NotGM_mean_var_prop < median(final_qc_table.GM_NotGM_mean_var_prop));
     
     
     % combine to get overall outliers
-    Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
-        Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
-        Group_QC.low_Smoothing + Group_QC.low_power_overlap + Group_QC.low_gm_coverage + Group_QC.low_gm_dice);
+    %Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
+    %    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
+    %    Group_QC.low_Smoothing + Group_QC.low_power_overlap + ...
+    %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
+
+    % Too little GM signal coverage, too little overlap with signal ICs and
+    % GM, and relatively low GM variance to NotGM variance all would
+    % suggest enough good signal was not found or image is swallowed by
+    % noise still.
+    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop);
 
     % add to final qc table
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
     final_qc_table.low_fraction_signal_variance_kept = Group_QC.low_fraction_signal_variance_kept;
-    final_qc_table.low_Signal = Group_QC.low_Signal;
+    final_qc_table.low_Signal = Group_QC.low_Signal; % maybe do not need if we have gm coverage by signal and signal overlap with gm
     final_qc_table.low_Smoothing = Group_QC.low_Smoothing;
     final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
-    final_qc_table.low_gm_coverage = Group_QC.low_gm_coverage;
+    final_qc_table.low_gm_dice = Group_QC.low_gm_dice;
+    final_qc_table.low_gm_coverage_by_signal = Group_QC.low_gm_coverage_by_signal;
+    final_qc_table.low_signal_overlap_with_gm = Group_QC.low_signal_overlap_with_gm;
+    final_qc_table.low_GM_NotGM_mean_var_prop = Group_QC.low_GM_NotGM_mean_var_prop;
     final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
     final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
     final_qc_table.cicada_outliers = Group_QC.cicada_outliers;   
@@ -427,9 +455,14 @@ writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_s
 writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv')
 Group_QC.final_qc_table = final_qc_table;
 Group_QC.final_qc_corrs_table = final_qc_corrs_table;
+Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
+Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
+
+% Save qc corrs data for quick and easy comparison plotting
+save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table' )
 
 % Now do group plotting
-dcorrt = group_qc_corrs_table;
+dcorrt = group_qc_corrs_table; % same as final qc corrs table
 ocorrt = group_orig_qc_corrs_table;
 
 % see if we have compare data to deal with here
@@ -439,16 +472,24 @@ if ~isempty(group_compare_qc_corrs_table)
 
     
     % Set appropriate titles and destination
-    title_string = ['Group_QC_' compare_tag];
+    title_string = ['Group_QC_' cleaned_file_tag, '_vs_', compare_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
     % now we can plot
-    plot_qc(dcorrt.Edge_Edge_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_Outbrain_Corr, ...
-        dcorrt.WMCSF_WMCSF_Corr, dcorrt.CSF_CSF_Corr, dcorrt.NotGM_NotGM_Corr, dcorrt.GM_GM_Corr, dcorrt.Suscept_Suscept_Corr, ...
-        ccorrt.Edge_Edge_Corr, ccorrt.FD_GM_Corr, ccorrt.DVARS_GM_Corr, ccorrt.Outbrain_Outbrain_Corr, ...
-        ccorrt.WMCSF_WMCSF_Corr, ccorrt.CSF_CSF_Corr, ccorrt.NotGM_NotGM_Corr, ccorrt.GM_GM_Corr, ccorrt.Suscept_Suscept_Corr, ...
-        ocorrt.Edge_Edge_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_Outbrain_Corr, ...
-        ocorrt.WMCSF_WMCSF_Corr, ocorrt.CSF_CSF_Corr, ocorrt.NotGM_NotGM_Corr, ocorrt.GM_GM_Corr, ocorrt.Suscept_Suscept_Corr, ...
+    plot_qc(cell2mat(dcorrt.Edge_Edge_Corr), cell2mat(dcorrt.FD_GM_Corr), ...
+        cell2mat(dcorrt.DVARS_GM_Corr), cell2mat(dcorrt.Outbrain_Outbrain_Corr), ...
+        cell2mat(dcorrt.WMCSF_WMCSF_Corr), cell2mat(dcorrt.CSF_CSF_Corr), ...
+        cell2mat(dcorrt.NotGM_NotGM_Corr), cell2mat(dcorrt.GM_GM_Corr), ...
+        cell2mat(dcorrt.Suscept_Suscept_Corr), cell2mat(ccorrt.Edge_Edge_Corr), ...
+        cell2mat(ccorrt.FD_GM_Corr), cell2mat(ccorrt.DVARS_GM_Corr), ...
+        cell2mat(ccorrt.Outbrain_Outbrain_Corr), cell2mat(ccorrt.WMCSF_WMCSF_Corr), ...
+        cell2mat(ccorrt.CSF_CSF_Corr), cell2mat(ccorrt.NotGM_NotGM_Corr), ...
+        cell2mat(ccorrt.GM_GM_Corr), cell2mat(ccorrt.Suscept_Suscept_Corr), ...
+        cell2mat(ocorrt.Edge_Edge_Corr), cell2mat(ocorrt.FD_GM_Corr), ...
+        cell2mat(ocorrt.DVARS_GM_Corr), cell2mat(ocorrt.Outbrain_Outbrain_Corr), ...
+        cell2mat(ocorrt.WMCSF_WMCSF_Corr), cell2mat(ocorrt.CSF_CSF_Corr), ...
+        cell2mat(ocorrt.NotGM_NotGM_Corr), cell2mat(ocorrt.GM_GM_Corr), ...
+        cell2mat(ocorrt.Suscept_Suscept_Corr), ...
         [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 
 
@@ -458,11 +499,17 @@ else
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
 
-    plot_qc(dcorrt.Edge_Edge_Corr, dcorrt.FD_GM_Corr, dcorrt.DVARS_GM_Corr, dcorrt.Outbrain_Outbrain_Corr, ...
-            dcorrt.WMCSF_WMCSF_Corr, dcorrt.CSF_CSF_Corr, dcorrt.NotGM_NotGM_Corr, dcorrt.GM_GM_Corr, dcorrt.Suscept_Suscept_Corr, ...
+    plot_qc(cell2mat(dcorrt.Edge_Edge_Corr), cell2mat(dcorrt.FD_GM_Corr), ...
+        cell2mat(dcorrt.DVARS_GM_Corr), cell2mat(dcorrt.Outbrain_Outbrain_Corr), ...
+            cell2mat(dcorrt.WMCSF_WMCSF_Corr), cell2mat(dcorrt.CSF_CSF_Corr), ...
+            cell2mat(dcorrt.NotGM_NotGM_Corr), cell2mat(dcorrt.GM_GM_Corr), ...
+            cell2mat(dcorrt.Suscept_Suscept_Corr), ...
             [], [], [], [], [], [], [], [], [], ...
-            ocorrt.Edge_Edge_Corr, ocorrt.FD_GM_Corr, ocorrt.DVARS_GM_Corr, ocorrt.Outbrain_Outbrain_Corr, ...
-            ocorrt.WMCSF_WMCSF_Corr, ocorrt.CSF_CSF_Corr, ocorrt.NotGM_NotGM_Corr, ocorrt.GM_GM_Corr, ocorrt.Suscept_Suscept_Corr, ...
+            cell2mat(ocorrt.Edge_Edge_Corr), cell2mat(ocorrt.FD_GM_Corr), ...
+            cell2mat(ocorrt.DVARS_GM_Corr), cell2mat(ocorrt.Outbrain_Outbrain_Corr), ...
+            cell2mat(ocorrt.WMCSF_WMCSF_Corr), cell2mat(ocorrt.CSF_CSF_Corr), ...
+            cell2mat(ocorrt.NotGM_NotGM_Corr), cell2mat(ocorrt.GM_GM_Corr), ...
+            cell2mat(ocorrt.Suscept_Suscept_Corr), ...
             [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 end
 
@@ -487,6 +534,10 @@ if cicada == 1
     merge_signalandnoise_overlap_command = ['fslmerge -a ', output_dir, '/signal_noise_overlaps.nii.gz ', strjoin(signalandnoise_overlap_list(image_keep))];
     [~, ~] = call_fsl(merge_signalandnoise_overlap_command);
 end
+
+% merge temporal standard deviation files
+merge_tstds_command = ['fslmerge -a ', output_dir, '/temporal_standard_deviations.nii.gz ', strjoin(tstd_list(image_keep))];
+[~, ~] = call_fsl(merge_funcmasks_command);
 
 % merge func masks as well!
 merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', strjoin(data_mask_list(image_keep))];

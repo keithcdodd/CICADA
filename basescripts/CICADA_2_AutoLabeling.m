@@ -816,7 +816,7 @@ feature_relative_array = table2array(feature_relative_table(:,2:end));
 before = sum(feature_relative_array .* IC_exp_var);
 IC_exp_var_signal = IC_exp_var(signal_ICs);
 IC_exp_var_signal = IC_exp_var_signal ./ sum(IC_exp_var_signal); % this re-does the proportions for just the signal components
-after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal);
+after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal,1); % specify it is summing columns in case only ONE signal IC is selected.
 percent_change = 100.*(after ./ before - 1); % rounded to be easier to read
 compare_cleaning = array2table([before; after; percent_change]', 'RowNames', feature_relative_table.Properties.VariableNames(2:end), 'VariableNames', {'Before', 'After', 'Percent_Change'});
 Results.compare_cleaning = compare_cleaning;
@@ -844,9 +844,10 @@ signal_prob = all_prob(:,:,:,signal_ICs);
 noise_prob_info.ImageSize = size(noise_prob);
 noise_prob_info.DisplayIntensityRange = [0.9 1];
 noise_prob_info.Datatype = 'single';
-
+   
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
+signal_prob_info.PixelDimensions = signal_prob_info.PixelDimensions(1:length(size(signal_prob))); % fixed in case only one signal IC is selected
 
 potential_signal_prob = all_prob(:,:,:,signal_idx);
 potential_signal_prob_info = noise_prob_info;

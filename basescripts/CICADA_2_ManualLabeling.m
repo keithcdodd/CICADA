@@ -140,7 +140,7 @@ feature_relative_array = table2array(Results_Auto.feature_relative_table(:,2:end
 before = sum(feature_relative_array .* IC_exp_var);
 IC_exp_var_signal = IC_exp_var(signal_ICs);
 IC_exp_var_signal = IC_exp_var_signal ./ sum(IC_exp_var_signal); % this re-does the proportions for just the signal components
-after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal);
+after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal,1);
 percent_change = 100.*(after ./ before - 1); % rounded to be easier to read
 compare_cleaning = array2table([before; after; percent_change]', 'RowNames', Results_Auto.feature_relative_table.Properties.VariableNames(2:end), 'VariableNames', {'Before', 'After', 'Percent_Change'});
 Results.compare_cleaning = compare_cleaning;
@@ -171,6 +171,7 @@ noise_prob_info.Datatype = 'single';
 
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
+signal_prob_info.PixelDimensions = signal_prob_info.PixelDimensions(1:length(size(signal_prob))); % fixed in case only one signal IC is selected
 
 potential_signal_prob = all_prob(:,:,:,signal_idx);
 potential_signal_prob_info = noise_prob_info;
@@ -207,8 +208,8 @@ signal_and_noise_overlap = thresholded_signal - noise_alone; % should just be 1 
 % write out the masks of highest probability
 niftiwrite(noise_prob_1D, 'NoiseICOverlap', noise_prob_info, 'Compressed', true)
 niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', true)
-niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
-niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
+%niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
+%niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
 % Write out the max noise ICs where we are in gray matter and noise is
@@ -251,6 +252,7 @@ movefile *SignalIC* ic_manual_selection
 movefile *NoiseIC* ic_manual_selection
 movefile *IC_manual_checker.* ic_manual_selection
 movefile *_manual_* ic_manual_selection
+movefile *_Manual.* ic_manual_selection
 
 if ~isfile('./ic_manual_selection/IC_manual_checker.csv')
     movefile(IC_manual_checker, "ic_manual_selection")
@@ -269,7 +271,9 @@ fprintf(['Running: ', fsl_regfilt_command, '\n'])
 
 % Now put things in cleaned_dir, and also get cleaned_filename
 cleaned_dir = [task_dir, '/cleaned'];
-movefile('*CICADA*.nii.gz', cleaned_dir)
+movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**8p*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**9p*.nii.gz', cleaned_dir)
 
 % get cleaned_filename
 cleaned_file_info = dir([cleaned_dir, '/*CICADA*manual*.nii.gz']);

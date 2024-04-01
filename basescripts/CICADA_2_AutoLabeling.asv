@@ -816,7 +816,7 @@ feature_relative_array = table2array(feature_relative_table(:,2:end));
 before = sum(feature_relative_array .* IC_exp_var);
 IC_exp_var_signal = IC_exp_var(signal_ICs);
 IC_exp_var_signal = IC_exp_var_signal ./ sum(IC_exp_var_signal); % this re-does the proportions for just the signal components
-after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal);
+after = sum(feature_relative_array(signal_ICs,:) .* IC_exp_var_signal,1); % specify it is summing columns in case only ONE signal IC is selected.
 percent_change = 100.*(after ./ before - 1); % rounded to be easier to read
 compare_cleaning = array2table([before; after; percent_change]', 'RowNames', feature_relative_table.Properties.VariableNames(2:end), 'VariableNames', {'Before', 'After', 'Percent_Change'});
 Results.compare_cleaning = compare_cleaning;
@@ -854,6 +854,13 @@ potential_signal_prob_info.ImageSize = size(potential_signal_prob);
 
 niftiwrite(potential_signal_prob, 'PotentialSignalICs', potential_signal_prob_info, 'Compressed', true) % just the ICs that were considered
 niftiwrite(noise_prob, 'NoiseICs', noise_prob_info, 'Compressed', true)
+
+% if only one signal IC is selected (this is a bad sign for the data and should almost certainly be not used), add
+% code to allow things to still run:
+if length(size(signal_prob)) == 3
+    % it is 3D because only one signal IC is selected
+end
+
 niftiwrite(signal_prob, 'SignalICs', signal_prob_info, 'Compressed', true)
 
 % Now compress noise and signal, with only max probabilities per voxel
@@ -883,15 +890,15 @@ signal_and_noise_overlap = thresholded_signal - noise_alone; % should just be 1 
 % write out the masks of highest probability
 niftiwrite(noise_prob_1D, 'NoiseICOverlap', noise_prob_info, 'Compressed', true)
 niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', true)
-niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
-niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
+%niftiwrite(signal_noise_ratio_IC_overlap, 'SignaltoNoiseICOverlap', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal, 0 is either equivalent, or not high probability either way
+%niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
 % We can use the SignalICOverlap file to calculate approximate regions that provided
 % BOLD signal capture. This could be useful for group GM mask calculations
 % later (e.g., focus on regions that are well captured across all images)
-call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
-call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
+call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
+call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_CICADA_auto_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
 
 % Write out the max noise ICs where we are in gray matter and noise is
 % currently more represented, and vice versa. Can help in identifying
@@ -928,6 +935,7 @@ movefile *SignalIC* ic_auto_selection
 movefile *NoiseIC* ic_auto_selection
 movefile *IC_auto_checker.* ic_auto_selection
 movefile *_auto_* ic_auto_selection
+movefile ic_auto_selection/*signal_constrained* ./
 movefile *regressors* regressors_timeseries
 movefile *timeseries.* regressors_timeseries
 % move confounds back out though so it is easier to find
@@ -974,17 +982,6 @@ tmean_add_9p_command = ['fslmaths ', prefix, '_9p_', suffix, ' -add ', task_dir,
 [~, ~] = call_fsl(tmean_add_8p_command);
 [~, ~] = call_fsl(tmean_add_9p_command);
 
-% One could consider detrending and gaussian smoothing here. Recommended
-% minimal smoothing (e.g., 3mm). Enough to smooth potential gaussian
-% jumps/differences that can arise from ICA denoising, but not enough to
-% cause potential issues for connectivity analysis. 
-% CICADA_data = niftiread()
-% CICADA_data_info = niftiinfo()
-% CIDADA_data_info.PixelDimensions % get x,y,z,t
-% detrend(reshape(CICADA_data, [], t),2); % detrend up to 2nd polynomial
-% niftiwrite()
-% call_fsl(['fslmaths -s 3 -mul ../funcmask
-
 % create cleaned directory
 cleaned_dir = [output_dir, '/cleaned'];
 if ~isfolder(cleaned_dir)
@@ -994,9 +991,9 @@ end
 
 % for good measure, put in a copy of the original with similar naming in cleaned dir - Good for comparisons in QC script
 copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
-movefile('*CICADA*.nii.gz', cleaned_dir)
-movefile('*8p*.nii.gz', cleaned_dir)
-movefile('*9p*.nii.gz', cleaned_dir)
+movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**8p*.nii.gz', cleaned_dir)
+movefile('sub*ses*task**9p*.nii.gz', cleaned_dir)
 
 % get cleaned_filename
 cleaned_file_info = dir([cleaned_dir, '/*CICADA*auto*.nii.gz']);

@@ -8,6 +8,10 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 
 % Plot QC results!
 
+% check if inputs are cell arrays instead of doubles. If so, convert to
+% doubles
+
+
 % There needs to be a decision on whether we are including GM mean signal
 % (good for within subject comparison, worthless in group qc comparison)
 % You can see if GM mean is empty for denoised
@@ -15,7 +19,7 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 fprintf('Creating Figures\n')
 
 if isempty(denoised_GM_mean)
-    figure('Position', [50, 200, 1400, 1000])
+    figure('Position', [50, 200, 1700, 750])
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
     figure('Position', [50, 50, 1700, 1000])

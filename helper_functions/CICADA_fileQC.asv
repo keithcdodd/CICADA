@@ -1,4 +1,4 @@
-function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
+function [Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, GM_mean] = CICADA_fileQC(cleaned_dir, denoised_file, orig_file)
 % function [Edge_GM_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_GM_corr, WMCSF_GM_corr, CSF_GM_corr, NotGM_GM_corr, GM_GM_corr, GM_mean] = CICADA_fileQC(denoised_file, orig_file)
 % An Inner Base script, called upon by script 3, to get relevant QC
 % information
@@ -17,7 +17,7 @@ if ~isfile(orig_file)
 end
 
 denoised_file_info = dir(denoised_file);
-cleaned_dir = denoised_file_info.folder;
+%cleaned_dir = denoised_file_info.folder;
 cd(cleaned_dir)
 
 denoised_file_data = niftiread(denoised_file);
@@ -39,25 +39,20 @@ confounds_fd = table2array(allconfounds(:,{'framewise_displacement'}));
 
 % Get GM prob mask and create GM mask and not GM mask for denoised
 % and original files
-GM_prob_file = [cleaned_dir, '/../region_masks/GM_extended_prob.nii.gz']; % reaches further into other regions
+GM_prob_file = [cleaned_dir, '/../region_masks/GMWMlenient_prob.nii.gz']; % can reach into WM that directly neighbors GM, which often corresponds with smooth signal
 WMCSF_prob_file = [cleaned_dir, '/../region_masks/Subepe_prob.nii.gz'];
 CSF_prob_file = [cleaned_dir, '/../region_masks/CSF_prob.nii.gz'];
 Edge_prob_file = [cleaned_dir, '/../region_masks/Edge_prob.nii.gz'];
 Outbrain_prob_file = [cleaned_dir, '/../region_masks/OutbrainOnly_prob.nii.gz'];
 Suscept_prob_file = [cleaned_dir, '/../region_masks/Susceptibility_prob.nii.gz'];
 funcmask = [cleaned_dir, '/../funcmask.nii.gz'];
-if isfile([cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']) == 1
-    NotGM_prob_file = [cleaned_dir, '/../region_masks/Outbrain_prob.nii.gz']; % this is a better estimate if we calculated it
-else
-    NotGM_prob_file = [cleaned_dir, '/../region_masks/NotGMorWM_prob.nii.gz']; % Makes sure not including anything that could be signal, removes WM too
-end
-
+NotGM_prob_file = [cleaned_dir, '/../region_masks/NotGMorWM_prob.nii.gz']; % this is a better estimate if we calculated it, won't penalize (or give benefit to) strictly WM
 fprintf(['Running QC calculation for ', denoised_file_info.name, '\n'])    
 
 % Now, get data for NotGM, Edge, Outbrain, WMCSF, and CSF for the denoised
 % data and orig data
 fprintf('Calculating Denoised Data\n')
-[denoised_GM, denoised_GM_mean, denoised_GM_var] = getData_sameregion(denoised_file_data, funcmask, GM_prob_file);
+[denoised_GM, denoised_GM_mean, denoised_GM_mean_var] = getData_sameregion(denoised_file_data, funcmask, GM_prob_file);
 [denoised_GM_NotGM, denoised_NotGM_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, NotGM_prob_file);
 [denoised_GM_Edge, denoised_Edge_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, Edge_prob_file);
 [denoised_GM_Outbrain, denoised_Outbrain_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, Outbrain_prob_file);
@@ -66,12 +61,12 @@ fprintf('Calculating Denoised Data\n')
 [denoised_GM_Suscept, denoised_Suscept_GM, ~, ~, ~, ~] = getData(denoised_file_data, funcmask, GM_prob_file, Suscept_prob_file);
 
 % testing with doing more of the same region
-[denoised_NotGM, ~, denoised_NotGM_var] = getData_sameregion(denoised_file_data, funcmask, NotGM_prob_file);
-[denoised_Edge, ~, denoised_Edge_var] = getData_sameregion(denoised_file_data, funcmask, Edge_prob_file);
-[denoised_Outbrain, ~, denoised_Outbrain_var] = getData_sameregion(denoised_file_data, funcmask, Outbrain_prob_file);
-[denoised_WMCSF, ~, denoised_WMCSF_var] = getData_sameregion(denoised_file_data, funcmask, WMCSF_prob_file);
-[denoised_CSF, ~, denoised_WMCSF_var] = getData_sameregion(denoised_file_data, funcmask, CSF_prob_file);
-[denoised_Suscept, ~, denoised_Suscept_var] = getData_sameregion(denoised_file_data, funcmask, Suscept_prob_file);
+[denoised_NotGM, ~, denoised_NotGM_mean_var] = getData_sameregion(denoised_file_data, funcmask, NotGM_prob_file);
+[denoised_Edge, ~, denoised_Edge_mean_var] = getData_sameregion(denoised_file_data, funcmask, Edge_prob_file);
+[denoised_Outbrain, ~, denoised_Outbrain_mean_var] = getData_sameregion(denoised_file_data, funcmask, Outbrain_prob_file);
+[denoised_WMCSF, ~, denoised_WMCSF_mean_var] = getData_sameregion(denoised_file_data, funcmask, WMCSF_prob_file);
+[denoised_CSF, ~, denoised_CSF_mean_var] = getData_sameregion(denoised_file_data, funcmask, CSF_prob_file);
+[denoised_Suscept, ~, denoised_Suscept_mean_var] = getData_sameregion(denoised_file_data, funcmask, Suscept_prob_file);
 
 % consider with orig file as well, can then compare "autocorrelations"
 [orig_GM, ~, orig_GM_var] = getData_sameregion(orig_file_data, funcmask, GM_prob_file);
@@ -138,21 +133,16 @@ CSF_CSF_corr = createHistData(denoised_CSF, denoised_CSF, CSF_randperm, CSF_rand
 NotGM_NotGM_corr = createHistData(denoised_NotGM, denoised_NotGM, NotGM_randperm, NotGM_randperm, perms);
 Suscept_Suscept_corr = createHistData(denoised_Suscept, denoised_Suscept, Suscept_randperm, Suscept_randperm, perms);
 
-% What about Variances?
-GM_GM_var = createVarHistData(denoised_GM, orig_GM, GM_randperm, perms);
-Edge_Edge_var = createVarHistData(denoised_Edge, orig_Edge, Edge_randperm, perms);
-Outbrain_Outbrain_var = createVarHistData(denoised_Outbrain, orig_Outbrain, Outbrain_randperm, perms);
-WMCSF_WMCSF_var = createVarHistData(denoised_WMCSF, orig_WMCSF, WMCSF_randperm, perms);
-CSF_CSF_var = createVarHistData(denoised_CSF, orig_CSF, CSF_randperm, perms);
-NotGM_NotGM_var = createVarHistData(denoised_NotGM, orig_NotGM, NotGM_randperm, perms);
-Suscept_Suscept_var = createVarHistData(denoised_Suscept, orig_Suscept, Suscept_randperm, perms);
-
 GM_mean = denoised_GM_mean;
+
+mean_var_array = [denoised_GM_mean_var, denoised_NotGM_mean_var, denoised_Edge_mean_var, ...
+    denoised_Outbrain_mean_var, denoised_WMCSF_mean_var, denoised_CSF_mean_var, denoised_Suscept_mean_var];
+mean_var_labels = ["GM_mean_var", ""]
 
 end
 
 %%
-function [GM, region, Global_Signal, GM_Signal_mean, GM_var, region_var] = getData(funcfile_data, funcmask, GM_prob_file, region_prob_file)
+function [GM, region, Global_Signal, GM_Signal_mean, GM_var, region_mean_var] = getData(funcfile_data, funcmask, GM_prob_file, region_prob_file)
 % read in the niftis
 region_prob_data = niftiread(region_prob_file);
 gm_prob_data = niftiread(GM_prob_file);
@@ -185,7 +175,7 @@ if size(GM) ~= size(region)
 end
 
 GM_var = var(GM, 0, 2); % variance of difference in time for GM)
-region_var = var(region, 0, 2);
+region_mean_var = mean(var(region, 0, 2), "omitnan");
 
 %Global_Signal_mean = mean(global_signal(global_signal(:, 1) ~= 0, :));
 %Global_Signal_mean = Global_Signal_mean - mean(Global_Signal_mean);
@@ -193,7 +183,7 @@ GM_Signal_mean = mean(GM(GM(:,1) ~= 0, :));
 GM_Signal_mean = GM_Signal_mean - mean(GM_Signal_mean);
 end
 
-function [region, region_signal_mean, region_var] = getData_sameregion(funcfile_data, funcmask, region_prob_file)
+function [region, region_signal_mean, region_mean_var] = getData_sameregion(funcfile_data, funcmask, region_prob_file)
 % read in the niftis
 region_prob_data = niftiread(region_prob_file);
 func_data = funcfile_data;
@@ -209,17 +199,18 @@ for j = 1:size(func_data, 4)
     region(:,j) = curr_func(region_mask);
 end
 
-region_var = var(region, 0, 2);
+region_mean_var = mean(var(region, 0, 2), "omitnan");
 region_signal_mean = mean(region(region(:,1) ~= 0, :));
 region_signal_mean = region_signal_mean - mean(region_signal_mean);
 end
 
-function compare_orig_corr = createHistData(compare_GM, orig_region, GM_randperm, region_randperm, perms)
+function compare_orig_corr = createHistData(compare_GM, orig_region, compare_randperm, orig_randperm, perms)
 % Should center close to 0 (not globally correlated) if it's
 % denoised (e.g., denoised lowered noise)
 perms = min([size(compare_GM,1), size(orig_region, 1), perms]);
-compare_orig_corr = corr(compare_GM(GM_randperm(1:perms), :)', orig_region(region_randperm(1:perms), :)');
+compare_orig_corr = corr(compare_GM(compare_randperm(1:perms), :)', orig_region(orig_randperm(1:perms), :)');
 compare_orig_corr = compare_orig_corr(tril(compare_orig_corr, -1) ~= 0);
+compare_orig_corr = compare_orig_corr(~isnan(compare_orig_corr)); % remove NaN correlations which can occur if a pixel has no variability (this might happen after a detrend, for example)
 
 % reduce sizes to number of perms too:
 compare_orig_corr_randperms = randperm(length(compare_orig_corr));
@@ -230,22 +221,6 @@ compare_orig_corr = compare_orig_corr(compare_orig_corr_randperms(1:perms)); % m
 % GM_GM_corr = GM_corr(tril(GM_corr, -1) ~= 0);
 end
 
-
-function compare_orig_var_comp = createVarHistData(compare_region_var, orig_region_var, region_randperm, perms)
-% Variance should be the least reduced in GM regions compared to orig
-perms = min([size(compare_region_var,1), size(orig_region_var, 1), perms]); % should be the same sizes
-compare_orig_var_comp = compare_region_var(region_randperm(1:perms),:)' ./ orig_region_var(region_randperm(1:perms),:)'; % divide denoised variance by orig variance
-
-% make into a column, get rid of Inf values, and make size of perms
-compare_orig_var_comp = compare_orig_var_comp(~isinf(compare_orig_var_comp)); % gets rid of inf and also makes it into a column
-
-% make it size of perms
-compare_orig_var_randperms = randperm(length(compare_orig_var_comp));
-nums = min(length(compare_orig_var_comp), 10000);
-compare_orig_var_comp = compare_orig_var_comp(compare_orig_var_randperms(1:nums)); % make it 10000 max, because otherwise too much big data
-
-end
-
 function [GM_conf1D_corr] = createHistConf1DData(GM, conf, GM_randperm, perms)
 % This is for confounds that are calculated in the 1st derivative
 % and absolute value (e.g., dvars, fd)
@@ -254,4 +229,7 @@ function [GM_conf1D_corr] = createHistConf1DData(GM, conf, GM_randperm, perms)
 % more on spikes, less on drift.
 perms = min([size(GM,1), perms]);
 GM_conf1D_corr = corr(conf(2:end), abs(diff(GM(GM_randperm(1:perms), :)')))';
+GM_conf1D_corr = GM_conf1D_corr(~isnan(GM_conf1D_corr)); % in case any voxels have no variance, for example after a detrend
 end
+
+
