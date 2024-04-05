@@ -1,4 +1,4 @@
-function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, tstd, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file)
+function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -21,8 +21,6 @@ cd('../')
 sub_dir = pwd;
 [~,sub_id,~]=fileparts(pwd);
 cd(cleaned_dir)
-
-naming_id = [sub_id, '_', ses_id, '_', task_name];
 
 % and get cleaned file info
 cleaned_file_info = dir(cleaned_file); % mainly for the name
@@ -51,6 +49,7 @@ if ~isfile([task_dir, '/funcmask.nii.gz'])
     fprintf(['Cannot find funcmask at ', task_dir, '/funcmask.nii.gz\n'])
     return;
 end
+funcmask = [task_dir, '/funcmask.nii.gz']; % original, not constrained, funcmask
 
 % grab constrained funcmask if it exists too (only within brain, and not
 % susceptibility low data)
@@ -135,9 +134,6 @@ GM_GM_sd = std(GM_GM_corr, "omitnan");
 Suscept_Suscept_median = median(Suscept_Suscept_corr, "omitnan");
 Suscept_Suscept_sd = std(Suscept_Suscept_corr, "omitnan");
 
-% Also calculate and grab a tstd and grab per region
-call_fsl(['fslmaths ', cleaned_file, ' -Tstd -mul ', funcmask, ' ', task_dir, '/', naming_id, '_tstd.nii.gz']);
-tstd = [task_dir, '/', naming_id, '_tstd.nii.gz']; % standard deviation in time of subject. Can be helpful to look at
 % And then grab variances from fileQC
 GM_mean_var = mean_var_table.GM_mean_var;
 NotGM_mean_var = mean_var_table.NotGM_mean_var;

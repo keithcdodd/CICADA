@@ -212,6 +212,12 @@ niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', tr
 %niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
+% We can use the SignalICOverlap file to calculate approximate regions that provided
+% BOLD signal capture. This could be useful for group GM mask calculations
+% later (e.g., focus on regions that are well captured across all images)
+call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
+call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_CICADA_manual_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
+
 % Write out the max noise ICs where we are in gray matter and noise is
 % currently more represented, and vice versa. Can help in identifying
 % misrepresnted signal and/or noise
@@ -271,9 +277,16 @@ fprintf(['Running: ', fsl_regfilt_command, '\n'])
 
 % Now put things in cleaned_dir, and also get cleaned_filename
 cleaned_dir = [task_dir, '/cleaned'];
-movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
-movefile('sub*ses*task**8p*.nii.gz', cleaned_dir)
-movefile('sub*ses*task**9p*.nii.gz', cleaned_dir)
+dir('sub*ses*task*CICADA*.nii.gz')
+if ~isempty(dir('sub*ses*task*CICADA*.nii.gz'))
+    movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
+end
+if ~isempty(dir('sub*ses*task*8p*.nii.gz'))
+    movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
+end
+if ~isempty(dir('sub*ses*task*9p*.nii.gz'))
+    movefile('sub*ses*task*9p*.nii.gz', cleaned_dir)
+end
 
 % get cleaned_filename
 cleaned_file_info = dir([cleaned_dir, '/*CICADA*manual*.nii.gz']);

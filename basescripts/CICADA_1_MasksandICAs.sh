@@ -45,6 +45,7 @@ fi
 
 # initialize things
 # Initialize things if not specified ("x" will say "does not exist")
+output_dir="x"
 funcfile="x"
 funcmask="x"
 confoundsfile="x"
@@ -287,6 +288,7 @@ WMprob="${output_anatfol}/WM_probseg.nii.gz"
 CSFprob="${output_anatfol}/CSF_probseg.nii.gz"
 anatmask="${output_anatfol}/anatmask.nii.gz"
 anatfile="${output_anatfol}/anatfile.nii.gz"
+
 
 # copy over session functional files and confounds file
 funcfilename="funcfile"

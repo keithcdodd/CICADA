@@ -6,7 +6,8 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
     orig_WMCSF_WMCSF_corr, orig_CSF_CSF_corr, orig_NotGM_NotGM_corr, orig_GM_GM_corr, orig_Suscept_Suscept_corr, ...
     denoised_GM_mean, compare_GM_mean, orig_GM_mean, title_string, qc_plot_dest, denoised_name)
 
-% Plot QC results!
+% Plot QC results! Add this in (will need to add in compare and orig corrs
+% somehow)
 
 % check if inputs are cell arrays instead of doubles. If so, convert to
 % doubles

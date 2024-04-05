@@ -1,4 +1,4 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, smoothing_kernel, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, smoothing_kernel, fpass, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -12,8 +12,10 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % for the call. 
 % file_tag: needs to be unique to the type of denoised/cleaned file you are
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
-% smoothing_kernel: gaussian smoothing kernel FWHMx size. Default is 3mm
+% smoothing_kernel: gaussian smoothing kernel FWHMx size. Default is same
+% as current size of functional
 % (keeping it small)
+% fpass is Hz for bandpassing. 0.008 to 0.15 is recommended
 % sub_ids e.g., {'102', '102', '103'}
 % ses_ids e.g., {'01', '02', '01'}
 % excludes (either 0 or 1 for exclude) e.g., {'0', '1', '0'}
@@ -61,6 +63,9 @@ if not(isfolder(output_dir))
     mkdir(output_dir)
 end
 
+if (~exist('fpass', 'var') == 1) || (~isa(fpass, 'double') == 1) || isempty(fpass)
+    fpass = []; % if bandpass frequencies are not readable, assume no bandpass applied
+end
 
 % Make separate photo folders, so it is easier to just scroll through them
 % all in the future. There is only 8p compare if auto, but 8p and auto if
@@ -71,6 +76,7 @@ first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', ta
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest, can be multiples
 
 comparison_only = 0; % to change in following if else statement
+orig_only = 0; % to change in following if else statement
 % make sure that the dir call actually found the file(s) of images that
 % compare to your cleaned file of interest (given the file tag)
 if size(compare_image_info,1) == 0
@@ -78,8 +84,13 @@ if size(compare_image_info,1) == 0
     compare_image_compareonly_info = dir([first_task_dir, '/qc/sub*ses*task*vs*', file_tag, '*qc_plots.jpg']); 
     
     if size(compare_image_compareonly_info,1) == 0
-        fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
-        return;
+        % check if it exists as orig only
+        if matches(file_tag, 'orig')
+            orig_only = 1; % so now we will not use a photo directory for orig only
+        else
+            fprintf(['Could not find a compare file match at task directory at ', first_task_dir, '/qc/ \nIs your file_tag correct, or does the task dir not exist?\n'])
+            return;
+        end
     else
         % OK, so the group qc is being run on a file type that has only
         % ever been used as a comparison
@@ -88,8 +99,8 @@ if size(compare_image_info,1) == 0
 end
 
 % Ok, NOW this should make appropriate photo folders. If it is comparison
-% only, then do not need (e.g., 8p)
-if comparison_only == 0
+% only or orig only, then do not need (e.g., 8p)
+if comparison_only == 0 && orig_only == 0
     for h = 1:size(compare_image_info,1)
     compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
     compare_tag = compare_tag{:};
@@ -115,7 +126,7 @@ mkdir(data_dir)
 % files or not
 first_cleaned_dir = [first_task_dir, '/cleaned'];
 
-% a fail safe for funcmasks
+% a fail safe for funcmasks that could be lurking inside
 if ~isempty(dir([first_cleaned_dir, '/funcmask*']))
     movefile([first_cleaned_dir, '/funcmask*'], [first_cleaned_dir, '/..'])
 end
@@ -277,30 +288,54 @@ for idx = 1:num_runs
         compare_file = '';
     end
 
+    if strcmp(cleaned_file, orig_file)
+        % Then we are just trying to run stats on original files for
+        % comparison! Do not need compare or "orig" since "cleaned" is orig
+        compare_file = '';
+        orig_file = '';
+    end
+
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     fprintf('Detrending & Smoothing Data and Copying to Group Data Folder...\n')
-    cleaned_file = detrend_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel);
-    orig_file = detrend_smooth(orig_file, funcmask, data_dir, smoothing_kernel);
+    cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass);
+    if ~isempty(orig_file)
+        orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass);
+    end
     % do the same to the compare_file, if it exists
     if ~isempty(compare_file)
-        compare_file = detrend_smooth(compare_file, funcmask, data_dir, smoothing_kernel);
+        compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass);
     end
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
     fprintf('Now calculating QC\n')
-    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, tstd, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
-    [~, ~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
+    if ~isempty(orig_file)
+        [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
+    else
+        orig_qc_corrs_table = table();
+    end
     if ~isempty(compare_file)
-        [~, ~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
+        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
     else
         compare_qc_corrs_table = table();
     end
+
+    % make and get tstd
+    % Also calculate and grab a tstd and grab per region
+    naming_id = ['sub-', sub_id, '_ses-', ses_id, '_task-', task_name];
+    call_fsl(['fslmaths ', cleaned_file, ' -Tstd -mul ', funcmask, ' ', output_dir, '/', naming_id, '_tstd.nii.gz']);
+    tstd = [output_dir, '/', naming_id, '_tstd.nii.gz']; % standard deviation in time of subject. Can be helpful to look at
     
     % now, to save space, we should delete the orig and compare data from
     % data dir
-    delete(compare_file)
-    delete(orig_file)
+    if isfile(compare_file)
+        delete(compare_file)
+    end
+    
+    if isfile(orig_file)
+        delete(orig_file)
+    end
 
     % then we need to be adding this information into the group qc stuff
     % (Group_QC struct)
@@ -320,7 +355,6 @@ for idx = 1:num_runs
     compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest to 8p only
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_vals.mat']); % specific to file tag of interest to 8p only
     if ~isempty(compare_file)
-        
         curr_compare_image_file = [compare_image_info.folder, '/', compare_image_info.name];
         compare_tag = extractBetween(compare_image_info.name, [task_name, '_'], '_qc_plots.jpg');
         compare_tag = compare_tag{:};
@@ -335,14 +369,18 @@ for idx = 1:num_runs
          % table
          group_qc_table = qc_table;
          group_qc_corrs_table = qc_corrs_table;
-         group_orig_qc_corrs_table = orig_qc_corrs_table;
-         group_compare_qc_corrs_table = compare_qc_corrs_table;
+         if orig_only == 0
+             group_orig_qc_corrs_table = orig_qc_corrs_table;
+             group_compare_qc_corrs_table = compare_qc_corrs_table;
+         end
     else
         % otherwise, tack it on to the end
         group_qc_table = [group_qc_table; qc_table];
         group_qc_corrs_table = [group_qc_corrs_table; qc_corrs_table];
-        group_orig_qc_corrs_table = [group_orig_qc_corrs_table; orig_qc_corrs_table];
-        group_compare_qc_corrs_table = [group_compare_qc_corrs_table; compare_qc_corrs_table];
+        if orig_only == 0
+            group_orig_qc_corrs_table = [group_orig_qc_corrs_table; orig_qc_corrs_table];
+            group_compare_qc_corrs_table = [group_compare_qc_corrs_table; compare_qc_corrs_table];
+        end
     end
    
     m = m+1; % increment successful counter
@@ -472,7 +510,7 @@ if ~isempty(group_compare_qc_corrs_table)
 
     
     % Set appropriate titles and destination
-    title_string = ['Group_QC_' cleaned_file_tag, '_vs_', compare_tag];
+    title_string = ['Group_QC_', compare_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
     % now we can plot
@@ -492,8 +530,7 @@ if ~isempty(group_compare_qc_corrs_table)
         cell2mat(ocorrt.Suscept_Suscept_Corr), ...
         [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 
-
-else
+elseif ~isempty(group_orig_qc_corrs_table)
     % we can plot now! There is no compare data
     title_string = ['Group_QC_' cleaned_file_tag, '_vs_orig'];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
@@ -537,7 +574,10 @@ end
 
 % merge temporal standard deviation files
 merge_tstds_command = ['fslmerge -a ', output_dir, '/temporal_standard_deviations.nii.gz ', strjoin(tstd_list(image_keep))];
-[~, ~] = call_fsl(merge_funcmasks_command);
+[~, ~] = call_fsl(merge_tstds_command);
+% then you can delete the extras after merging!
+delete([output_dir, '/sub*ses*task*tstd.nii.gz'])
+[~, ~] = call_fsl(['fslmaths ', output_dir, '/temporal_standard_deviations.nii.gz -inm 1 ', output_dir '/temporal_standard_deviations.nii.gz']);
 
 % merge func masks as well!
 merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', strjoin(data_mask_list(image_keep))];
