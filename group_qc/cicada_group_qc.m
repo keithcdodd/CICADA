@@ -493,8 +493,18 @@ writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_s
 writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv')
 Group_QC.final_qc_table = final_qc_table;
 Group_QC.final_qc_corrs_table = final_qc_corrs_table;
-Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
-Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
+if orig_only == 0
+    % there is only a compare and orig qc corrs table if we are not just
+    % looking at the original data only
+    Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
+    Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
+else
+    group_compare_qc_corrs_table = table();
+    group_orig_qc_corrs_table = table();
+    Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
+    Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
+end
+
 
 % Save qc corrs data for quick and easy comparison plotting
 save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table' )
@@ -503,6 +513,8 @@ save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table'
 dcorrt = group_qc_corrs_table; % same as final qc corrs table
 ocorrt = group_orig_qc_corrs_table;
 
+% Plotting depends on the existence of comparison tables
+% Don't plot if it is just original data
 % see if we have compare data to deal with here
 if ~isempty(group_compare_qc_corrs_table)
     
