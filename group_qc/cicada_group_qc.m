@@ -632,7 +632,7 @@ flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -ou
 Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m group_funcmask.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 
 if redo_melodic == 0
-    if not(isfile('./melodic/melodic_IC.nii.gz'))
+    if ~isfile('./melodic/melodic_IC.nii.gz') 
         % if melodic clearly did not finish last time, re do it.
         if isfolder('melodic')
             rmdir('melodic', 's')
@@ -649,120 +649,121 @@ elseif redo_melodic == 1
     fprintf(['Running: ', Group_ICA_command, '\n'])
     [~, ~] = call_fsl(Group_ICA_command);
     fprintf('Done with Group ICA (Melodic)\n\n')
-
-    % create ICprobabilities combined in melodic folder (good for making masks
-    % later at 100% probability, for example).
-    % first get to qc folder in bash
-    out = system(['cd ', output_dir], '-echo');
-    [~, str] = system('ls ./melodic/stats/probmap_* | sort -V');
-    probmapnames = regexprep(str, '\s+', ' '); % convert newlines to spaces
-    command = ['fslmerge -t ./melodic/ICprobabilities.nii.gz ', probmapnames];
-    [~, ~] = call_fsl(command);
-
-    % And load this now, 4th dimension is the ICs
-    IC_probs = niftiread('./melodic/ICprobabilities.nii.gz');
-    IC_probs_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
-    IC_probs_99 = logical(IC_probs > 0.99); % keeps only very best overlap
-    
-    % Update headers for 3D images
-    IC_3D_info = IC_probs_info;
-    IC_3D_info.ImageSize = IC_3D_info.ImageSize(1:end-1);
-    IC_3D_info.PixelDimensions = IC_3D_info.PixelDimensions(1:end-1);
-    IC_3D_info.Datatype = 'single';
-       
-    % Also go through melodic output and calculate overlap % of IC to each
-    % network between the 7 networks, which can be useful
-    networks_combined = niftiread(network_file);
-    %networks_info = niftiinfo(network_file);
-    
-    % Break it up into the 7 networks in the 4th dimension
-    networks = zeros([size(networks_combined),7]);
-    for i1 = 1:7
-        networks(:,:,:,i1) = logical(networks_combined == i1);
-    end
-    
-    % OK, now you can just multiply this by ICprobabilities file since each 4th
-    % dimension is an IC
-    % because matlab does not love a 4th dimension, the code is a little
-    % complex
-    % initialize:
-    IC_in_network = zeros(size(IC_probs_99,4), size(networks,4));
-    network_in_IC = IC_in_network;
-    dice_IC_network = IC_in_network;
-    for i1 = 1:size(networks,4)
-        curr_network = networks(:,:,:,i1);
-    
-        curr_IC_network_overlap = zeros(size(IC_probs_99));
-        for i2 = 1:size(IC_probs_99,4)
-            % make matrix only showing overlap between probability maps and
-            % current network
-            curr_IC_network_overlap(:,:,:,i2) = logical(IC_probs_99(:,:,:,i2) .* curr_network); % Try to mask in 4th dimension
-        end
-        
-        % sum across everything except ICs & squeeze to reduce dimensions to
-        % calculate proportional overlap per IC
-        IC_in_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ squeeze(sum(sum(sum(IC_probs_99,1),2),3));
-        network_in_IC(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) / sum(curr_network(:));
-    
-        dice_IC_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ ...
-            (squeeze(sum(sum(sum(IC_probs_99,1),2),3)) + sum(curr_network(:)) ...
-            - squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)));
-    end
-    
-    Group_QC.IC_in_network = IC_in_network;
-    Group_QC.network_in_IC = network_in_IC;
-    Group_QC.dice_IC_network = dice_IC_network;
-    
-    % Idea: select ICs that contribute toward networks:
-    % For each network, sort ICs by dice . Loop through those calculating new
-    % dice for each IC addition. Once new_dice < old_dice, stop. Output ICs
-    % that contributed
-    networks_ICs = cell(size(networks,4),1);
-    networks_dice = zeros(size(networks,4),1);
-    networks_IC_probs_99 = zeros(size(networks));
-    networks_IC_probs_final = networks_IC_probs_99;
-    for i1 = 1:size(networks,4)
-        curr_dice = 0;
-        curr_network_dices = dice_IC_network(:,i1);
-        curr_network = networks(:,:,:,i1);
-        [~, b] = sort(curr_network_dices, 'descend');
-    
-        % initialize
-        curr_IC_prob_cum = zeros(size(networks(:,:,:,1)));
-        go = 1; i2 = 1; network_ICs = [];
-        while go > 0
-            curr_IC_prob_cum = curr_IC_prob_cum + IC_probs_99(:,:,:,b(i2));
-            curr_IC_and_network = logical(curr_IC_prob_cum .* curr_network); % A & B
-            curr_IC_or_network = logical(curr_IC_prob_cum + curr_network); % A or B
-            % dice = A&B / (AorB-A&B)
-            dice_new = sum(curr_IC_and_network(:)) ./ sum(curr_IC_or_network(:));
-            if dice_new <= curr_dice
-                go = 0;
-            else
-                curr_dice = dice_new;
-                network_ICs = [network_ICs, b(i2)]; % save a list of the ICs to use for each network
-                updated_IC_prob_99 = int8(logical(curr_IC_prob_cum));
-            end
-            i2 = i2+1;
-        end
-        
-        % writeout IC prob network file:
-        networks_IC_probs_99(:,:,:,i1) = updated_IC_prob_99;
-        networks_IC_probs_final(:,:,:,i1) = logical(updated_IC_prob_99 .* int8(curr_network)); % keep within network file
-    
-        networks_dice(i1) = curr_dice;
-        networks_ICs{i1} = {network_ICs};
-    end
-    
-    IC_probs_info.Datatype = 'single';
-    IC_probs_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
-    niftiwrite(cast(networks_IC_probs_99, 'single'), 'IC_probs_networks', IC_probs_info, 'Compressed', true)
-    niftiwrite(cast(networks_IC_probs_final, 'single'), 'IC_probs_networks_final', IC_probs_info, 'Compressed', true)
-    
-    Group_QC.networks_dice = networks_dice;
-    Group_QC.networks_ICs = networks_ICs;
-
 end
+
+% create ICprobabilities combined in melodic folder (good for making masks
+% later at 100% probability, for example).
+% first get to qc folder in bash
+out = system(['cd ', output_dir], '-echo');
+[~, str] = system('ls ./melodic/stats/probmap_* | sort -V');
+probmapnames = regexprep(str, '\s+', ' '); % convert newlines to spaces
+command = ['fslmerge -t ./melodic/ICprobabilities.nii.gz ', probmapnames];
+[~, ~] = call_fsl(command);
+
+% And load this now, 4th dimension is the ICs
+IC_probs = niftiread('./melodic/ICprobabilities.nii.gz');
+IC_probs_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
+IC_probs_99 = logical(IC_probs > 0.99); % keeps only very best overlap
+
+% Update headers for 3D images
+IC_3D_info = IC_probs_info;
+IC_3D_info.ImageSize = IC_3D_info.ImageSize(1:end-1);
+IC_3D_info.PixelDimensions = IC_3D_info.PixelDimensions(1:end-1);
+IC_3D_info.Datatype = 'single';
+   
+% Also go through melodic output and calculate overlap % of IC to each
+% network between the 7 networks, which can be useful
+networks_combined = niftiread(network_file);
+%networks_info = niftiinfo(network_file);
+
+% Break it up into the 7 networks in the 4th dimension
+networks = zeros([size(networks_combined),7]);
+for i1 = 1:7
+    networks(:,:,:,i1) = logical(networks_combined == i1);
+end
+
+% OK, now you can just multiply this by ICprobabilities file since each 4th
+% dimension is an IC
+% because matlab does not love a 4th dimension, the code is a little
+% complex
+% initialize:
+IC_in_network = zeros(size(IC_probs_99,4), size(networks,4));
+network_in_IC = IC_in_network;
+dice_IC_network = IC_in_network;
+for i1 = 1:size(networks,4)
+    curr_network = networks(:,:,:,i1);
+
+    curr_IC_network_overlap = zeros(size(IC_probs_99));
+    for i2 = 1:size(IC_probs_99,4)
+        % make matrix only showing overlap between probability maps and
+        % current network
+        curr_IC_network_overlap(:,:,:,i2) = logical(IC_probs_99(:,:,:,i2) .* curr_network); % Try to mask in 4th dimension
+    end
+    
+    % sum across everything except ICs & squeeze to reduce dimensions to
+    % calculate proportional overlap per IC
+    IC_in_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ squeeze(sum(sum(sum(IC_probs_99,1),2),3));
+    network_in_IC(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) / sum(curr_network(:));
+
+    dice_IC_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ ...
+        (squeeze(sum(sum(sum(IC_probs_99,1),2),3)) + sum(curr_network(:)) ...
+        - squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)));
+end
+
+Group_QC.IC_in_network = IC_in_network;
+Group_QC.network_in_IC = network_in_IC;
+Group_QC.dice_IC_network = dice_IC_network;
+
+% Idea: select ICs that contribute toward networks:
+% For each network, sort ICs by dice . Loop through those calculating new
+% dice for each IC addition. Once new_dice < old_dice, stop. Output ICs
+% that contributed
+networks_ICs = cell(size(networks,4),1);
+networks_dice = zeros(size(networks,4),1);
+networks_IC_probs_99 = zeros(size(networks));
+networks_IC_probs_final = networks_IC_probs_99;
+for i1 = 1:size(networks,4)
+    curr_dice = 0;
+    curr_network_dices = dice_IC_network(:,i1);
+    curr_network = networks(:,:,:,i1);
+    [~, b] = sort(curr_network_dices, 'descend');
+
+    % initialize
+    curr_IC_prob_cum = zeros(size(networks(:,:,:,1)));
+    go = 1; i2 = 1; network_ICs = [];
+    while go > 0
+        curr_IC_prob_cum = curr_IC_prob_cum + IC_probs_99(:,:,:,b(i2));
+        curr_IC_and_network = logical(curr_IC_prob_cum .* curr_network); % A & B
+        curr_IC_or_network = logical(curr_IC_prob_cum + curr_network); % A or B
+        % dice = A&B / (AorB-A&B)
+        dice_new = sum(curr_IC_and_network(:)) ./ sum(curr_IC_or_network(:));
+        if dice_new <= curr_dice
+            go = 0;
+        else
+            curr_dice = dice_new;
+            network_ICs = [network_ICs, b(i2)]; % save a list of the ICs to use for each network
+            updated_IC_prob_99 = int8(logical(curr_IC_prob_cum));
+        end
+        i2 = i2+1;
+    end
+    
+    % writeout IC prob network file:
+    networks_IC_probs_99(:,:,:,i1) = updated_IC_prob_99;
+    networks_IC_probs_final(:,:,:,i1) = logical(updated_IC_prob_99 .* int8(curr_network)); % keep within network file
+
+    networks_dice(i1) = curr_dice;
+    networks_ICs{i1} = {network_ICs};
+end
+
+IC_probs_info.Datatype = 'single';
+IC_probs_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
+niftiwrite(cast(networks_IC_probs_99, 'single'), 'IC_probs_networks', IC_probs_info, 'Compressed', true)
+niftiwrite(cast(networks_IC_probs_final, 'single'), 'IC_probs_networks_final', IC_probs_info, 'Compressed', true)
+
+Group_QC.networks_dice = networks_dice;
+Group_QC.networks_ICs = networks_ICs;
+
+
 
 save('group_qc.mat', 'Group_QC')
 % When this is done, create your own table, with same image_numbers and
