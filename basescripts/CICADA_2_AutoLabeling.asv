@@ -379,7 +379,7 @@ if isfile(task_events_file)
     % to get a guestimated hrf response for each condition:
     hrf_conditions = zeros(size(block));
     for j = 1:length(condition_names)
-        convolution = conv(Data.HRF_general.plot_norm, block(:,j));
+        convolution = conv(Data.HRF_general.hrf_padded, block(:,j)); % convolve with non-normalized so it doesn't just decrease
         hrf_conditions(:, j) = convolution(1:size(block,1));
     end
    
@@ -844,9 +844,10 @@ signal_prob = all_prob(:,:,:,signal_ICs);
 noise_prob_info.ImageSize = size(noise_prob);
 noise_prob_info.DisplayIntensityRange = [0.9 1];
 noise_prob_info.Datatype = 'single';
-
+   
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
+signal_prob_info.PixelDimensions = signal_prob_info.PixelDimensions(1:length(size(signal_prob))); % fixed in case only one signal IC is selected
 
 potential_signal_prob = all_prob(:,:,:,signal_idx);
 potential_signal_prob_info = noise_prob_info;
@@ -854,13 +855,6 @@ potential_signal_prob_info.ImageSize = size(potential_signal_prob);
 
 niftiwrite(potential_signal_prob, 'PotentialSignalICs', potential_signal_prob_info, 'Compressed', true) % just the ICs that were considered
 niftiwrite(noise_prob, 'NoiseICs', noise_prob_info, 'Compressed', true)
-
-% if only one signal IC is selected (this is a bad sign for the data and should almost certainly be not used), add
-% code to allow things to still run:
-if length(size(signal_prob)) == 3
-    % it is 3D because only one signal IC is selected
-end
-
 niftiwrite(signal_prob, 'SignalICs', signal_prob_info, 'Compressed', true)
 
 % Now compress noise and signal, with only max probabilities per voxel

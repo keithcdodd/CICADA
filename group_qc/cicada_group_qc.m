@@ -296,13 +296,15 @@ for idx = 1:num_runs
     end
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
-    fprintf('Detrending & Smoothing Data and Copying to Group Data Folder...\n')
+    fprintf('Detrending & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
     cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass);
     if ~isempty(orig_file)
+         fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
         orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass);
     end
     % do the same to the compare_file, if it exists
     if ~isempty(compare_file)
+         fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
         compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass);
     end
     
@@ -387,6 +389,7 @@ for idx = 1:num_runs
 end
 fprintf('\n Done with calculating subject data\n')
 
+
 % record the bad data that was not even looked at, for easy reference later:
 Group_QC.bad_data_prefixes = bad_data_prefixes;
 
@@ -397,6 +400,11 @@ cd(output_dir)
 % add it to the qc table (only if this is CICADA though!):
 final_qc_table = group_qc_table;
 final_qc_corrs_table = group_qc_corrs_table;
+
+% add in bold to high freq ratio
+boldfreq_highfreq = final_qc_table.BOLDfreq ./ final_qc_table.Highfreq;
+final_qc_table.boldfreq_highfreq_ratio = boldfreq_highfreq;
+Group_QC.boldfreq_highfreq_ratio = boldfreq_highfreq;
 
 % Now we can calculate outliers, but some are only calculated in this
 % manner IF it is CICADA data
@@ -418,18 +426,26 @@ if cicada == 1
     
     % Smoothing
     Group_QC.low_Smoothing = (isoutlier(final_qc_table.Smoothing_Retention, "median")) & (final_qc_table.Smoothing_Retention < mean(final_qc_table.Smoothing_Retention));
+
+    % BOLD freq / highfreq ratio
+    Group_QC.low_boldfreq_highfreq_ratio = (isoutlier(boldfreq_highfreq, "median")) & (boldfreq_highfreq < mean(boldfreq_highfreq));
     
-    % Power Overlap
+    % Power/frequency Overlap
     % if task data, take into account task power overlap
     Group_QC.low_general_power_overlap = (isoutlier(final_qc_table.general_power_overlap, "median")) & ...
         (final_qc_table.general_power_overlap < mean(final_qc_table.general_power_overlap));
+    
     if sum(cell2mat(task_event_file_exist_list)) > 0 % so there are task event files!
         fprintf('Found task event files, so using best task power overlap.\n')
         Group_QC.low_besttask_power_overlap = (isoutlier(final_qc_table.besttask_power_overlap, "median")) & ...
         (final_qc_table.besttask_power_overlap < mean(final_qc_table.besttask_power_overlap));
-        Group_QC.low_power_overlap = Group_QC.low_general_power_overlap & Group_QC.low_besttask_power_overlap;
+
+        Group_QC.low_best_power_overlap_norm = (isoutlier(final_qc_table.best_power_overlap_norm, "median")) & ...
+        (final_qc_table.best_power_overlap_norm < mean(final_qc_table.best_power_overlap_norm));
+
+        Group_QC.low_power_overlap = Group_QC.low_general_power_overlap | Group_QC.low_boldfreq_highfreq_ratio | Group_QC.low_besttask_power_overlap;
     else
-        %else it is resting state
+        % else it is resting state
         fprintf('No Task event files. Assumed to be resting state.\n')
         Group_QC.low_power_overlap = Group_QC.low_general_power_overlap;
     end
@@ -452,11 +468,12 @@ if cicada == 1
     %    Group_QC.low_Smoothing + Group_QC.low_power_overlap + ...
     %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
 
-    % Too little GM signal coverage, too little overlap with signal ICs and
-    % GM, and relatively low GM variance to NotGM variance all would
-    % suggest enough good signal was not found or image is swallowed by
-    % noise still.
-    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop);
+    % Factors involving GM coverage are good, alongside factors regarding
+    % power spectrum frequency (because sometimes high motion can make
+    % random ICs that look like high enough GM coverage, but are not at
+    % all, and are instead dominated by higher frequency noise). So, most
+    % important are power overlap and GM overlap.
+    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio);
 
     % add to final qc table
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
@@ -665,6 +682,10 @@ IC_probs = niftiread('./melodic/ICprobabilities.nii.gz');
 IC_probs_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
 IC_probs_99 = logical(IC_probs > 0.99); % keeps only very best overlap
 
+% grab melodic file too - can be good for later images
+IC_mel = niftiread('./melodic/melodic_IC.nii.gz');
+IC_mel_info = niftiinfo('./melodic/melodic_IC.nii.gz');
+
 % Update headers for 3D images
 IC_3D_info = IC_probs_info;
 IC_3D_info.ImageSize = IC_3D_info.ImageSize(1:end-1);
@@ -722,6 +743,7 @@ networks_ICs = cell(size(networks,4),1);
 networks_dice = zeros(size(networks,4),1);
 networks_IC_probs_99 = zeros(size(networks));
 networks_IC_probs_final = networks_IC_probs_99;
+networks_IC_mel_max_final = networks_IC_probs_99;
 for i1 = 1:size(networks,4)
     curr_dice = 0;
     curr_network_dices = dice_IC_network(:,i1);
@@ -751,6 +773,10 @@ for i1 = 1:size(networks,4)
     networks_IC_probs_99(:,:,:,i1) = updated_IC_prob_99;
     networks_IC_probs_final(:,:,:,i1) = logical(updated_IC_prob_99 .* int8(curr_network)); % keep within network file
 
+    % write out melodic max version, a solid reference
+    curr_network_IC_mel = IC_mel(:,:,:, sort(network_ICs));
+    networks_IC_mel_max_final(:,:,:,i1) = max(curr_network_IC_mel,[],4);
+
     networks_dice(i1) = curr_dice;
     networks_ICs{i1} = {network_ICs};
 end
@@ -759,6 +785,7 @@ IC_probs_info.Datatype = 'single';
 IC_probs_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
 niftiwrite(cast(networks_IC_probs_99, 'single'), 'IC_probs_networks', IC_probs_info, 'Compressed', true)
 niftiwrite(cast(networks_IC_probs_final, 'single'), 'IC_probs_networks_final', IC_probs_info, 'Compressed', true)
+niftiwrite(cast(networks_IC_mel_max_final, 'single'), 'IC_mel_networks_final', IC_probs_info, 'Compressed', true)
 
 Group_QC.networks_dice = networks_dice;
 Group_QC.networks_ICs = networks_ICs;

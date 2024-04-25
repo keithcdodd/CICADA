@@ -107,6 +107,7 @@ hrf_plot_norm = hrf; % OK, this should be equivalent to spm defaults now.
 %hrf_plot_norm_spm = spm_hrf(2); % and now go on from there
 % should centerpad hrf to have same length
 hrf_padded = [hrf_plot_norm', zeros(1,numvolumes-length(hrf_plot_norm))]; % to give relevant resolution of full sampling
+% hrf_padded is a full hrf and then padded with zeros to length of scan
 Data.HRF_general.hrf_padded = hrf_padded;
 if ~strcmp(task_events_file, '')
     if isfile(task_events_file)
@@ -129,9 +130,9 @@ end
 cd(output_dir)
 
 % remove old ic_auto_selection folder if it exists
-if isfolder('./ic_auto_selection')
-    rmdir './ic_auto_selection' 's'
-end
+%if isfolder('./ic_auto_selection')
+%    rmdir './ic_auto_selection' 's'
+%end
 
 % Now do set up to make future coding easier and faster
 % Describe the first (Factor) and second level layers
@@ -379,7 +380,7 @@ if isfile(task_events_file)
     % to get a guestimated hrf response for each condition:
     hrf_conditions = zeros(size(block));
     for j = 1:length(condition_names)
-        convolution = conv(Data.HRF_general.plot_norm, block(:,j));
+        convolution = conv(Data.HRF_general.hrf_padded, block(:,j)); % convolve with non-normalized but padded so it doesn't just decrease
         hrf_conditions(:, j) = convolution(1:size(block,1));
     end
    

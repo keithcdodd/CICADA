@@ -64,7 +64,7 @@ end
 
 % If a data_signal_mask exists, grab it (areas where signal ICs generally overlap
 % with it)
-data_signal_mask_path = [task_dir, 'ic_', cicada_type, '_selection/funcmask_CICADA_', cicada_type, '_signal_constrained.nii.gz'];
+data_signal_mask_path = [task_dir, '/ic_', cicada_type, '_selection/funcmask_CICADA_', cicada_type, '_signal_constrained.nii.gz'];
 if isfile(data_signal_mask_path)
     data_signal_mask = data_signal_mask_path; % constrains based on where solid signal was generally captured
 else

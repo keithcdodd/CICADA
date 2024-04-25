@@ -18,13 +18,13 @@ funcmask_data = niftiread(funcmask);
 mm_div = mean(file_orig_data_info.PixelDimensions(1:3)); % to convert smoothing kernel for imgaussfilt3D
 
 if size(funcmask_data) ~= size(file_orig_data(:,:,:,1))
-    fprintf('Funcmask size does not match Data size...\n')
+    fprintf('   Funcmask size does not match Data size...\n')
     return
 end
 
 
 % detrend
-fprintf('Detrending to 2nd polynomial...\n')
+fprintf('   Detrending to 2nd polynomial...\n')
 file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
 file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
 file_detrended_2D = detrend(file_orig_data_2D',2)'; % mean is gone, back can be added back in later
@@ -34,7 +34,7 @@ bp = 0;
 if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass) && (length(fpass) == 2)
     bp = 1; % Mark bandpass filtering down
     % OK, do bandpass!
-    fprintf(['Bandpassing Filtering at ', num2str(fpass(1)), ' ', num2str(fpass(2)), ' Hz...\n'])
+    fprintf(['  Bandpassing Filtering at ', num2str(fpass(1)), ' ', num2str(fpass(2)), ' Hz...\n'])
     % bandpass, can use fft and ifft
     N = T/tr; F = 1/tr;
     df = 1/T; N_freq = N/2 + 1;
@@ -58,7 +58,7 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
         filtered_signal_2D(idx1, :) = filtered_signal;
     end
 else
-    fprintf('Not Applying Bandpass filtering!\n')
+    fprintf('   Not Applying Bandpass filtering!\n')
 end
 
 filtered_signal_2D = filtered_signal_2D + file_means_2D; % add mean back in, good for visualization purposes and makes spm happier
@@ -78,7 +78,7 @@ end
 
 % smooth
 if smoothing_kernel ~= 0
-    fprintf(['Smoothing at ', num2str(smoothing_kernel), 'mm gauss...\n'])
+    fprintf(['  Smoothing at ', num2str(smoothing_kernel), 'mm gauss...\n'])
     file_data = zeros(size(file_orig_data));
     % gaussian smooth and remask
     for idx2 = 1:size(file_orig_data,4)
@@ -100,7 +100,7 @@ if smoothing_kernel ~= 0
     
 
 else
-    fprintf('Not Smoothing! \n')
+    fprintf('   Not Smoothing! \n')
     if bp == 1
         file_data = file_filtered_data; % not smoothed, only detrended and masked if smoothing kernel was set at 0
         % write to data dir and relabel cleaned file:
