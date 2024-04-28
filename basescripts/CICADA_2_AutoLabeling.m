@@ -103,7 +103,7 @@ f2 = exp( (h2-1).*log(u) +h2.*log(l2) - l2.*u - gammaln(h2))/p(5);
 hrf = f1 - f2;
 hrf = hrf((0:(p(7)/TR))*fMRI_T + 1); hrf = hrf'/sum(hrf);
 hrf_plot_norm = hrf; % OK, this should be equivalent to spm defaults now.
-Data.hrf_plot_norm = hrf_plot_norm;
+Data.HRF_general.hrf_plot_norm = hrf_plot_norm;
 
 %hrf_plot_norm_spm = spm_hrf(2); % and now go on from there
 hrf_padded = [hrf_plot_norm', zeros(1,numvolumes-length(hrf_plot_norm))]'; % to give relevant resolution of full sampling
@@ -253,6 +253,8 @@ cush = 1; %#ok<NASGU> % to avoid overlap, give an index of padding
 % Also calculate relevant things for hrf by itself
 N_hrf = length(hrf_plot_norm);
 f_hrf = F*(0:floor(N_hrf/2))/N_hrf;
+Data.HRF_general.N = N_hrf;
+Data.HRF_general.f = f_hrf;
 
 % while we are here, let's also calculate hrf general powerspectrum
 Data.HRF_general.plot_norm = normalize(hrf_plot_norm); % remove mean to get rid of 0Hz
@@ -314,7 +316,7 @@ Data.lowfreq_cutoff = 0.008; Data.highfreq_cutoff = 0.15;
 % later, consider not normalizing by range here for better outlier
 % comparison later
 HRF_table = table();
-HRF_table{:, 'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
+HRF_table{:, 'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp' .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
 Tables.HRF_table = HRF_table;
 
 % (2b) Calculate actual measured proportions, easy to do manually.
