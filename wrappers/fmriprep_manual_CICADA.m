@@ -14,6 +14,12 @@ function fmriprep_manual_CICADA(cicada_dir, sub_id, ses_id, task_name, IC_manual
 % for you, but if you already have a MELODIC folder you insist on using,
 % you can supply that here
 
+if isempty(ses_id)
+    % then the original data did not have sessions, so default to session
+    % 01 to match other outputs
+    ses_id = '01';
+end
+
 % Now check for non-necessary variables
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file=[];

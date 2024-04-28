@@ -135,6 +135,8 @@ fprintf('Done with CICADA_2\n\n')
 fprintf('Running: CICADA_3_QC \n')
 CICADA_3_QC(cleaned_file, compare_file)
 fprintf('Done with CICADA_3\n\n')
+% close figures from CICADA_3_QC
+close all 
 
 diary off
 

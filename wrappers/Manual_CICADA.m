@@ -99,5 +99,7 @@ if ~isempty(compare_file_2) && isfile(compare_file_2)
     fprintf('Running: CICADA_3_QC to compare manual to auto \n')
     CICADA_3_QC(cleaned_file, compare_file_2)
     fprintf('Done with CICADA_3\n\n')
+    % close figures
+    close all
 end
 

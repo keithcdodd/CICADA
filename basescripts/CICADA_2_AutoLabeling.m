@@ -103,11 +103,12 @@ f2 = exp( (h2-1).*log(u) +h2.*log(l2) - l2.*u - gammaln(h2))/p(5);
 hrf = f1 - f2;
 hrf = hrf((0:(p(7)/TR))*fMRI_T + 1); hrf = hrf'/sum(hrf);
 hrf_plot_norm = hrf; % OK, this should be equivalent to spm defaults now.
+Data.hrf_plot_norm = hrf_plot_norm;
 
 %hrf_plot_norm_spm = spm_hrf(2); % and now go on from there
-% should centerpad hrf to have same length
-hrf_padded = [hrf_plot_norm', zeros(1,numvolumes-length(hrf_plot_norm))]; % to give relevant resolution of full sampling
-% hrf_padded is a full hrf and then padded with zeros to length of scan
+hrf_padded = [hrf_plot_norm', zeros(1,numvolumes-length(hrf_plot_norm))]'; % to give relevant resolution of full sampling
+% hrf_padded is a full hrf and then padded with zeros to length of scan,
+% not the most helpful
 Data.HRF_general.hrf_padded = hrf_padded;
 if ~strcmp(task_events_file, '')
     if isfile(task_events_file)
@@ -249,18 +250,23 @@ lower_phys_cutoff = round(0.008 / df) + 1; % start at freq 0 at position 1
 higher_phys_cutoff = round(0.15 / df) + 1;
 cush = 1; %#ok<NASGU> % to avoid overlap, give an index of padding
 
+% Also calculate relevant things for hrf by itself
+N_hrf = length(hrf_plot_norm);
+f_hrf = F*(0:floor(N_hrf/2))/N_hrf;
+
 % while we are here, let's also calculate hrf general powerspectrum
-Data.HRF_general.plot_norm = normalize(hrf_padded)'; % remove mean to get rid of 0Hz
+Data.HRF_general.plot_norm = normalize(hrf_plot_norm); % remove mean to get rid of 0Hz
 Data.HRF_general.fft = fft(Data.HRF_general.plot_norm);
-Data.HRF_general.P2_single_hrf = abs((Data.HRF_general.fft.^2)/N); % power
-Data.HRF_general.hrf_power = Data.HRF_general.P2_single_hrf(1:floor(N/2)+1); % grab first half of power, since power has negative to positive frequency
+Data.HRF_general.P2_single_hrf = abs((Data.HRF_general.fft.^2)/N_hrf); % power
+Data.HRF_general.hrf_power = Data.HRF_general.P2_single_hrf(1:floor(N_hrf/2)+1); % grab first half of power, since power has negative to positive frequency
 % normalize so it sums to 1
 Data.HRF_general.hrf_power_norm = (Data.HRF_general.hrf_power ./ trapz(Data.HRF_general.hrf_power)); % if you multiply this by the normalized power for each IC, you may be able to calculate useful things
-P1_single_hrf_bp = Data.HRF_general.hrf_power_norm;
-P1_single_hrf_bp(1:lower_phys_cutoff) = 0;
-P1_single_hrf_bp(higher_phys_cutoff+1:length(f)) = 0; % bp is bandpassed
-P1_single_hrf_bp = (P1_single_hrf_bp ./ sum(P1_single_hrf_bp)); % renormalize sum based on bandpass - so it can be a fair comparison across other HRFs
-Data.HRF_general.hrf_power_bp = P1_single_hrf_bp;
+% interpolate it to new frequency
+Data.HRF_general.hrf_power_interp = interp1(f_hrf, Data.HRF_general.hrf_power_norm, f, 'spline');
+% normalize to sum to 1
+Data.HRF_general.hrf_power_interp_norm = Data.HRF_general.hrf_power_interp ./ trapz(Data.HRF_general.hrf_power_interp);
+P1_single_hrf_bp = Data.HRF_general.hrf_power_interp_norm; % not actually bandpassed, but we don't really need to do that.
+Data.HRF_general.hrf_power_bp = P1_single_hrf_bp; % keep bandpassed naming here just for ease of coding
 % Can plot(HRF_general.f,HRF_general.hrf_power_bp) to see the power if you want to confirm
 
 % OK, now calculate power spectrums for each IC:
@@ -308,7 +314,7 @@ Data.lowfreq_cutoff = 0.008; Data.highfreq_cutoff = 0.15;
 % later, consider not normalizing by range here for better outlier
 % comparison later
 HRF_table = table();
-HRF_table{:,'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
+HRF_table{:, 'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
 Tables.HRF_table = HRF_table;
 
 % (2b) Calculate actual measured proportions, easy to do manually.
@@ -323,9 +329,11 @@ Tables.Freq_generalprops_table = Freq_genprops_table;
 
 % And make a relprops version where you divide by BOLDfreqIC_prop, can do
 % without a loop since it is so short
+% Can do BOLDfreq dependent on highfreq since that has more relevant
+% information than BOLDfreq by itself
 Freq_relprops_table = Freq_genprops_table;
-Freq_relprops_table{:,'Lowfreq'} = Freq_genprops_table{:,'Lowfreq'} ./ (Freq_genprops_table{:, 'BOLDfreq'} + Freq_genprops_table{:,'Lowfreq'});
-Freq_relprops_table{:,'Highfreq'} = Freq_genprops_table{:,'Highfreq'} ./ (Freq_genprops_table{:, 'BOLDfreq'} + Freq_genprops_table{:,'Highfreq'});
+Freq_relprops_table{:,'Lowfreq'} = Freq_genprops_table{:,'Lowfreq'} ./ (Freq_genprops_table{:, 'BOLDfreq'} + Freq_genprops_table{:,'Lowfreq'}); % want to be low
+Freq_relprops_table{:,'Highfreq'} = Freq_genprops_table{:,'Highfreq'} ./ (Freq_genprops_table{:, 'BOLDfreq'} + Freq_genprops_table{:,'Highfreq'}); % want to be low, could say low is good instead of worrying about low BOLDfreq worr
 Tables.Freq_relativeprops_table = Freq_relprops_table;
 
 % (3) Correlations: to dvars, FD, tasks (if not resting state):
@@ -336,7 +344,13 @@ Data.Confounds.Eightparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 't
 Data.Confounds.Sixmotionparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'}));
 Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
-Results.Confounds = Data.Confounds; %#ok<STRNU> 
+Results.Confounds = Data.Confounds;  
+
+% Spikieness or overrideing drift can be based on magnitude of normalized max vs mean 
+ts_detrend = detrend(Data.TimeSeries,1);
+spikieness = (max(abs(ts_detrend)) ./ mean(abs(ts_detrend)))'; % but honestly, not necessary, and not great with some sensory motor
+Data.Spikiness = spikieness;
+Results.Spikieness = spikieness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
 
 % Calculate and create Correlations table
 Corr_genprops_table = table();
@@ -432,10 +446,7 @@ if ~isempty(condition_corrs)
         P1_all_hrfs(:,m) = P2_all_hrfs(1:floor(N/2)+1,m); % grab first half of power, since power has negative to positive frequency
         % normalize so it sums to 1
         P1_all_hrfs_norm(:,m) = (P1_all_hrfs(:,m) ./ trapz(P1_all_hrfs(:,m))); % if you multiply this by the normalized power for each IC, you may be able to calculate useful things
-        P1_all_hrfs_bp(:,m) = P1_all_hrfs_norm(:,m);
-        P1_all_hrfs_bp(1:lower_phys_cutoff,m) = 0;
-        P1_all_hrfs_bp(higher_phys_cutoff+1:length(f),m) = 0; % bp is bandpassed
-        P1_all_hrfs_bp(:,m) = (P1_all_hrfs_bp(:,m) ./ sum(P1_all_hrfs_bp(:,m))); % renormalize sum based on bandpass for fair future hrf comparisons
+        P1_all_hrfs_bp(:,m) = P1_all_hrfs_norm(:,m); %don't really need to bandpass, but keeping name here to not break code
         % Can plot(f,P1_all_hrfs_norm) to see the power if you want
     end
 
@@ -445,7 +456,8 @@ if ~isempty(condition_corrs)
     Data.HRF_task.P2_single_hrf = P2_all_hrfs;
     Data.HRF_task.hrf_power = P1_all_hrfs;
     Data.HRF_task.hrf_power_norm = P1_all_hrfs_norm;
-    Data.HRF_task.hrf_power_bp = P1_all_hrfs_bp;
+    %Data.HRF_task.hrf_power_bp = P1_all_hrfs_bp;
+    Data.HRF_task.hrf_power_bp = P1_all_hrfs_norm; % keep it named as bp just to not break code, but likely better to not bandpass here
 
     % Use the maximum correlation to pick out the best hrf_power spectrum
     % to use per IC
@@ -529,14 +541,18 @@ end
 % Start parsing out what is important to look at from classification
 best_classification_labels = {'High_Signal', 'High_Smoothing_Retention', 'High_best_power_overlap_norm'};
 % there is no best task power if there are no condition cors
+% because highfreq is relative to boldfreq, a low relative highfreq is a
+% good classification
 if ~isempty(condition_corrs)
-    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'High_besttask_power_overlap', 'High_WM'};
+    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'High_besttask_power_overlap', 'Low_Highfreq', 'High_WM'};
 else
-    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'High_WM'};
+    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'Low_Highfreq', 'High_WM'};
 end
 
+% Low BOLDfreq is not enough to be bad, because it could be low BOLDfreq
+% with high lowfreq, which in and of itself is not likely to be bad.
 bad_classification_labels = {'Low_Signal', 'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
-    'High_OutbrainOnly', 'High_Outbrain', 'Low_BOLDfreq', 'High_Highfreq', ...
+    'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', ...
     'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'}; 
 networks_classification_labels = {'High_MedialVisual', 'High_SensoryMotor', ...
     'High_DorsalAttention', 'High_VentralAttention', 'High_FrontoParietal', ...
@@ -576,18 +592,11 @@ Tables.bad_classification_table = bad_classification_table;
 Tables.networks_classification_table = networks_classification_table;
 Tables.condition_corrs_classification_table = condition_corrs_classification_table;
 
-% Take into account low and high frequency
-% content into account for signal and noise
-% high signal
 % intialize Results Struct
 Results = struct();
 % high noise
 Highnoise_indices = sum(table2array(bad_classification_table), 2) > 0;
 Highnoise_ICs = ICs(Highnoise_indices);
-
-% check if the only "bad thing" is high_Lowfreq - this alone is not
-% worrisome
-%not_so_bad_indices = (sum(table2array(bad_classification_table), 2) == 1) & bad_classification_table.High_LowFreq
 
 % all 3 of the best things are classified high
 HighSig_indices = (sum(table2array(best_classification_table), 2) == width(best_classification_table)); 
@@ -627,6 +636,9 @@ curr_val = reshape(network_props, [rows.*cols, 1]);
 high_network_props = val_idx == find(val_C == max(val_C));
 high_network_props = reshape(high_network_props, size(network_props));
 
+% the following will overcome will overcome if low smoothness is the only
+% issue, or even motion/DVARS, but only if network overlap, GM, and best
+% power are all high. 
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
     (sum([classification_final_table{:, 'High_Signal'}, classification_final_table{:, 'High_GM'}],2) > 0) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);

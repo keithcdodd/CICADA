@@ -17,6 +17,13 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_nam
 % for you, but if you already have a MELODIC folder you insist on using,
 % you can supply that here
 
+% check if fmriprep has sessions or not (if only one session, might not!)
+if isempty(ses_id)
+    has_ses = 0; % has no distinct sessions, assume only one occured. In transfer to CICADA, still label as ses-01 because otherwise tough with the code
+else
+    has_ses = 1; % this is the expected structure, with multiple sessions
+end
+
 % Now check for non-necessary variables
 if ~exist('redo_mel', 'var') || (redo_mel ~= 0 && redo_mel ~=1)
     redo_mel = 0; % default is to not redo melodic
@@ -45,17 +52,37 @@ else
 end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
-    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic']; % will look in default location
+    if has_ses == 1
+        mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic']; % will look in default location
+    else
+        % if no designated session, just make it session 01
+        mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-01/', task_name, '/melodic']; % will look in default location
+    end
 elseif ~isfolder(mel_fol)
     fprintf(['MELODIC folder not found at ', mel_fol, '\n'])
-    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic'];
+    if has_ses == 1
+        mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic'];
+    else
+        % if no designated session, just make it session 01
+        mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-01/', task_name, '/melodic'];
+    end
     fprintf(['Will run new melodic in new default folder: ' mel_fol, '\n'])
 end
 
+
+
 % First do all the checks to make sure everything seems legit!
 % check that expected fmriprep directories exist first
-fmriprep_func_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/func'];
-fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', anat_ses_id, '/anat'];
+if has_ses == 1
+    fmriprep_func_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/func'];
+    fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', anat_ses_id, '/anat'];
+else
+    % If there is no session folder in fmriprep, work with that
+    fmriprep_func_dir = [fmriprep_dir, '/sub-', sub_id, '/func'];
+    fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/anat'];
+end
+
+
 if ~isfolder(fmriprep_func_dir)
     fprintf(['Cannot find fmriprep func dir at ', fmriprep_func_dir, '\n'])
     return;
@@ -65,30 +92,45 @@ elseif ~isfolder(fmriprep_anat_dir)
 else
     % first grab things from func folder
     cd(fmriprep_func_dir)
-    funcfile_info = dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
+    funcfile_info = dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
     funcfile = [funcfile_info.folder, '/', funcfile_info.name];
-    funcmask_info = dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
+    if ~isfile(funcfile)
+        fprintf(['Cannot find fmriprep funcfile at ', funcfile, '\n'])
+        return;
+    end
+
+    funcmask_info = dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
     funcmask = [funcmask_info.folder, '/', funcmask_info.name];
-    confounds_info =  dir(['*', sub_id, '*', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
+    confounds_info =  dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
     confoundsfile = [confounds_info.folder, '/', confounds_info.name];
 
     % and now grab from best anat folder
     % Note, if you use a different structural other than T1w, you may need
     % to change that below
     cd(fmriprep_anat_dir)
-    anatfile_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
+    anatfile_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
     anatfile = [anatfile_info.folder, '/', anatfile_info.name];
-    anatmask_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
+    if ~isfile(funcfile)
+        fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
+        return;
+    end
+    anatmask_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
     anatmask = [anatmask_info.folder, '/', anatmask_info.name];
-    gm_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
+    gm_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
     gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
-    wm_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
+    wm_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
     wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
-    csf_prob_info = dir(['*', sub_id, '*', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
+    csf_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
     csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
 end
 
-output_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
+if has_ses == 1
+    output_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
+else
+    % just put in a ses-01 folder for consistency
+    output_dir = [cicada_dir, '/sub-', sub_id, '/ses-01/', task_name];
+end
+
 
 % Output everything to check:
 fprintf(['\nfmriprep_dir: ', fmriprep_dir, '\n'])

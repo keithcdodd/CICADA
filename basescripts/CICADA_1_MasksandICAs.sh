@@ -308,9 +308,18 @@ echo "    Creating New Funcmask To Include Outer Areas Of Brain!"
 funcmask="${output_dir}/funcmask_orig.nii.gz" # func brain mask, but will relabel to get final one in next few lines
 funcfile_nomask="${output_dir}/${funcfilename}_unmasked.nii.gz" # functional file unmasked version
 
+# create an eroded anatmask which could be helpful later for looking more towards the center of the brain
+# four erodes is likely good for standard 2mm space
+fslmaths "${anatmask}" -ero -ero -ero -ero -ero "${output_anatfol}/anatmask_eroded.nii.gz"
+anatmask_eroded="${output_anatfol}/anatmask_eroded.nii.gz"
+
 # First, calculate a good resampled anatomy mask if you did not already. Do not make anatmask_resam temporary because potentially useful later.
 flirt -ref "${funcmask}" -in "${anatmask}" -out "${output_regionmask_dir}/anatmask_resam.nii.gz" -usesqform -applyxfm
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/anatmask_resam.nii.gz"
+
+# Do it for the eroded one too!
+flirt -ref "${funcmask}" -in "${anatmask_eroded}" -out "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -usesqform -applyxfm
+fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -bin "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz"
 
 # now find max of orig funcmask and anatmask_resam - helps make sure we do not leave out part of brain - this could be a large func mask
 fslmaths "${funcmask}" -max "${output_regionmask_dir}/anatmask_resam.nii.gz" "${output_dir}/max_anatmask_tmp_funcmask.nii.gz"
@@ -367,11 +376,10 @@ fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -fmean -sub "${output_regionm
 fslmaths "${output_regionmask_dir}/GM_tmp_outerprob.nii.gz" -add "${output_regionmask_dir}/GM_prob.nii.gz" "${output_regionmask_dir}/GM_extended_prob.nii.gz" # this is GM probability, but extended out a little bit. Useful for better QC testing (e.g., grab outbrain not potentially impacted by GM)
 
 # Can calculate an "inner CSF" by multiplying by an eroded anatmask_resam -- this may be helpful for a more target inner CSF measure. This could be in contrast to OutbrainOnly
-fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -mul ${funcmask} -bin "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz"
-fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
 
 # Also do inner WM, this will be useful to make subepe mask
-fslmaths "${output_regionmask_dir}/anatmask_resam_eroded.nii.gz" -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_mask.nii.gz"
 
 # OK, now get subepe by fmean both innercsf and inner wm, multiplying, and scaling
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -mul "${output_regionmask_dir}/InnerCSF_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz"
