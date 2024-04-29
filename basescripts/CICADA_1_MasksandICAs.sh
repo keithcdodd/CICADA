@@ -371,7 +371,7 @@ fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regi
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
 # can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% GM, a 1 is 100% not GM 
-fslmaths "${anatmask_resam.nii.gz}" -sub "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GM_inv_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -sub "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GM_inv_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_inv_prob.nii.gz" -thr 0.99 -bin "${output_regionmask_dir}/GM_inv_mask.nii.gz"
 
 # also make lenient GM, WM, CSF masks, which might be useful for making a more lenient signal mask later
