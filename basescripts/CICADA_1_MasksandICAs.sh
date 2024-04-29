@@ -370,6 +370,15 @@ fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 67 -bin "${output_regio
 fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
+# can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% GM, a 1 is 100% not GM 
+fslmaths "${anatmask_resam.nii.gz}" -sub "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GM_inv_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_inv_prob.nii.gz" -thr 0.99 -bin "${output_regionmask_dir}/GM_inv_mask.nii.gz"
+
+# also make lenient GM, WM, CSF masks, which might be useful for making a more lenient signal mask later
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/GM_lenient_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/WM_lenient_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/CSF_lenient_mask.nii.gz"
+
 # Make an extended GM_prob which goes more into outbrain, just so this can be more taken into account
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -bin "${output_regionmask_dir}/GM_tmp_allmask.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -fmean -sub "${output_regionmask_dir}/GM_tmp_allmask.nii.gz" -thr 0 "${output_regionmask_dir}/GM_tmp_outerprob.nii.gz"
@@ -413,9 +422,10 @@ fslmaths "${output_regionmask_dir}/GMorWM_mask.nii.gz" -sub "${output_regionmask
 # we can make WM final mask more accurate for signal now by removing Subepe from it
 fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_adj_mask.nii.gz"
 
-# Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise. Need to sub WM mask and subepe mask not prob here to maintain GMWM leniency
-fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/WM_adj_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -mul ${funcmask} "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 67 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # include adding in GM mask again in case small spots were removed from thresholding
+# Signal Mask: Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise. Need to sub GM inv mask to make sure we don't accidentally include areas that cannot possibly have GM influence
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/GM_inv_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 33 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # This is a very generous signal mask!
+# overall the signal mask is where there is at least 1% chance of GM, and GMorWM percentage is above 33% (So CSF is not higher than 67%, or other potential issues). 
 
 # also make versions that do not worry about removing edge and susceptibility, in case you want those later
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" "${output_regionmask_dir}/Anatprob_tmp_resam.nii.gz"
