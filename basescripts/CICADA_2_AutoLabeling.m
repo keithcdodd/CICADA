@@ -602,7 +602,7 @@ Highnoise_ICs = ICs(Highnoise_indices);
 
 % all 3 of the best things are classified high
 HighSig_indices = (sum(table2array(best_classification_table), 2) == width(best_classification_table)); 
-HighSig_ICs = ICs(HighSig_indices);
+HighSig_ICs = ICs(HighSig_indices); % in which case, we should always label as signal just in case! Err on side of caution of keeping good signal!
 
 % Also make something to mark whether it has any good classification tags
 HasSig_indices = sum(table2array(good_classification_table),2) > 0;
@@ -617,7 +617,7 @@ Results.HighSig_indices = HighSig_indices;
 Results.HighSig_ICs = HighSig_ICs;
 
 % OK, now we can start to narrow down our search! Good ICs are
-% determined by GM overlap (compared to other regions),
+% determined by GM/Signal overlap (compared to other regions),
 % Boldfrequency power (compared to high frequency), and
 % smoothness. Weight GM overlap heavier than smoothness or
 % frequency (because noise could be in BOLD and smooth, like
@@ -642,7 +642,7 @@ high_network_props = reshape(high_network_props, size(network_props));
 % issue, or even motion/DVARS, but only if network overlap, GM, and best
 % power are all high. 
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
-    (sum([classification_final_table{:, 'High_Signal'}, classification_final_table{:, 'High_GM'}],2) > 0) ...
+    (classification_final_table{:, 'High_Signal'} == 1) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);
 Network_Overlap_ICs = ICs(Network_Overlap_indices);
 
@@ -661,7 +661,9 @@ while stop_num > 0
     % if it is labeled as high noise, it could be saved if it has good
     % Network Overlap and great HRF overlap
     if ismember(signal_idx(g), Highnoise_ICs) == 1
-        if ismember(signal_idx(g), Network_Overlap_ICs) == 0
+        % looks like noise, but make sure it is not saved by network
+        % overlap or being high signal before labeling as noise
+        if (ismember(signal_idx(g), Network_Overlap_ICs) == 0) && (ismember(signal_idx(g), HighSig_ICs) == 0)
             stop_num = stop_num - 1;
             % mark as noise!
             signal_decision(g) = 0; %#ok<AGROW> 

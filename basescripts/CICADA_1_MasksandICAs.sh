@@ -364,13 +364,13 @@ fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thrP 67 -bin "${output_reg
 
 ### Calculate GM, WM, and CSF by subtracting out Edge (perimeter) and susceptibility
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GM_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/GM_mask.nii.gz" # be more lenient with GM, since not nearly all clear GM regions are captured at 67%
 fslmaths "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/WM_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WM_mask.nii.gz"
 fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
-# can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% GM, a 1 is 100% not GM 
+# can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% GM, a 1 is 100% not GM
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -sub "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GM_inv_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_inv_prob.nii.gz" -thr 0.99 -bin "${output_regionmask_dir}/GM_inv_mask.nii.gz"
 
@@ -425,7 +425,7 @@ fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir
 # Signal Mask: Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise. Need to sub GM inv mask to make sure we don't accidentally include areas that cannot possibly have GM influence
 fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/GM_inv_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 33 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # This is a very generous signal mask!
-# overall the signal mask is where there is at least 1% chance of GM, and GMorWM percentage is above 33% (So CSF is not higher than 67%, or other potential issues). 
+# overall the signal mask is where there is at least 1% chance of GM, and GMorWM percentage is above 33% (So CSF is not higher than 67%, or other potential issues). This helps take into account that true signal is smooth and will bleed into neighboring areas.
 
 # also make versions that do not worry about removing edge and susceptibility, in case you want those later
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -add "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" "${output_regionmask_dir}/Anatprob_tmp_resam.nii.gz"
