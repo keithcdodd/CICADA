@@ -193,6 +193,13 @@ for i1 = 1:length(ROINetworks_labels)
 end
 ROI_genprops_table = table(); ROI_genprops_table{:, ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} = ROINetworks_genprops_table{:,Networks_labels};
+
+% Update Subepe to be more fully captured, just use WM+CSF because sometimes
+% Subepe extends way outside of Subepe mask, which is a good mask, but
+% strict and will not always catch it.
+WM_CSF = ROI_genprops_table{:, 'WM'} + ROI_genprops_table{:,'CSF'};
+ROI_genprops_table{:, 'WMCSF'} = WM_CSF;
+
 Tables.ROI_generalprops_table = ROI_genprops_table;
 Tables.Networks_generalprops_table = Networks_genprops_table;
 
@@ -206,6 +213,10 @@ for i1 = 1:length(ROI_relprops_labels)
     ROI_relprops_table{:, ROI_relprops_labels{i1}} = ROINetworks_genprops_table{:,ROI_relprops_labels{i1}} ...
         ./ (ROINetworks_genprops_table{:,'Signal'} + ROINetworks_genprops_table{:,ROI_relprops_labels{i1}});
 end
+
+% calculate and add in WMCSF here too
+WM_CSF_relmean = mean([ROI_relprops_table{:, 'WM'}, ROI_relprops_table{:,'CSF'}],2);
+ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
 
 % Inbrain Outbrain should just be compared to themselves for gen props
@@ -541,6 +552,10 @@ for i1 = 2:length(feature_labels)
     classification_table{:, ['High_', feature_labels{i1}]} = val_idx == max_feats(end);
     classification_table{:, ['Low_', feature_labels{i1}]} = val_idx == min_feats(1);
 end
+
+% We can put High Subepe as a combination of high subepe and high WMCSF,
+% both are great and grab similar ICs, overall should capture Subepe well!
+classification_table{:, 'High_Subepe'} = logical(classification_table.High_Subepe + classification_table.High_WMCSF);
 
 % Spikiness as a problem only really exists IF there are spikes in the data
 % at all. So put in a min cut off of norm 5, so that if none exist, there
