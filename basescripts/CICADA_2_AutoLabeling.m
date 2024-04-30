@@ -11,7 +11,7 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, to
 % standard tolerance of 4 is a good baseline. If you increase that number,
 % you may label more ICs as signal. Decreasing it may label less ICs as signal.
 
-% General Method of This Script:s
+% General Method of This Script:
 % This script evaluates each IC to determine if it is more likely to be signal or noise. 
 % ICs are first ordered from most to least likely to be signal. This is
 % determined based on GM spatial overlap, powerspectrum overlap with hrf
@@ -348,11 +348,13 @@ Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
 Results.Confounds = Data.Confounds;  
 
-% Spikieness or overrideing drift can be based on magnitude of normalized max vs mean 
+% Spikiness or overrideing drift can be based on magnitude of normalized max vs mean 
 ts_detrend = detrend(Data.TimeSeries,1);
-spikieness = (max(abs(ts_detrend)) ./ mean(abs(ts_detrend)))'; % but honestly, not necessary, and not great with some sensory motor
-Data.Spikiness = spikieness;
-Results.Spikieness = spikieness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
+Spikiness = max(abs(ts_detrend))'; % a normalized response with larger values had greater spikes
+Data.Spikiness = Spikiness;
+Spikiness_table = table();
+Spikiness_table{:, 'Spikiness'} = Spikiness;
+Results.Spikiness = Spikiness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
 
 % Calculate and create Correlations table
 Corr_genprops_table = table();
@@ -517,7 +519,7 @@ feature_general_table = [ICs_table, ROI_genprops_table, InOut_genprops_table, ..
 % relative table is the one we will use for kmeans things:
 feature_relative_table = [ICs_table, ROI_relprops_table, InOut_relprops_table, ...
     Freq_relprops_table, Corr_genprops_table, Smoothness_table, HRF_table, ...
-    Networks_genprops_table, condition_corrs_table];
+    Networks_genprops_table, condition_corrs_table, Spikiness_table];
 % norm table can put things in perspective for use
 feature_table_norm = [feature_relative_table(:,1), normalize(feature_relative_table(:,2:end))]; % normalized version
 feature_labels = feature_relative_table.Properties.VariableNames;
@@ -540,6 +542,12 @@ for i1 = 2:length(feature_labels)
     classification_table{:, ['Low_', feature_labels{i1}]} = val_idx == min_feats(1);
 end
 
+% Spikiness as a problem only really exists IF there are spikes in the data
+% at all. So put in a min cut off of norm 5, so that if none exist, there
+% will not be good/better data removed! I am just trying to catch if one is
+% horrendous
+classification_table{:, 'High_Spikiness'} = (classification_table.High_Spikiness .* (Spikiness > 5)) == 1;
+
 % Start parsing out what is important to look at from classification
 best_classification_labels = {'High_Signal', 'High_Smoothing_Retention', 'High_best_power_overlap_norm'};
 % there is no best task power if there are no condition cors
@@ -554,7 +562,7 @@ end
 % Low BOLDfreq is not enough to be bad, because it could be low BOLDfreq
 % with high lowfreq, which in and of itself is not likely to be bad.
 bad_classification_labels = {'Low_Signal', 'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
-    'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', ...
+    'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', 'High_Spikiness', ...
     'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'}; 
 networks_classification_labels = {'High_MedialVisual', 'High_SensoryMotor', ...
     'High_DorsalAttention', 'High_VentralAttention', 'High_FrontoParietal', ...
@@ -642,7 +650,7 @@ high_network_props = reshape(high_network_props, size(network_props));
 % issue, or even motion/DVARS, but only if network overlap, GM, and best
 % power are all high. 
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
-    (classification_final_table{:, 'High_Signal'} == 1) ...
+    (sum([classification_final_table{:, 'High_Signal'}, classification_final_table{:, 'High_GM'}],2) > 0) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);
 Network_Overlap_ICs = ICs(Network_Overlap_indices);
 

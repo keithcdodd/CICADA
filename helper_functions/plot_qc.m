@@ -53,7 +53,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % GM_fd corr: Want to see a shift toward center for denoised
@@ -74,7 +74,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % GM_dvars corr: Want to see a shift toward center for denoised
@@ -96,7 +96,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % GM_Outbrain corr: Want to see a tighter distribution, centered near
@@ -122,7 +122,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % GM_WMCSF corr: Want to see a tighter distribution, centered near
@@ -148,7 +148,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 
@@ -175,7 +175,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % Suscept corr: Want to see a tighter distribution, centered near
@@ -203,7 +203,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % GM_NotGM corr: Want to see a tighter distribution, centered near
@@ -229,7 +229,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 
@@ -256,7 +256,7 @@ end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
 ylabel('Frequency')
-%xlim([-1, 1]);
+xlim([-1, 1]);
 hold off
 
 % for single subject, you have one more plot to make
