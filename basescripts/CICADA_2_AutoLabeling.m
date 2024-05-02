@@ -6,13 +6,13 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, to
 
 % task_events_file should be given if evaluating a task -- will increase IC
 % classification accuracy. Task Events file should be the same structure as
-% standard bids or fMRIPrep format .csv 
+% standard bids or fMRIPrep format .csv
 
 % standard tolerance of 4 is a good baseline. If you increase that number,
 % you may label more ICs as signal. Decreasing it may label less ICs as signal.
 
 % General Method of This Script:
-% This script evaluates each IC to determine if it is more likely to be signal or noise. 
+% This script evaluates each IC to determine if it is more likely to be signal or noise.
 % ICs are first ordered from most to least likely to be signal. This is
 % determined based on GM spatial overlap, powerspectrum overlap with hrf
 % predicted power, and spatial smoothness. K means clustering helps
@@ -24,7 +24,7 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, to
 % documentation when you search "running fsl in matlab" online -
 % FslMatlabConfiguration
 
-% check output_dir exists 
+% check output_dir exists
 if ~isfolder(output_dir)
     fprintf('ERROR: output_dir does not exist!')
     return;
@@ -118,11 +118,11 @@ if ~strcmp(task_events_file, '')
         if ~isempty(baseline_exists)
             task_events_table(baseline_exists, :) = [];
         end
-        
+
     else
         fprintf(['Cannont find ', task_events_file, '. Running without task condition information.\n'])
-        task_events_file = ''; %#ok<NASGU> 
-    return 
+        task_events_file = ''; %#ok<NASGU>
+    return
     end
 end
 
@@ -165,7 +165,7 @@ end
 % (1a) Approximate overlap with mean and numvoxels
 
 % We can just make tables for everything too
-WholeBrain_labels = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh'};
+WholeBrain_labels = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh', 'All'};
 ROI_labels = {'GMWM', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 InOut_labels = {'Inbrain', 'Outbrain'};
 Freq_labels = {'Lowfreq', 'BOLDfreq', 'Highfreq'};
@@ -189,7 +189,7 @@ ROI_compare_labels = {'GM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 ROINetworks_labels = [ROI_labels, Networks_labels];
 ROINetworks_genprops_table = table();
 for i1 = 1:length(ROINetworks_labels)
-    ROINetworks_genprops_table{:,ROINetworks_labels{i1}} = ICsum_table{:,ROINetworks_labels{i1}} ./ sum(ICsum_table{:, ROI_compare_labels},2);
+    ROINetworks_genprops_table{:,ROINetworks_labels{i1}} = ICsum_table{:,ROINetworks_labels{i1}} ./ ICsum_table{:, 'All'}; %sum(ICsum_table{:, ROI_compare_labels},2);
 end
 ROI_genprops_table = table(); ROI_genprops_table{:, ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} = ROINetworks_genprops_table{:,Networks_labels};
@@ -215,9 +215,14 @@ for i1 = 1:length(ROI_relprops_labels)
 end
 
 % calculate and add in WMCSF here too
-WM_CSF_relmean = mean([ROI_relprops_table{:, 'WM'}, ROI_relprops_table{:,'CSF'}],2);
+WM_CSF_relmean = normalize(2*ROI_relprops_table.WM + ROI_relprops_table.CSF, "range"); % good because needs mainly WM with a decent amount of CSF in it to be true subepe
 ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
+
+% Grab maximum WMCSF value and make sure that is removed no matter what
+% because it is very likely to be subependymal which will otherwise look
+% good
+% subepe_max_index =  WM_CSF_relmean == max(WM_CSF_relmean));
 
 % Inbrain Outbrain should just be compared to themselves for gen props
 InOut_compare_labels = {'Inbrain', 'Outbrain'};
@@ -254,7 +259,7 @@ Tables.Smoothness_table = Smoothness_table;
 % (2a) Grab time series and calculate power and proportions in each
 % frequency range of interest
 N = T/TR; F = 1/TR;
-df = 1/T; N_freq = N/2 + 1; %#ok<NASGU> 
+df = 1/T; N_freq = N/2 + 1; %#ok<NASGU>
 f = F*(0:floor(N/2))/N; % to chart what frequencies we are at
 frequencies = f; % easier naming later
 lower_phys_cutoff = round(0.008 / df) + 1; % start at freq 0 at position 1
@@ -360,9 +365,9 @@ Data.Confounds.Eightparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 't
 Data.Confounds.Sixmotionparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'}));
 Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
-Results.Confounds = Data.Confounds;  
+Results.Confounds = Data.Confounds;
 
-% Spikiness or overrideing drift can be based on magnitude of normalized max vs mean 
+% Spikiness or overrideing drift can be based on magnitude of normalized max vs mean
 ts_detrend = detrend(Data.TimeSeries,1);
 Spikiness = max(abs(ts_detrend))'; % a normalized response with larger values had greater spikes
 Data.Spikiness = Spikiness;
@@ -372,10 +377,10 @@ Results.Spikiness = Spikiness; % not currently used as a marker. Generally unnec
 
 % Calculate and create Correlations table
 Corr_genprops_table = table();
-% FD: 
+% FD:
 corr_during_FD = corr(detrend(Data.Confounds.FD(2:end)), abs(diff(detrend(Data.TimeSeries)))).^2';
 Corr_genprops_table{:, 'FD_Corr'} = corr_during_FD;
-% DVARS: 
+% DVARS:
 corr_during_DVARS = corr(detrend(Data.Confounds.DVARS(2:end)), abs(diff(detrend(Data.TimeSeries)))).^2';
 Corr_genprops_table{:, 'DVARS_Corr'} =  corr_during_DVARS;
 Tables.Corr_generalprops_table = Corr_genprops_table;
@@ -389,7 +394,7 @@ condition_corrs_table = table();
 if isfile(task_events_file)
     condition_names = unique(task_events_table{:,3})';
     block = zeros(numvolumes, length(condition_names));
-    
+
     for j = 1:length(condition_names)
         curr_condition_name = condition_names{j};
         curr_condition_rows = find(strcmp(task_events_table{:,3}, curr_condition_name));
@@ -415,11 +420,11 @@ if isfile(task_events_file)
         convolution = conv(Data.HRF_general.hrf_padded, block(:,j)); % convolve with non-normalized but padded so it doesn't just decrease
         hrf_conditions(:, j) = convolution(1:size(block,1));
     end
-   
+
     condition_names_orig = condition_names; % save original
-    hrf_conditions(:,length(condition_names_orig)+1) = sum(hrf_conditions,2); 
+    hrf_conditions(:,length(condition_names_orig)+1) = sum(hrf_conditions,2);
     hrf_conditions = normalize(hrf_conditions); % normalize to remove mean so we don't have power at 0Hz overtaking
-    condition_names = [condition_names, 'Combined']; 
+    condition_names = [condition_names, 'Combined'];
     condition_corrs = zeros(length(ICs), length(condition_names));
 
     for m = 1:length(condition_names)
@@ -446,12 +451,12 @@ end
 % most correlated condition corr)
 if ~isempty(condition_corrs)
     % repeat IC matrix to match size
-    ICs_reps = repmat(ICs, 1, size(condition_corrs,2)); %#ok<NASGU> 
-    
+    ICs_reps = repmat(ICs, 1, size(condition_corrs,2)); %#ok<NASGU>
+
     % both calculate relative correlation strength for hrfs AND calculate
     % power spectra
     % initialize things first, then go into for loop
-    N = T/TR; F = 1/TR; df = 1/T; N_freq = N/2 + 1; %#ok<NASGU> 
+    N = T/TR; F = 1/TR; df = 1/T; N_freq = N/2 + 1; %#ok<NASGU>
     Y_all_hrfs = zeros(length(ts), length(condition_names));
     P2_all_hrfs = Y_all_hrfs;
     P1_all_hrfs = zeros(length(1:floor(N/2)+1), length(condition_names));
@@ -494,7 +499,7 @@ if ~isempty(condition_corrs)
     HRF_table_overlap{:, 'besttask_power_overlap'} = power_overlap_all_hrfs;
     HRF_table_difference{:, 'besttask_power_difference'} = power_difference_all_hrfs;
 
-    
+
     save('Task_Condition_Info.mat', 'ts', 'numvolumes','hrf_conditions_table', 'condition_corr_most_correlated_index', ...
         'condition_corrs', 'condition_names', 'hrfstask_fullpowerspectrum', ...
         'hrfstask_powerspectrum', 'max_conditioncorr_powerspectra', 'power_overlap_all_hrfs', 'power_difference_all_hrfs', 'frequencies', 'hrf_conditions')
@@ -505,7 +510,7 @@ writematrix(Data.Confounds.Nineparam, '9p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Eightparam, '8p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Sixmotionparam, '6p_motion_regressors.txt', 'Delimiter', ' ')
 % include versions with an intercept column, in case you regress without
-% demeaning 
+% demeaning
 intercept = ones(size(Data.Confounds.Eightparam,1),1);
 writematrix([intercept, Data.Confounds.Nineparam], '9p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Eightparam], '8p_regressors_intercept.txt', 'Delimiter', ' ')
@@ -569,8 +574,9 @@ end
 % We can put High Subepe as a combination of high subepe and high WMCSF,
 % both are great and grab similar ICs, overall should capture Subepe well!
 % The downside, however, is potentially removing true signal that is
-% bleeding off GM and into WM/CSF. 
+% bleeding off GM and into WM/CSF.
 classification_table{:, 'High_Subepe'} = logical(classification_table.High_Subepe + classification_table.High_WMCSF);
+High_Subepe_ICs = find(classification_table{:, 'High_Subepe'} == 1);
 
 % Spikiness as a problem only really exists IF there are spikes in the data
 % at all. So put in a min cut off of norm 5, so that if none exist, there
@@ -594,7 +600,7 @@ end
 % with high lowfreq, which in and of itself is not likely to be bad.
 bad_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
     'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', 'High_Spikiness', ...
-    'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'}; 
+    'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'};
 networks_classification_labels = {'High_MedialVisual', 'High_SensoryMotor', ...
     'High_DorsalAttention', 'High_VentralAttention', 'High_FrontoParietal', ...
     'High_DefaultModeNetwork', 'High_Subcortical'};
@@ -640,7 +646,7 @@ Highnoise_indices = sum(table2array(bad_classification_table), 2) > 0;
 Highnoise_ICs = ICs(Highnoise_indices);
 
 % all 3 of the best things are classified high
-HighSig_indices = (sum(table2array(best_classification_table), 2) == width(best_classification_table)); 
+HighSig_indices = (sum(table2array(best_classification_table), 2) == width(best_classification_table));
 HighSig_ICs = ICs(HighSig_indices); % in which case, we should always label as signal just in case! Err on side of caution of keeping good signal!
 
 % Also make something to mark whether it has any good classification tags
@@ -679,7 +685,7 @@ high_network_props = reshape(high_network_props, size(network_props));
 
 % the following will overcome will overcome if low smoothness is the only
 % issue, or even motion/DVARS, but only if network overlap, GM, and best
-% power are all high. 
+% power are all high.
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
     (classification_final_table{:, 'High_GM'} == 1) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);
@@ -700,27 +706,35 @@ while stop_num > 0
     % if it is labeled as high noise, it could be saved if it has good
     % Network Overlap and great HRF overlap
     if ismember(signal_idx(g), Highnoise_ICs) == 1
-        % looks like noise, but make sure it is not saved by network
-        % overlap or being high signal before labeling as noise
-        if (ismember(signal_idx(g), Network_Overlap_ICs) == 0) && (ismember(signal_idx(g), HighSig_ICs) == 0)
-            stop_num = stop_num - 1;
-            % mark as noise!
-            signal_decision(g) = 0; %#ok<AGROW> 
-        else
+        % looks like noise, but if it has high network overlap orhigh signal mark as
+        % signal. Otherwise mark as noise.
+        if ismember(signal_idx(g), Network_Overlap_ICs) == 1
             stop_num = stop_num + 1;
-            % mark as signal
-            signal_decision(g) = 1; %#ok<AGROW> 
+            % mark as signal!
+            signal_decision(g) = 1; %#ok<AGROW>
+        elseif (ismember(signal_idx(g), HighSig_ICs) == 1) %&& (ismember(signal_idx(g), High_Subepe_ICs) == 0)
+            % Even if it is a high signal, if it is high
+            % subepe, do not save it (because Subepe can very easily hide
+            % as signal since it usually has good frequencies and time
+            % series, and can bleed into subcortical GM)
+            stop_num = stop_num + 1;
+            % mark as noise!
+            signal_decision(g) = 1; %#ok<AGROW>
+        else
+            stop_num = stop_num - 1;
+            % mark as noise
+            signal_decision(g) = 0; %#ok<AGROW>
         end
     elseif ismember(signal_idx(g), HasSig_ICs) == 1
         % Needs to have at least one signal-like marking
         stop_num = stop_num + 1;
         % mark as signal
-        signal_decision(g) = 1; %#ok<AGROW> 
+        signal_decision(g) = 1; %#ok<AGROW>
     else
         % if it has no signal-like markings, mark as noise
         stop_num = stop_num - 1;
         % mark as signal
-        signal_decision(g) = 0; %#ok<AGROW> 
+        signal_decision(g) = 0; %#ok<AGROW>
     end
        % if stop num went above tolerance, set it back to tolerance
        if stop_num > tolerance
@@ -755,7 +769,7 @@ if ~isempty(condition_names)
 end
 
 
-% add on classification labels to signal_checker_table 
+% add on classification labels to signal_checker_table
 % One column for good, one for bad, one for networks, one for tasks (if it
 % exists)
 % good first:
@@ -842,7 +856,7 @@ Results.noise_ICs = noise_ICs;
 % a reference if every needed.
 %%%%% Update IC_checker_updated_table variable above before
 %%%%% re-evaluating everything below
-% need to reconvert table to not classification column(s) 
+% need to reconvert table to not classification column(s)
 cut_off_table = IC_checker_table(:,{'PotentialICs', 'SignalLabel', 'HighSignalLabel', 'HighNoiseLabel'});
 close_IC_checker_updated_array = table2array(cut_off_table);
 % update noise_indices
@@ -900,7 +914,7 @@ signal_prob = all_prob(:,:,:,signal_ICs);
 noise_prob_info.ImageSize = size(noise_prob);
 noise_prob_info.DisplayIntensityRange = [0.9 1];
 noise_prob_info.Datatype = 'single';
-   
+
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
 signal_prob_info.PixelDimensions = signal_prob_info.PixelDimensions(1:length(size(signal_prob))); % fixed in case only one signal IC is selected
@@ -914,9 +928,9 @@ niftiwrite(noise_prob, 'NoiseICs', noise_prob_info, 'Compressed', true)
 niftiwrite(signal_prob, 'SignalICs', signal_prob_info, 'Compressed', true)
 
 % Now compress noise and signal, with only max probabilities per voxel
-[~, ~] = max(all_prob, [], 4); 
-[noise_prob_1D, noise_prob_ind] = max(all_prob(:,:,:,noise_ICs), [], 4); 
-[signal_prob_1D, signal_prob_ind] = max(all_prob(:,:,:,signal_ICs), [], 4); 
+[~, ~] = max(all_prob, [], 4);
+[noise_prob_1D, noise_prob_ind] = max(all_prob(:,:,:,noise_ICs), [], 4);
+[signal_prob_1D, signal_prob_ind] = max(all_prob(:,:,:,signal_ICs), [], 4);
 
 % Update headers for the 3D images
 noise_prob_info.ImageSize = noise_prob_info.ImageSize(1:end-1);
@@ -936,6 +950,7 @@ thresholded_noise = noise_prob_1D > 0.949;
 thresholded_signal = signal_prob_1D > 0.949;
 noise_alone = thresholded_noise .* ~thresholded_signal;
 signal_and_noise_overlap = thresholded_signal - noise_alone; % should just be 1 for signal, and -1 for noise
+
 
 % write out the masks of highest probability
 niftiwrite(noise_prob_1D, 'NoiseICOverlap', noise_prob_info, 'Compressed', true)
@@ -1026,7 +1041,7 @@ nineparam_regress_command = ['fsl_glm -i ', task_dir, '/funcfile.nii.gz -d ', ta
 fprintf(['Running: ', nineparam_regress_command, '\n'])
 [~, ~] = call_fsl(nineparam_regress_command);
 
-% add Tmean back onto 8 & 9 parameter 
+% add Tmean back onto 8 & 9 parameter
 tmean_add_8p_command = ['fslmaths ', prefix, '_8p_', suffix, ' -add ', task_dir, '/tmean_funcfile.nii.gz ', prefix, '_8p_', suffix];
 tmean_add_9p_command = ['fslmaths ', prefix, '_9p_', suffix, ' -add ', task_dir, '/tmean_funcfile.nii.gz ', prefix, '_9p_', suffix];
 [~, ~] = call_fsl(tmean_add_8p_command);

@@ -487,7 +487,7 @@ GMWMmask="${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
 Subepemask="${output_regionmask_dir}/Subepe_prob.nii.gz"
 WMCSFmask="${output_regionmask_dir}/WMandCSF_mask.nii.gz"
 GMCSFmask="${output_regionmask_dir}/GMandCSF_mask.nii.gz"
-GMWMmask="${output_regionmask_dir}/GMandWM_mask.nii.gz"
+GMandWMmask="${output_regionmask_dir}/GMandWM_mask.nii.gz"
 NotGMmask="${output_regionmask_dir}/NotGM_prob.nii.gz"
 
 
@@ -600,6 +600,12 @@ echo "    Brain Network Template Calculated. Now finally do all the relevant cal
 #calcfile="${ROIcalcfol}/highprob_tmp_prob.nii.gz"
 #calcfile="${mel_fol}/ICprobabilities.nii.gz"
 calcfile="${mel_fol}/melodic_IC_abs.nii.gz"
+
+# All voxels
+fslmaths "${calcfile}" -mul "${funcmask}" "${ROIcalcfol}/allICA_tmp_weighted.nii.gz"
+fslstats -t "${ROIcalcfol}/allICA_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
+awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/All_ICmean.txt
+awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/All_ICnumvoxels.txt
 
 # GM voxels
 fslmaths "${calcfile}" -mul "${GMmask}" "${ROIcalcfol}/GMICA_tmp_weighted.nii.gz"
