@@ -474,9 +474,7 @@ if cicada == 1
     % random ICs that look like high enough GM coverage, but are not at
     % all, and are instead dominated by higher frequency noise). So, most
     % important are power overlap and GM overlap. Also anything with 2 ICs
-    % as signal or less need to be cut out, as 2 is a safety number and
-    % very lenient. The data must be truly horrid to not have greater than
-    % 2 ICs kept as signal.
+    % as signal or less need to be cut out, as 2 is a safety number
     Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal);
 
     % add to final qc table

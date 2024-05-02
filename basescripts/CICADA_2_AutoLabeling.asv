@@ -165,7 +165,7 @@ end
 % (1a) Approximate overlap with mean and numvoxels
 
 % We can just make tables for everything too
-WholeBrain_labels = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh'};
+WholeBrain_labels = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh', 'All'};
 ROI_labels = {'GMWM', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 InOut_labels = {'Inbrain', 'Outbrain'};
 Freq_labels = {'Lowfreq', 'BOLDfreq', 'Highfreq'};
@@ -189,7 +189,7 @@ ROI_compare_labels = {'GM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 ROINetworks_labels = [ROI_labels, Networks_labels];
 ROINetworks_genprops_table = table();
 for i1 = 1:length(ROINetworks_labels)
-    ROINetworks_genprops_table{:,ROINetworks_labels{i1}} = ICsum_table{:,ROINetworks_labels{i1}} ./ sum(ICsum_table{:, ROI_compare_labels},2);
+    ROINetworks_genprops_table{:,ROINetworks_labels{i1}} = ICsum_table{:,ROINetworks_labels{i1}} ./ ICsum_table{:, 'All'}; %sum(ICsum_table{:, ROI_compare_labels},2);
 end
 ROI_genprops_table = table(); ROI_genprops_table{:, ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} = ROINetworks_genprops_table{:,Networks_labels};
@@ -215,9 +215,14 @@ for i1 = 1:length(ROI_relprops_labels)
 end
 
 % calculate and add in WMCSF here too
-WM_CSF_relmean = mean([ROI_relprops_table{:, 'WM'}, ROI_relprops_table{:,'CSF'}],2);
+WM_CSF_relmean = normalize(2*ROI_relprops_table.WM + ROI_relprops_table.CSF, "range"); % good because needs mainly WM with a decent amount of CSF in it to be true subepe
 ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
+
+% Grab maximum WMCSF value and make sure that is removed no matter what
+% because it is very likely to be subependymal which will otherwise look
+% good
+% subepe_max_index =  WM_CSF_relmean == max(WM_CSF_relmean));
 
 % Inbrain Outbrain should just be compared to themselves for gen props
 InOut_compare_labels = {'Inbrain', 'Outbrain'};
@@ -571,6 +576,7 @@ end
 % The downside, however, is potentially removing true signal that is
 % bleeding off GM and into WM/CSF. 
 classification_table{:, 'High_Subepe'} = logical(classification_table.High_Subepe + classification_table.High_WMCSF);
+High_Subepe_ICs = find(classification_table{:, 'High_Subepe'} == 1);
 
 % Spikiness as a problem only really exists IF there are spikes in the data
 % at all. So put in a min cut off of norm 5, so that if none exist, there
@@ -700,16 +706,24 @@ while stop_num > 0
     % if it is labeled as high noise, it could be saved if it has good
     % Network Overlap and great HRF overlap
     if ismember(signal_idx(g), Highnoise_ICs) == 1
-        % looks like noise, but make sure it is not saved by network
-        % overlap or being high signal before labeling as noise
-        if (ismember(signal_idx(g), Network_Overlap_ICs) == 0) && (ismember(signal_idx(g), HighSig_ICs) == 0)
-            stop_num = stop_num - 1;
-            % mark as noise!
-            signal_decision(g) = 0; %#ok<AGROW> 
-        else
+        % looks like noise, but if it has high network overlap orhigh signal mark as
+        % signal. Otherwise mark as noise.
+        if ismember(signal_idx(g), Network_Overlap_ICs) == 1
             stop_num = stop_num + 1;
-            % mark as signal
+            % mark as signal!
             signal_decision(g) = 1; %#ok<AGROW> 
+        elseif (ismember(signal_idx(g), HighSig_ICs) == 1) %&& (ismember(signal_idx(g), High_Subepe_ICs) == 0)
+            % Even if it is a high signal, if it is high
+            % subepe, do not save it (because Subepe can very easily hide
+            % as signal since it usually has good frequencies and time
+            % series, and can bleed into subcortical GM)
+            stop_num = stop_num + 1;
+            % mark as noise!
+            signal_decision(g) = 1; %#ok<AGROW> 
+        else
+            stop_num = stop_num - 1;
+            % mark as noise
+            signal_decision(g) = 0; %#ok<AGROW> 
         end
     elseif ismember(signal_idx(g), HasSig_ICs) == 1
         % Needs to have at least one signal-like marking
@@ -936,6 +950,7 @@ thresholded_noise = noise_prob_1D > 0.949;
 thresholded_signal = signal_prob_1D > 0.949;
 noise_alone = thresholded_noise .* ~thresholded_signal;
 signal_and_noise_overlap = thresholded_signal - noise_alone; % should just be 1 for signal, and -1 for noise
+
 
 % write out the masks of highest probability
 niftiwrite(noise_prob_1D, 'NoiseICOverlap', noise_prob_info, 'Compressed', true)
