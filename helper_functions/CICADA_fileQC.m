@@ -39,7 +39,7 @@ confounds_fd = table2array(allconfounds(:,{'framewise_displacement'}));
 
 % Get GM prob mask and create GM mask and not GM mask for denoised
 % and original files
-GM_prob_file = [cleaned_dir, '/../region_masks/GMWMlenient_prob.nii.gz']; % can reach into WM that directly neighbors GM, which often corresponds with smooth signal
+GM_prob_file = [cleaned_dir, '/../region_masks/GM_prob.nii.gz']; % can reach into WM that directly neighbors GM, which often corresponds with smooth signal
 WMCSF_prob_file = [cleaned_dir, '/../region_masks/Subepe_prob.nii.gz'];
 CSF_prob_file = [cleaned_dir, '/../region_masks/CSF_prob.nii.gz'];
 Edge_prob_file = [cleaned_dir, '/../region_masks/Edge_prob.nii.gz'];

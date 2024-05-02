@@ -11,7 +11,7 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, to
 % standard tolerance of 4 is a good baseline. If you increase that number,
 % you may label more ICs as signal. Decreasing it may label less ICs as signal.
 
-% General Method of This Script:s
+% General Method of This Script:
 % This script evaluates each IC to determine if it is more likely to be signal or noise. 
 % ICs are first ordered from most to least likely to be signal. This is
 % determined based on GM spatial overlap, powerspectrum overlap with hrf
@@ -142,7 +142,7 @@ Layer_Factors = {'WholeBrain', 'InOutBrain', 'Networks', 'Regions', 'Power', 'Sm
 Layer_WholeBrain = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh'};
 Layer_InOutBrain = {'Inbrain', 'Outbrain'};
 Layer_Networks = {'MedialVisual', 'SensoryMotor', 'DorsalAttention', 'VentralAttention', 'FrontoParietal', 'DefaultModeNetwork', 'Subcortical'};
-Layer_Regions = {'Signal', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'}; % all smaller regions
+Layer_Regions = {'GMWM', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'}; % all smaller regions
 Layer_Power = {'Lowfreq', 'BOLDfreq', 'Highfreq'};
 Layer_Smoothness = {'Smoothing_Retention'};
 Layer_Corr = {'DVARS', 'FD'};
@@ -166,7 +166,7 @@ end
 
 % We can just make tables for everything too
 WholeBrain_labels = {'fullvolume_smoothed_nothresh', 'fullvolume_nothresh'};
-ROI_labels = {'Signal', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
+ROI_labels = {'GMWM', 'GM', 'WM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 InOut_labels = {'Inbrain', 'Outbrain'};
 Freq_labels = {'Lowfreq', 'BOLDfreq', 'Highfreq'};
 Networks_labels = {'MedialVisual', 'SensoryMotor', 'DorsalAttention', 'VentralAttention', 'FrontoParietal', 'DefaultModeNetwork', 'Subcortical'};
@@ -185,7 +185,7 @@ Tables.ICmean = ICmean_table; Tables.ICnumvoxels = ICnumvoxels_table; Tables.ICs
 
 % Now Calculate the proportaions for relevant things:
 % For ROIs and Networks, just divide by the following:
-ROI_compare_labels = {'Signal', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
+ROI_compare_labels = {'GM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 ROINetworks_labels = [ROI_labels, Networks_labels];
 ROINetworks_genprops_table = table();
 for i1 = 1:length(ROINetworks_labels)
@@ -193,6 +193,13 @@ for i1 = 1:length(ROINetworks_labels)
 end
 ROI_genprops_table = table(); ROI_genprops_table{:, ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} = ROINetworks_genprops_table{:,Networks_labels};
+
+% Update Subepe to be more fully captured, just use WM+CSF because sometimes
+% Subepe extends way outside of Subepe mask, which is a good mask, but
+% strict and will not always catch it.
+WM_CSF = ROI_genprops_table{:, 'WM'} + ROI_genprops_table{:,'CSF'};
+ROI_genprops_table{:, 'WMCSF'} = WM_CSF;
+
 Tables.ROI_generalprops_table = ROI_genprops_table;
 Tables.Networks_generalprops_table = Networks_genprops_table;
 
@@ -204,8 +211,12 @@ ROI_relprops_table{:,ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 % Recalculate noise compartments by dividing by signal:
 for i1 = 1:length(ROI_relprops_labels)
     ROI_relprops_table{:, ROI_relprops_labels{i1}} = ROINetworks_genprops_table{:,ROI_relprops_labels{i1}} ...
-        ./ (ROINetworks_genprops_table{:,'Signal'} + ROINetworks_genprops_table{:,ROI_relprops_labels{i1}});
+        ./ (ROINetworks_genprops_table{:,'GM'} + ROINetworks_genprops_table{:,ROI_relprops_labels{i1}});
 end
+
+% calculate and add in WMCSF here too
+WM_CSF_relmean = mean([ROI_relprops_table{:, 'WM'}, ROI_relprops_table{:,'CSF'}],2);
+ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
 
 % Inbrain Outbrain should just be compared to themselves for gen props
@@ -218,13 +229,13 @@ Tables.InOutBrain_generalprops_table = InOut_genprops_table;
 
 % Outbrain relative props can be based on signal as well
 InOut_relprops_table = InOut_genprops_table;
-InOut_relprops_table{:, 'Outbrain'} = InOut_relprops_table{:, 'Outbrain'} ./ (ROINetworks_genprops_table{:,'Signal'} + InOut_relprops_table{:, 'Outbrain'});
+InOut_relprops_table{:, 'Outbrain'} = InOut_relprops_table{:, 'Outbrain'} ./ (ROINetworks_genprops_table{:,'GM'} + InOut_relprops_table{:, 'Outbrain'});
 Tables.InOut_relativeprops_table = InOut_relprops_table;
 
 % While we are here, let's initialize IC number information (we needed to
 % readmatrix some files first)
 % Grab number of ICs and explained variance:
-ICs = (1:length(ROI_genprops_table{:,'Signal'}))';
+ICs = (1:length(ROI_genprops_table{:,'GM'}))';
 ICs_table = array2table(ICs, 'VariableNames', {'ICs'});
 IC_exp_var = readmatrix('ROIcalcs/IC_exp_variance.txt');
 IC_exp_var = IC_exp_var ./ 100; % put it in decimal places
@@ -315,9 +326,12 @@ Data.lowfreq_cutoff = 0.008; Data.highfreq_cutoff = 0.15;
 % Calculate overlap similarity and record in table, this may be added to
 % later, consider not normalizing by range here for better outlier
 % comparison later
-HRF_table = table();
-HRF_table{:, 'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp' .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
-Tables.HRF_table = HRF_table;
+HRF_table_overlap = table();
+HRF_table_difference = table();
+HRF_table_overlap{:, 'general_power_overlap'} = sum(Data.HRF_general.hrf_power_bp' .* Data.Powers)'; % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
+HRF_table_difference{:, 'general_power_difference'} = sum((Data.HRF_general.hrf_power_bp' - Data.Powers).^2)'; % A bigger value means the power spectrum is worse or more different from planned HRF
+Tables.HRF_table_overlap = HRF_table_overlap;
+Tables.HRF_table_difference = HRF_table_difference;
 
 % (2b) Calculate actual measured proportions, easy to do manually.
 LowfreqIC_prop = LowfreqIC ./ (LowfreqIC+BOLDfreqIC+HighfreqIC);
@@ -348,11 +362,13 @@ Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
 Results.Confounds = Data.Confounds;  
 
-% Spikieness or overrideing drift can be based on magnitude of normalized max vs mean 
+% Spikiness or overrideing drift can be based on magnitude of normalized max vs mean 
 ts_detrend = detrend(Data.TimeSeries,1);
-spikieness = (max(abs(ts_detrend)) ./ mean(abs(ts_detrend)))'; % but honestly, not necessary, and not great with some sensory motor
-Data.Spikiness = spikieness;
-Results.Spikieness = spikieness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
+Spikiness = max(abs(ts_detrend))'; % a normalized response with larger values had greater spikes
+Data.Spikiness = Spikiness;
+Spikiness_table = table();
+Spikiness_table{:, 'Spikiness'} = Spikiness;
+Results.Spikiness = Spikiness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
 
 % Calculate and create Correlations table
 Corr_genprops_table = table();
@@ -472,14 +488,16 @@ if ~isempty(condition_corrs)
     % idea is helps us find outliers in subjects later, where power overlap
     % is simply more poor
     power_overlap_all_hrfs = sum(max_conditioncorr_powerspectra .* Ps', 2); % a higher sum for an IC indicates more power spectrum overlap with expected BOLD response
+    power_difference_all_hrfs = sum((max_conditioncorr_powerspectra - Ps').^2, 2); % A bigger value means the power spectrum is worse or more different from planned HRF
     hrfstask_powerspectrum = P1_all_hrfs_norm;
     hrfstask_fullpowerspectrum = P2_all_hrfs;
-    HRF_table{:, 'besttask_power_overlap'} = power_overlap_all_hrfs;
+    HRF_table_overlap{:, 'besttask_power_overlap'} = power_overlap_all_hrfs;
+    HRF_table_difference{:, 'besttask_power_difference'} = power_difference_all_hrfs;
 
     
     save('Task_Condition_Info.mat', 'ts', 'numvolumes','hrf_conditions_table', 'condition_corr_most_correlated_index', ...
         'condition_corrs', 'condition_names', 'hrfstask_fullpowerspectrum', ...
-        'hrfstask_powerspectrum', 'max_conditioncorr_powerspectra', 'power_overlap_all_hrfs', 'frequencies', 'hrf_conditions')
+        'hrfstask_powerspectrum', 'max_conditioncorr_powerspectra', 'power_overlap_all_hrfs', 'power_difference_all_hrfs', 'frequencies', 'hrf_conditions')
 end
 
 % save standard 9Param and 8Param for comparison or use later, and write to mat file for fsl glm in future:
@@ -498,12 +516,20 @@ writematrix([intercept, Data.Confounds.Sixmotionparam], '6p_motion_regressors_in
 
 % Calculate the highest normalized HRF matching (whether to a general HRF
 % frequency range, or HRFs in response to tasks)
-% get a nromalized range of HRF_table first
-HRF_table_norm = normalize(Tables.HRF_table, "range");
-HRF_table{:, 'best_power_overlap_norm'} = max(HRF_table_norm{:,:}, [], 2); % if there is no task, it will just be the same as general but normalized
-HRF_table_norm{:, 'best_power_overlap_norm'} = HRF_table.best_power_overlap_norm;
-Tables.HRF_table = HRF_table;
-Tables.HRF_table_norm = HRF_table_norm;
+% get a normalized range of HRF_table first
+HRF_table_overlap_norm = normalize(Tables.HRF_table_overlap, "range");
+HRF_table_overlap{:, 'best_power_overlap_norm'} = max(HRF_table_overlap_norm{:,:}, [], 2); % if there is no task, it will just be the same as general but normalized
+HRF_table_overlap_norm{:, 'best_power_overlap_norm'} = HRF_table_overlap.best_power_overlap_norm;
+
+HRF_table_difference_norm = normalize(Tables.HRF_table_difference, "range");
+HRF_table_difference{:, 'best_power_difference_norm'} = min(HRF_table_difference_norm{:,:}, [], 2); % if there is no task, it will just be the same as general but normalized
+HRF_table_difference_norm{:, 'best_power_difference_norm'} = HRF_table_difference.best_power_difference_norm;
+
+Tables.HRF_table_overlap = HRF_table_overlap;
+Tables.HRF_table_overlap_norm = HRF_table_overlap_norm;
+
+Tables.HRF_table_difference = HRF_table_difference;
+Tables.HRF_table_difference_norm = HRF_table_difference_norm;
 
 
 % (4) Putting it all together!
@@ -512,12 +538,12 @@ Tables.HRF_table_norm = HRF_table_norm;
 
 % the general values are true proportions
 feature_general_table = [ICs_table, ROI_genprops_table, InOut_genprops_table, ...
-    Freq_genprops_table, Corr_genprops_table, Smoothness_table, HRF_table, ...
+    Freq_genprops_table, Corr_genprops_table, Smoothness_table, HRF_table_overlap, HRF_table_difference, ...
     Networks_genprops_table, condition_corrs_table];
 % relative table is the one we will use for kmeans things:
 feature_relative_table = [ICs_table, ROI_relprops_table, InOut_relprops_table, ...
-    Freq_relprops_table, Corr_genprops_table, Smoothness_table, HRF_table, ...
-    Networks_genprops_table, condition_corrs_table];
+    Freq_relprops_table, Corr_genprops_table, Smoothness_table, HRF_table_overlap, HRF_table_difference, ...
+    Networks_genprops_table, condition_corrs_table, Spikiness_table];
 % norm table can put things in perspective for use
 feature_table_norm = [feature_relative_table(:,1), normalize(feature_relative_table(:,2:end))]; % normalized version
 feature_labels = feature_relative_table.Properties.VariableNames;
@@ -540,21 +566,34 @@ for i1 = 2:length(feature_labels)
     classification_table{:, ['Low_', feature_labels{i1}]} = val_idx == min_feats(1);
 end
 
+% We can put High Subepe as a combination of high subepe and high WMCSF,
+% both are great and grab similar ICs, overall should capture Subepe well!
+% The downside, however, is potentially removing true signal that is
+% bleeding off GM and into WM/CSF. 
+classification_table{:, 'High_Subepe'} = logical(classification_table.High_Subepe + classification_table.High_WMCSF);
+
+% Spikiness as a problem only really exists IF there are spikes in the data
+% at all. So put in a min cut off of norm 5, so that if none exist, there
+% will not be good/better data removed! I am just trying to catch if one is
+% horrendous
+classification_table{:, 'High_Spikiness'} = (classification_table.High_Spikiness .* (Spikiness > 5)) == 1;
+
 % Start parsing out what is important to look at from classification
-best_classification_labels = {'High_Signal', 'High_Smoothing_Retention', 'High_best_power_overlap_norm'};
+best_classification_labels = {'High_GM', 'High_Smoothing_Retention', 'High_best_power_overlap_norm'};
 % there is no best task power if there are no condition cors
 % because highfreq is relative to boldfreq, a low relative highfreq is a
 % good classification
 if ~isempty(condition_corrs)
-    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'High_besttask_power_overlap', 'Low_Highfreq', 'High_WM'};
+    othergood_classification_labels = {'High_general_power_overlap', 'High_besttask_power_overlap', 'Low_Highfreq'};
 else
-    othergood_classification_labels = {'High_GM', 'High_general_power_overlap', 'Low_Highfreq', 'High_WM'};
+    othergood_classification_labels = {'High_general_power_overlap', 'Low_Highfreq'};
 end
+
 
 % Low BOLDfreq is not enough to be bad, because it could be low BOLDfreq
 % with high lowfreq, which in and of itself is not likely to be bad.
-bad_classification_labels = {'Low_Signal', 'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
-    'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', ...
+bad_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
+    'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', 'High_Spikiness', ...
     'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'}; 
 networks_classification_labels = {'High_MedialVisual', 'High_SensoryMotor', ...
     'High_DorsalAttention', 'High_VentralAttention', 'High_FrontoParietal', ...
@@ -623,7 +662,7 @@ Results.HighSig_ICs = HighSig_ICs;
 % frequency (because noise could be in BOLD and smooth, like
 % WMCSF signal)
 [~, signal_idx] = sort(normalize(feature_relative_table{:,'Smoothing_Retention'}, "range") .* ...
-    normalize(feature_relative_table{:,'Signal'}, "range").^2 .* ...
+    normalize(feature_relative_table{:,'GM'}, "range").^2 .* ...
     normalize(feature_relative_table{:,'best_power_overlap_norm'}, "range"), 'descend');
 
 % A non-smooth IC can be saved with high network overlap if HRF and
@@ -642,7 +681,7 @@ high_network_props = reshape(high_network_props, size(network_props));
 % issue, or even motion/DVARS, but only if network overlap, GM, and best
 % power are all high. 
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
-    (classification_final_table{:, 'High_Signal'} == 1) ...
+    (classification_final_table{:, 'High_GM'} == 1) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);
 Network_Overlap_ICs = ICs(Network_Overlap_indices);
 

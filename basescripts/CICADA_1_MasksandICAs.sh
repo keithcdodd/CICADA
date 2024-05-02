@@ -359,25 +359,20 @@ fslmaths "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thrP 67 -bin "${
 # Now calculate edge after removing susceptibility. Perimeter of funcmask, but not including susceptibility areas (i.e., edge must have strong enough signal)
 fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz"
-fslmaths ${funcmask} -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
+fslmaths ${funcmask} -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -sub "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Edge_mask.nii.gz"
 
 ### Calculate GM, WM, and CSF by subtracting out Edge (perimeter) and susceptibility
 fslmaths "${output_regionmask_dir}/GMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GM_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/GM_mask.nii.gz" # be more lenient with GM, since not nearly all clear GM regions are captured at 67%
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GM_mask.nii.gz" # be more lenient with GM, since not nearly all clear GM regions are captured at 67%
 fslmaths "${output_regionmask_dir}/WMprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/WM_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WM_mask.nii.gz"
 fslmaths "${output_regionmask_dir}/CSFprob_tmp_resam.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/CSF_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/CSF_mask.nii.gz"
 
-# can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% GM, a 1 is 100% not GM
+# can also be helpful to calculate a completely not GM prob (inverse prob). a 0 is 100% likly to be GM, a 0.6 is 40% likely to be GM, a 1 is 0% likely to be GM
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -sub "${output_regionmask_dir}/GM_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GM_inv_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_inv_prob.nii.gz" -thr 0.99 -bin "${output_regionmask_dir}/GM_inv_mask.nii.gz"
-
-# also make lenient GM, WM, CSF masks, which might be useful for making a more lenient signal mask later
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/GM_lenient_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/WM_lenient_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/CSF_lenient_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_inv_prob.nii.gz" -thr 0.6 -bin "${output_regionmask_dir}/GM_inv_mask.nii.gz" # so this mask is everywhere where GM is 40% or lower likely
 
 # Make an extended GM_prob which goes more into outbrain, just so this can be more taken into account
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -bin "${output_regionmask_dir}/GM_tmp_allmask.nii.gz"
@@ -385,12 +380,14 @@ fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -fmean -sub "${output_regionm
 fslmaths "${output_regionmask_dir}/GM_tmp_outerprob.nii.gz" -add "${output_regionmask_dir}/GM_prob.nii.gz" "${output_regionmask_dir}/GM_extended_prob.nii.gz" # this is GM probability, but extended out a little bit. Useful for better QC testing (e.g., grab outbrain not potentially impacted by GM)
 
 # Can calculate an "inner CSF" by multiplying by an eroded anatmask_resam -- this may be helpful for a more target inner CSF measure. This could be in contrast to OutbrainOnly
+fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/CSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerCSF_mask.nii.gz"
 
 # Also do inner WM, this will be useful to make subepe mask
+fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/WM_prob.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -mul "${output_regionmask_dir}/WM_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/InnerWM_mask.nii.gz"
 
-# OK, now get subepe by fmean both innercsf and inner wm, multiplying, and scaling
+# OK, now get Subepe
 fslmaths "${output_regionmask_dir}/CSF_prob.nii.gz" -mul "${output_regionmask_dir}/InnerCSF_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz"
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -mul "${output_regionmask_dir}/InnerWM_mask.nii.gz" -fmean "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz"
 fslmaths "${output_regionmask_dir}/InnerCSF_tmp_smoothed.nii.gz" -mul "${output_regionmask_dir}/InnerWM_tmp_smoothed.nii.gz" -mul 4 "${output_regionmask_dir}/Subepe_tmp_prob.nii.gz"
@@ -401,10 +398,10 @@ fslmaths "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz" -uthr 1 -add "
 fslmaths "${output_regionmask_dir}/Subepe_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
 
 # Calculate WMorCSF, GMorCSF, and GMorWM regions, can be helpful
-fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/WMorCSF_tmp_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WMorCSF_mask.nii.gz"
-fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMorCSF_tmp_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMorCSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WMorCSF_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/WMorCSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/WMorCSF_mask.nii.gz"
+fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorCSF_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/GMorCSF_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMorCSF_mask.nii.gz"
 fslmaths "${output_regionmask_dir}/GM_prob.nii.gz" -add "${output_regionmask_dir}/WM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -thr 0 "${output_regionmask_dir}/GMorWM_prob.nii.gz" # don't include subepe in there! It is different
 fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/GMorWM_mask.nii.gz"
 
@@ -420,11 +417,12 @@ fslmaths "${output_regionmask_dir}/GMorWM_mask.nii.gz" -sub "${output_regionmask
 #fslmaths "${output_regionmask_dir}/WMandCSF_tmp_WMdilation.nii.gz" -add "${output_regionmask_dir}/WMandCSF_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz"
 
 # we can make WM final mask more accurate for signal now by removing Subepe from it
+fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WM_adj_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/WM_mask.nii.gz" -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/WM_adj_mask.nii.gz"
 
-# Signal Mask: Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap - this might be most indicative of signal with low chance of noise. Need to sub GM inv mask to make sure we don't accidentally include areas that cannot possibly have GM influence
-fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/GM_inv_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
-fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thrP 33 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # This is a very generous signal mask!
+# Signal Mask: Because WM around GM may have true BOLD signal, we can be more generous with GM by including GMWM overlap. Basically, make sure at least 40% of GM, with at least then 10% being WM (combination needs to be at least 50%)
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/GM_inv_mask.nii.gz" -thr 0 -mul "${funcmask}" "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" # So anything with GM<0.4 is removed
+fslmaths "${output_regionmask_dir}/GMWMlenient_prob.nii.gz" -thr 0.5 -add "${output_regionmask_dir}/GM_mask.nii.gz" -bin "${output_regionmask_dir}/GMWMlenient_mask.nii.gz" # Threshold at 0.5 combination. This is more lenient than just 50%
 # overall the signal mask is where there is at least 1% chance of GM, and GMorWM percentage is above 33% (So CSF is not higher than 67%, or other potential issues). This helps take into account that true signal is smooth and will bleed into neighboring areas.
 
 # also make versions that do not worry about removing edge and susceptibility, in case you want those later
@@ -442,6 +440,7 @@ fslmaths "${output_regionmask_dir}/NotGMorWM_prob.nii.gz" -thrP 67 -bin "${outpu
 ### Calculate Inbrain & Outbrain: funcmask outside of anatomical inbrain+CSF+WMCSF. Inbrain should not include WMCSF or susceptibility, since these regions cannot be trusted.
 # inbrain is simply GMorWM (minus Subepe), especially since this already removes edge and susceptibility and anatomy outside of funcmask
 # subepe should have already been removed, but it doesn't hurt to double check
+fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -thr 0 "${output_regionmask_dir}/Inbrain_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/GMorWM_prob.nii.gz" -thrP 67 -bin -sub "${output_regionmask_dir}/Subepe_mask.nii.gz" -thr 0 -bin "${output_regionmask_dir}/Inbrain_mask.nii.gz"
 # outbrain includes, but is not limited to, CSF. Need to remove GMorWM from funcmask. Outbrain only will also remove edge and susceptibility
 # all of outbrain will include edge, susceptibility, and subepe
@@ -453,27 +452,44 @@ fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -thrP 67 -bin "${output
 
 # outbrainonly ideally does not include susceptibility, edge, csf, or Subepe. We can approximate this pretty well!
 # This makes it so that full funcmask coverage should include: Edge + Suscept + OutbrainOnly + CSF + Subepe + Inbrain
-fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -sub "${output_regionmask_dir}/CSF_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -mul "${funcmask}" -thr 0 "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz"
+fslmaths "${output_regionmask_dir}/Outbrain_prob.nii.gz" -sub "${output_regionmask_dir}/CSF_prob.nii.gz" -sub "${output_regionmask_dir}/Subepe_prob.nii.gz" -sub "${output_regionmask_dir}/Edge_prob.nii.gz" -sub "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -mul "${funcmask}" -sub "${output_regionmask_dir}/anatmask_eroded_resam.nii.gz" -thr 0.1 "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/OutbrainOnly_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/OutbrainOnly_mask.nii.gz"
 
 
 echo "      Functional Space Masks are Computed"
 # relabel these for easier future coding
-Edgemask="${output_regionmask_dir}/Edge_mask.nii.gz"
-GMmask="${output_regionmask_dir}/GM_mask.nii.gz"
-WMmask="${output_regionmask_dir}/WM_adj_mask.nii.gz" # so it does not include Subepe
-CSFmask="${output_regionmask_dir}/CSF_mask.nii.gz"
-InnerCSFmask="${output_regionmask_dir}/InnerCSF_mask.nii.gz"
-Outbrainmask="${output_regionmask_dir}/Outbrain_mask.nii.gz"
-OutbrainOnlymask="${output_regionmask_dir}/OutbrainOnly_mask.nii.gz"
-Susceptmask="${output_regionmask_dir}/Susceptibility_mask.nii.gz"
-Inbrainmask="${output_regionmask_dir}/Inbrain_mask.nii.gz"
-Signalmask="${output_regionmask_dir}/GMWMlenient_mask.nii.gz"
-Subepemask="${output_regionmask_dir}/Subepe_mask.nii.gz"
+#Edgemask="${output_regionmask_dir}/Edge_mask.nii.gz"
+#GMmask="${output_regionmask_dir}/GM_mask.nii.gz"
+#WMmask="${output_regionmask_dir}/WM_adj_mask.nii.gz" # so it does not include Subepe
+#CSFmask="${output_regionmask_dir}/CSF_mask.nii.gz"
+#InnerCSFmask="${output_regionmask_dir}/InnerCSF_mask.nii.gz"
+#Outbrainmask="${output_regionmask_dir}/Outbrain_mask.nii.gz"
+#OutbrainOnlymask="${output_regionmask_dir}/OutbrainOnly_mask.nii.gz"
+#Susceptmask="${output_regionmask_dir}/Susceptibility_mask.nii.gz"
+#Inbrainmask="${output_regionmask_dir}/Inbrain_mask.nii.gz"
+#Signalmask="${output_regionmask_dir}/GMWMlenient_mask.nii.gz"
+#Subepemask="${output_regionmask_dir}/Subepe_mask.nii.gz"
+#WMCSFmask="${output_regionmask_dir}/WMandCSF_mask.nii.gz"
+#GMCSFmask="${output_regionmask_dir}/GMandCSF_mask.nii.gz"
+#GMWMmask="${output_regionmask_dir}/GMandWM_mask.nii.gz"
+#NotGMmask="${output_regionmask_dir}/NotGM_mask.nii.gz"
+
+Edgemask="${output_regionmask_dir}/Edge_prob.nii.gz"
+GMmask="${output_regionmask_dir}/GM_prob.nii.gz"
+WMmask="${output_regionmask_dir}/WM_adj_prob.nii.gz" # so it does not include Subepe
+CSFmask="${output_regionmask_dir}/CSF_prob.nii.gz"
+InnerCSFmask="${output_regionmask_dir}/InnerCSF_prob.nii.gz"
+Outbrainmask="${output_regionmask_dir}/Outbrain_prob.nii.gz"
+OutbrainOnlymask="${output_regionmask_dir}/OutbrainOnly_prob.nii.gz"
+Susceptmask="${output_regionmask_dir}/Susceptibility_prob.nii.gz"
+Inbrainmask="${output_regionmask_dir}/Inbrain_prob.nii.gz"
+GMWMmask="${output_regionmask_dir}/GMWMlenient_prob.nii.gz"
+Subepemask="${output_regionmask_dir}/Subepe_prob.nii.gz"
 WMCSFmask="${output_regionmask_dir}/WMandCSF_mask.nii.gz"
 GMCSFmask="${output_regionmask_dir}/GMandCSF_mask.nii.gz"
-GMWMmask="${output_regionmask_dir}/GMandWM_mask.nii.gz"
-NotGMmask="${output_regionmask_dir}/NotGM_mask.nii.gz"
+GMandWMmask="${output_regionmask_dir}/GMandWM_mask.nii.gz"
+NotGMmask="${output_regionmask_dir}/NotGM_prob.nii.gz"
+
 
 echo "    Copying of Files & Calculating Masks is Done! Now Calculating Relevant TimeSeries!"
 ##############################################################################################################
@@ -513,6 +529,9 @@ else
   echo "      Melodic already complete at ${mel_fol}"
 fi
 
+# create an absolute value melodic IC file
+fslmaths "${mel_fol}/melodic_IC.nii.gz" -abs "${mel_fol}/melodic_IC_abs.nii.gz"
+
 # Merge the probability maps and threshold maps which may prove useful later
 probmapnames="$(ls ${mel_fol}/stats/probmap_* | sort -V)"
 fslmerge -t ${mel_fol}/ICprobabilities.nii.gz ${probmapnames}
@@ -541,7 +560,7 @@ ROIcalcfol="${output_dir}/ROIcalcs"
 awk '{print $1}' ${mel_fol}/melodic_ICstats > ${ROIcalcfol}/IC_exp_variance.txt
 
 # Calculate the higher probabilities to use
-fslmaths ${mel_fol}/ICprobabilities.nii.gz -thr 0.95 "${ROIcalcfol}/highprob_tmp_prob.nii.gz"
+fslmaths "${mel_fol}/ICprobabilities.nii.gz" -thr 0.95 "${ROIcalcfol}/highprob_tmp_prob.nii.gz"
 fslmaths "${ROIcalcfol}/highprob_tmp_prob.nii.gz" -bin "${ROIcalcfol}/highprob_tmp_mask.nii.gz"
 
 # calculate a nonthresholded version of the z stats, absolute valued
@@ -578,7 +597,15 @@ network_template="${template_dir}/network_template_${task_name}.nii.gz"
 #########################################################################################
 # NOW, do all the relevant calculations!
 echo "    Brain Network Template Calculated. Now finally do all the relevant calculations!"
-calcfile="${ROIcalcfol}/highprob_tmp_prob.nii.gz"
+#calcfile="${ROIcalcfol}/highprob_tmp_prob.nii.gz"
+#calcfile="${mel_fol}/ICprobabilities.nii.gz"
+calcfile="${mel_fol}/melodic_IC_abs.nii.gz"
+
+# All voxels
+fslmaths "${calcfile}" -mul "${funcmask}" "${ROIcalcfol}/allICA_tmp_weighted.nii.gz"
+fslstats -t "${ROIcalcfol}/allICA_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
+awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/All_ICmean.txt
+awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/All_ICnumvoxels.txt
 
 # GM voxels
 fslmaths "${calcfile}" -mul "${GMmask}" "${ROIcalcfol}/GMICA_tmp_weighted.nii.gz"
@@ -587,10 +614,10 @@ awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/GM_ICmean.txt
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/GM_ICnumvoxels.txt
 
 # GM WM lenient voxels, labeled as "signal voxels"
-fslmaths "${calcfile}" -mul "${Signalmask}" "${ROIcalcfol}/SignalICA_tmp_weighted.nii.gz"
-fslstats -t "${ROIcalcfol}/SignalICA_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
-awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/Signal_ICmean.txt
-awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/Signal_ICnumvoxels.txt
+fslmaths "${calcfile}" -mul "${GMWMmask}" "${ROIcalcfol}/GMWMICA_tmp_weighted.nii.gz"
+fslstats -t "${ROIcalcfol}/GMWMICA_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
+awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/GMWM_ICmean.txt
+awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/GMWM_ICnumvoxels.txt
 
 # WM voxels
 fslmaths "${calcfile}" -mul "${WMmask}" "${ROIcalcfol}/WMICA_tmp_weighted.nii.gz"
@@ -656,49 +683,49 @@ awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > ${ROIcalcfol}/WMCSF_ICnumvoxe
 # 1: Medial Visual, 2: Sensory Motor, 3: Dorsal Attention, 4: Ventral Attention, 5: FrontoParietal, 6: Default Mode Network, 7: Subcortical
 tag="MedialVisual"
 val="1"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="SensoryMotor"
 val="2"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="DorsalAttention"
 val="3"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="VentralAttention"
 val="4"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="FrontoParietal"
 val="5"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="DefaultModeNetwork"
 val="6"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
 tag="Subcortical"
 val="7"
-fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${Signalmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
+fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
 fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
