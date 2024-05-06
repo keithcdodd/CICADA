@@ -198,7 +198,7 @@ Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} =
 % Subepe extends way outside of Subepe mask, which is a good mask, but
 % strict and will not always catch it.
 WM_CSF = ROI_genprops_table{:, 'WM'} + ROI_genprops_table{:,'CSF'};
-ROI_genprops_table{:, 'WMCSF'} = WM_CSF;
+ROI_genprops_table{:, 'WMCSF'} = WM_CSF; % but the better measure is coming up in relative props
 
 Tables.ROI_generalprops_table = ROI_genprops_table;
 Tables.Networks_generalprops_table = Networks_genprops_table;
@@ -215,7 +215,7 @@ for i1 = 1:length(ROI_relprops_labels)
 end
 
 % calculate and add in WMCSF here too
-WM_CSF_relmean = normalize(2*ROI_relprops_table.WM + ROI_relprops_table.CSF, "range"); % good because needs mainly WM with a decent amount of CSF in it to be true subepe
+WM_CSF_relmean = normalize((ROI_relprops_table.WM .* ROI_relprops_table.CSF) ./ ROI_relprops_table.GM, "range"); % because subepe is a mix of WM and CSF, without GM. 
 ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
 
@@ -752,8 +752,20 @@ signal_indices = logical(signal_indices');
 
 % Give a fail safe incase it is so bad that no ICs are labeled as signal
 if sum(signal_indices) == 0
-    fprintf('WARNING: No ICs were labeled as signal. Will label first IC in best order as signal to allow the rest of the code to run.\n')
+    fprintf('WARNING: No ICs were labeled as signal. Will label first two ICs in best order as signal to allow the rest of the code to run, but the data is bad!\n')
     signal_indices(:,1) = true;
+    signal_indices(:,2) = true;
+    % This means that an exclusion criteria should be that there needs to
+    % be more than 2 ICs labeled as signal
+end
+if sum(signal_indices) < 2
+    fprintf('WARNING: Only 1 IC was labeled as signal. Will label a second one as signal to allow the rest of the code to run, but the data is bad!\n')
+    signal_indices(:,1) = true;
+    if sum(signal_indices) < 2
+        signal_indices(:,2) = true;
+    end
+    % This means that an exclusion criteria should be that there needs to
+    % be more than 2 ICs labeled as signal
 end
 noise_indices = ~signal_indices;
 signal_ICs = ICs(signal_indices);

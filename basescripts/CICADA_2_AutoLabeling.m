@@ -130,11 +130,6 @@ end
 % Now do things!
 cd(output_dir)
 
-% remove old ic_auto_selection folder if it exists
-%if isfolder('./ic_auto_selection')
-%    rmdir './ic_auto_selection' 's'
-%end
-
 % Now do set up to make future coding easier and faster
 % Describe the first (Factor) and second level layers
 Factors = struct;
@@ -198,12 +193,12 @@ Networks_genprops_table = table(); Networks_genprops_table{:, Networks_labels} =
 % Subepe extends way outside of Subepe mask, which is a good mask, but
 % strict and will not always catch it.
 WM_CSF = ROI_genprops_table{:, 'WM'} + ROI_genprops_table{:,'CSF'};
-ROI_genprops_table{:, 'WMCSF'} = WM_CSF;
+ROI_genprops_table{:, 'WMCSF'} = WM_CSF; % but the better measure is coming up in relative props
 
 Tables.ROI_generalprops_table = ROI_genprops_table;
 Tables.Networks_generalprops_table = Networks_genprops_table;
 
-% For ROI Noise areas, we will make decisions in comparison to signal
+% For ROI Noise areas, we will make decisions in comparison to GM
 % overlap for the IC
 ROI_relprops_labels = {'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'}; % Noise parts only
 ROI_relprops_table = table();
@@ -215,14 +210,9 @@ for i1 = 1:length(ROI_relprops_labels)
 end
 
 % calculate and add in WMCSF here too
-WM_CSF_relmean = normalize(2*ROI_relprops_table.WM + ROI_relprops_table.CSF, "range"); % good because needs mainly WM with a decent amount of CSF in it to be true subepe
+WM_CSF_relmean = normalize((ROI_relprops_table.WM .* ROI_relprops_table.CSF) ./ ROI_relprops_table.GM, "range"); % because subepe is a mix of WM and CSF, without GM. 
 ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
-
-% Grab maximum WMCSF value and make sure that is removed no matter what
-% because it is very likely to be subependymal which will otherwise look
-% good
-% subepe_max_index =  WM_CSF_relmean == max(WM_CSF_relmean));
 
 % Inbrain Outbrain should just be compared to themselves for gen props
 InOut_compare_labels = {'Inbrain', 'Outbrain'};
@@ -586,21 +576,27 @@ classification_table{:, 'High_Spikiness'} = (classification_table.High_Spikiness
 
 % Start parsing out what is important to look at from classification
 best_classification_labels = {'High_GM', 'High_Smoothing_Retention', 'High_best_power_overlap_norm'};
-% there is no best task power if there are no condition cors
+% there is no best task power if there are no condition corrs
 % because highfreq is relative to boldfreq, a low relative highfreq is a
 % good classification
 if ~isempty(condition_corrs)
-    othergood_classification_labels = {'High_general_power_overlap', 'High_besttask_power_overlap', 'Low_Highfreq'};
+    othergood_classification_labels = {'High_general_power_overlap', 'High_besttask_power_overlap'};
 else
-    othergood_classification_labels = {'High_general_power_overlap', 'Low_Highfreq'};
+    othergood_classification_labels = {'High_general_power_overlap'};
 end
 
 
 % Low BOLDfreq is not enough to be bad, because it could be low BOLDfreq
 % with high lowfreq, which in and of itself is not likely to be bad.
+% Also, Low Highfreq is not good enough to be good
+worst_classification_labels = {'Low_GM', 'Low_best_power_overlap_norm'};
+bad_region_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
+    'High_OutbrainOnly', 'High_Outbrain'};
+
 bad_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
     'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', 'High_Spikiness', ...
     'Low_best_power_overlap_norm', 'Low_Smoothing_Retention', 'High_DVARS_Corr', 'High_FD_Corr'}; 
+
 networks_classification_labels = {'High_MedialVisual', 'High_SensoryMotor', ...
     'High_DorsalAttention', 'High_VentralAttention', 'High_FrontoParietal', ...
     'High_DefaultModeNetwork', 'High_Subcortical'};
@@ -611,8 +607,10 @@ for i1 = 1:length(condition_names)
 end
 
 best_classification_table = classification_table(:, best_classification_labels);
+worst_classification_table = classification_table(:, worst_classification_labels);
 othergood_classification_table = classification_table(:, othergood_classification_labels);
 good_classification_table = [best_classification_table, othergood_classification_table];
+bad_region_classification_table = classification_table(:, bad_region_classification_labels);
 bad_classification_table = classification_table(:, bad_classification_labels);
 networks_classification_table = classification_table(:, networks_classification_labels);
 % There are no condition corrs classification if there are no condition
@@ -633,8 +631,10 @@ Tables.classification_table = classification_table;
 Tables.classification_final_table = classification_final_table;
 Tables.classification_general_table = classification_general_table;
 Tables.best_classification_table = best_classification_table;
+Tables.worst_classification_table = worst_classification_table;
 Tables.othergood_classification_table = othergood_classification_table;
 Tables.good_classification_table = good_classification_table;
+Tables.bad_region_classification_table = bad_region_classification_table;
 Tables.bad_classification_table = bad_classification_table;
 Tables.networks_classification_table = networks_classification_table;
 Tables.condition_corrs_classification_table = condition_corrs_classification_table;
@@ -671,7 +671,7 @@ Results.HighSig_ICs = HighSig_ICs;
     normalize(feature_relative_table{:,'GM'}, "range").^2 .* ...
     normalize(feature_relative_table{:,'best_power_overlap_norm'}, "range"), 'descend');
 
-% A non-smooth IC can be saved with high network overlap if HRF and
+% A non-smooth IC could be saved with high network overlap if HRF and
 % signal/GM prop values are also relatively high. This can help save us sometimes
 % (e.g., subcortical is often not very smooth, so could use saving)
 % Not all networks may be found, so it is likely best to do a new kmeans
@@ -683,9 +683,11 @@ curr_val = reshape(network_props, [rows.*cols, 1]);
 high_network_props = val_idx == find(val_C == max(val_C));
 high_network_props = reshape(high_network_props, size(network_props));
 
-% the following will overcome will overcome if low smoothness is the only
+% the following could overcome if low smoothness is the only
 % issue, or even motion/DVARS, but only if network overlap, GM, and best
-% power are all high. 
+% power are all high. We may not use this, in favor of not requiring the
+% use of network overlap, to help make this more applicable to templates
+% other than MNI in the future.
 Network_Overlap_indices = (sum(high_network_props, 2) > 0) & ...
     (classification_final_table{:, 'High_GM'} == 1) ...
     & (classification_final_table{:, 'High_best_power_overlap_norm'} == 1);
@@ -697,49 +699,67 @@ Results.Network_Overlap_ICs = Network_Overlap_ICs;
 % still display all the high networks, just for reference if ever
 % needed/desired
 
+
+% General Rules:
+% (1) Need to have one of the following High GM, High Best Power, or High Smoothness
+% (2) Either need High_GM, or need no other bad region being high
+% (3) High GM and  High Best Power is enough to
+% mark as signal regardless of other negatives
+% (4) Or if no negatives, mark as signal (assuming 1 holds true)
+
+
 % Each time you get noise, drop one in tolerance, if you get signal, add
 % one in tolerance (up to tolerance number), stop when tolerance is 0!
 g = 1;
 signal_decision = [];
 stop_num = tolerance;
 while stop_num > 0
-    % if it is labeled as high noise, it could be saved if it has good
-    % Network Overlap and great HRF overlap
-    if ismember(signal_idx(g), Highnoise_ICs) == 1
-        % looks like noise, but if it has high network overlap orhigh signal mark as
-        % signal. Otherwise mark as noise.
-        if ismember(signal_idx(g), Network_Overlap_ICs) == 1
-            stop_num = stop_num + 1;
-            % mark as signal!
-            signal_decision(g) = 1; %#ok<AGROW> 
-        elseif (ismember(signal_idx(g), HighSig_ICs) == 1) %&& (ismember(signal_idx(g), High_Subepe_ICs) == 0)
-            % Even if it is a high signal, if it is high
-            % subepe, do not save it (because Subepe can very easily hide
-            % as signal since it usually has good frequencies and time
-            % series, and can bleed into subcortical GM)
-            stop_num = stop_num + 1;
-            % mark as noise!
-            signal_decision(g) = 1; %#ok<AGROW> 
+    % (1) Need to have one of the following High GM, High Best Power, or
+    % High Smoothness, and none of the worst (low of them)
+    if (sum(best_classification_table{signal_idx(g),:},2) > 0) && (sum(worst_classification_table{signal_idx(g),:},2) == 0)
+        %(2) Either need High_GM, or need no other bad region being high
+        if (best_classification_table.High_GM(signal_idx(g)) == 1) || (sum(bad_region_classification_table{signal_idx(g),:},2) == 0)
+            % (3) High GM AND either High Best Power, or High Smoothness is enough to
+            % mark as signal. But if not High GM, then need to make sure
+            % there is not another bad classification.
+
+            % OK if High GM and one of the other good things, mark as signal
+            if (best_classification_table.High_GM(signal_idx(g)) == 1) && ...
+                    ((best_classification_table.High_best_power_overlap_norm(signal_idx(g)) == 1) || ...
+                    (best_classification_table.High_Smoothing_Retention(signal_idx(g)) == 1))
+                % Yay, label as signal!
+                stop_num = stop_num + 1;
+                % mark as signal!
+                signal_decision(g) = 1; %#ok<AGROW> 
+
+                % Or if no additional bad things (we already are confirmed to have at least one good thing), mark as signal
+            elseif (sum(bad_classification_table{signal_idx(g), :},2) == sum(bad_region_classification_table{signal_idx(g), :},2))
+                stop_num = stop_num + 1;
+                % mark as signal!
+                signal_decision(g) = 1; %#ok<AGROW> 
+            else
+                % else label as noise
+                stop_num = stop_num - 1;
+                % mark as noise
+                signal_decision(g) = 0; %#ok<AGROW>
+            end
         else
+            % else label as noise
             stop_num = stop_num - 1;
             % mark as noise
-            signal_decision(g) = 0; %#ok<AGROW> 
+            signal_decision(g) = 0; %#ok<AGROW>
         end
-    elseif ismember(signal_idx(g), HasSig_ICs) == 1
-        % Needs to have at least one signal-like marking
-        stop_num = stop_num + 1;
-        % mark as signal
-        signal_decision(g) = 1; %#ok<AGROW> 
     else
-        % if it has no signal-like markings, mark as noise
+        % Label as noise if it has none of the best classification labels
         stop_num = stop_num - 1;
-        % mark as signal
-        signal_decision(g) = 0; %#ok<AGROW> 
+        % mark as noise
+        signal_decision(g) = 0; %#ok<AGROW>
     end
-       % if stop num went above tolerance, set it back to tolerance
-       if stop_num > tolerance
-           stop_num = tolerance;
-       end
+    
+   % if stop num went above tolerance, set it back to tolerance
+   if stop_num > tolerance
+       stop_num = tolerance;
+   end
     g = g + 1; % g will be how far along the signal ICs you go
 end
 g = g - 1;
@@ -753,16 +773,16 @@ signal_indices = logical(signal_indices');
 % Give a fail safe incase it is so bad that no ICs are labeled as signal
 if sum(signal_indices) == 0
     fprintf('WARNING: No ICs were labeled as signal. Will label first two ICs in best order as signal to allow the rest of the code to run, but the data is bad!\n')
-    signal_indices(:,1) = true;
-    signal_indices(:,2) = true;
+    signal_indices(1) = 1;
+    signal_indices(2) = 1;
     % This means that an exclusion criteria should be that there needs to
     % be more than 2 ICs labeled as signal
 end
 if sum(signal_indices) < 2
     fprintf('WARNING: Only 1 IC was labeled as signal. Will label a second one as signal to allow the rest of the code to run, but the data is bad!\n')
-    signal_indices(:,1) = true;
+    signal_indices(1) = 1;
     if sum(signal_indices) < 2
-        signal_indices(:,2) = true;
+        signal_indices(2) = 1;
     end
     % This means that an exclusion criteria should be that there needs to
     % be more than 2 ICs labeled as signal

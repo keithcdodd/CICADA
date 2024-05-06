@@ -118,14 +118,16 @@ end
 
 fprintf('\n\n')
 %%%%%%%%%%%%%% ACTUALLY DO THE THINGS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_dir, ...
-    ' -F ', funcfile, ' -f ', funcmask, ' -C ', confoundsfile, ...
-    ' -A ', anatfile, ' -a ', anatmask, ' -g ', gm_prob, ...
-    ' -w ', wm_prob, ' -c ', csf_prob, ' -m ', mel_fol, '< /dev/null'];
-
-fprintf(['Running: ', CICADA_1_command, '\n'])
-[status, cmdout_CICADA_1] = system(CICADA_1_command, '-echo');
-fprintf('Done with CICADA_1\n\n')
+% Commented out for testing later scripts, but everything below should not
+% be commented out in the final!
+% CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_dir, ...
+%     ' -F ', funcfile, ' -f ', funcmask, ' -C ', confoundsfile, ...
+%     ' -A ', anatfile, ' -a ', anatmask, ' -g ', gm_prob, ...
+%     ' -w ', wm_prob, ' -c ', csf_prob, ' -m ', mel_fol, '< /dev/null'];
+% 
+% fprintf(['Running: ', CICADA_1_command, '\n'])
+% [status, cmdout_CICADA_1] = system(CICADA_1_command, '-echo');
+% fprintf('Done with CICADA_1\n\n')
 
 fprintf('Running: CICADA_2_AutoLabeling \n')
 tolerance = 4;

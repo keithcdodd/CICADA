@@ -421,9 +421,9 @@ if cicada == 1
     Group_QC.low_ics_labeled_signal = (final_qc_table.number_kept_ics < 3); % If number kept ICs is less than 3, it cannot be good. And this is an extremely lenient cut off.
     Group_QC.low_fraction_signal_variance_kept = (isoutlier(final_qc_table.fraction_signal_variance_kept, "median")) & (final_qc_table.fraction_signal_variance_kept < mean(final_qc_table.fraction_signal_variance_kept));
     
-    % Signal (The kept ICs should contain a fair amount of signal region
+    % Signal (The kept ICs should contain a fair amount of GM/Signal region
     % overlap)
-    Group_QC.low_Signal = (isoutlier(final_qc_table.Signal, "median")) & (final_qc_table.Signal < mean(final_qc_table.Signal));
+    Group_QC.low_GM = (isoutlier(final_qc_table.GM, "median")) & (final_qc_table.GM < mean(final_qc_table.GM));
     
     % Smoothing
     Group_QC.low_Smoothing = (isoutlier(final_qc_table.Smoothing_Retention, "median")) & (final_qc_table.Smoothing_Retention < mean(final_qc_table.Smoothing_Retention));
@@ -465,7 +465,7 @@ if cicada == 1
     
     % combine to get overall outliers
     %Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
-    %    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_Signal + ...
+    %    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_GM + ...
     %    Group_QC.low_Smoothing + Group_QC.low_power_overlap + ...
     %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
 
@@ -483,7 +483,7 @@ if cicada == 1
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
     final_qc_table.low_ics_labeled_signal = Group_QC.low_ics_labeled_signal; % this should give similar to low fraction signal variance kept, but this insures anything with only 2 ICs kept are excluded
     final_qc_table.low_fraction_signal_variance_kept = Group_QC.low_fraction_signal_variance_kept;
-    final_qc_table.low_Signal = Group_QC.low_Signal; % maybe do not need if we have gm coverage by signal and signal overlap with gm
+    final_qc_table.low_GM = Group_QC.low_GM; % maybe do not need if we have gm coverage by signal and signal overlap with gm
     final_qc_table.low_Smoothing = Group_QC.low_Smoothing;
     final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
     final_qc_table.low_gm_dice = Group_QC.low_gm_dice;
