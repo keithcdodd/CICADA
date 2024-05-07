@@ -1,4 +1,4 @@
-function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
+function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
 % Make this into a function that does name=value, and specify what inputs
 % are required. 
 % Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
@@ -120,17 +120,19 @@ fprintf('\n\n')
 %%%%%%%%%%%%%% ACTUALLY DO THE THINGS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Commented out for testing later scripts, but everything below should not
 % be commented out in the final!
-% CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_dir, ...
-%     ' -F ', funcfile, ' -f ', funcmask, ' -C ', confoundsfile, ...
-%     ' -A ', anatfile, ' -a ', anatmask, ' -g ', gm_prob, ...
-%     ' -w ', wm_prob, ' -c ', csf_prob, ' -m ', mel_fol, '< /dev/null'];
-% 
-% fprintf(['Running: ', CICADA_1_command, '\n'])
-% [status, cmdout_CICADA_1] = system(CICADA_1_command, '-echo');
-% fprintf('Done with CICADA_1\n\n')
+CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_dir, ...
+    ' -F ', funcfile, ' -f ', funcmask, ' -C ', confoundsfile, ...
+    ' -A ', anatfile, ' -a ', anatmask, ' -g ', gm_prob, ...
+    ' -w ', wm_prob, ' -c ', csf_prob, ' -m ', mel_fol, '< /dev/null'];
+
+fprintf(['Running: ', CICADA_1_command, '\n'])
+[status, cmdout_CICADA_1] = system(CICADA_1_command, '-echo');
+fprintf('Done with CICADA_1\n\n')
 
 fprintf('Running: CICADA_2_AutoLabeling \n')
-tolerance = 4;
+if ~exist('tolerance', 'var')
+    tolerance = 3;
+end
 cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance, mel_fol);
 fprintf('Done with CICADA_2\n\n')
 

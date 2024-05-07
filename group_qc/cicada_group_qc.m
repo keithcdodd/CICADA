@@ -453,10 +453,10 @@ if cicada == 1
     
     
     % High DVARS_Corr
-    Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.DVARS_GM_median), "median")) & (abs(final_qc_table.DVARS_GM_median) > median(abs(final_qc_table.DVARS_GM_median)));
+    Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.DVARS_GM_mean_abs_corr), "median")) & (abs(final_qc_table.DVARS_GM_mean_abs_corr) > median(abs(final_qc_table.DVARS_GM_mean_abs_corr)));
     
     % High FD_Corr
-    Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_median), "median")) & (abs(final_qc_table.FD_GM_median) > median(abs(final_qc_table.FD_GM_median)));
+    Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_mean_abs_corr), "median")) & (abs(final_qc_table.FD_GM_mean_abs_corr) > median(abs(final_qc_table.FD_GM_mean_abs_corr)));
 
     % Low GM_NotGM_mean_var_prop (high GM variance and low NotGM variance
     % would occur in high signal and low noise data)

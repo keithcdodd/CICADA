@@ -39,9 +39,9 @@ else
     fprintf(['  Using task events file: ', task_events_file, '\n'])
 end
 if ~exist('tolerance', 'var')
-    tolerance = 4;
+    tolerance = 3;
 end
-fprintf(['   Tolerance is ' num2str(tolerance), '. Standard is 4.\n'])
+fprintf(['   Tolerance is ' num2str(tolerance), '. Standard is 3.\n'])
 
 % read in the functional file to get necessary information
 cd(output_dir)
@@ -205,12 +205,14 @@ ROI_relprops_table = table();
 ROI_relprops_table{:,ROI_labels} = ROINetworks_genprops_table{:,ROI_labels};
 % Recalculate noise compartments by dividing by signal:
 for i1 = 1:length(ROI_relprops_labels)
+    % dividing by GM once more at the end saves more signals with more GM
+    % in it
     ROI_relprops_table{:, ROI_relprops_labels{i1}} = ROINetworks_genprops_table{:,ROI_relprops_labels{i1}} ...
-        ./ (ROINetworks_genprops_table{:,'GM'} + ROINetworks_genprops_table{:,ROI_relprops_labels{i1}});
+        ./ (ROINetworks_genprops_table{:,'GM'} + ROINetworks_genprops_table{:,ROI_relprops_labels{i1}}) ./ ROINetworks_genprops_table{:,'GM'}; 
 end
 
 % calculate and add in WMCSF here too
-WM_CSF_relmean = normalize((ROI_relprops_table.WM .* ROI_relprops_table.CSF) ./ ROI_relprops_table.GM, "range"); % because subepe is a mix of WM and CSF, without GM. 
+WM_CSF_relmean = (ROI_relprops_table.WM .* ROI_relprops_table.CSF) ./ (ROI_relprops_table.GM + ROI_relprops_table.WM .* ROI_relprops_table.CSF) ./ ROI_relprops_table.GM; % because subepe is a mix of WM and CSF, without GM. 
 ROI_relprops_table{:, 'WMCSF'} = WM_CSF_relmean;
 Tables.ROI_relativeprops_table = ROI_relprops_table;
 
@@ -224,7 +226,7 @@ Tables.InOutBrain_generalprops_table = InOut_genprops_table;
 
 % Outbrain relative props can be based on signal as well
 InOut_relprops_table = InOut_genprops_table;
-InOut_relprops_table{:, 'Outbrain'} = InOut_relprops_table{:, 'Outbrain'} ./ (ROINetworks_genprops_table{:,'GM'} + InOut_relprops_table{:, 'Outbrain'});
+InOut_relprops_table{:, 'Outbrain'} = InOut_relprops_table{:, 'Outbrain'} ./ (ROINetworks_genprops_table{:,'GM'} + InOut_relprops_table{:, 'Outbrain'}) ./ ROINetworks_genprops_table{:,'GM'};
 Tables.InOut_relativeprops_table = InOut_relprops_table;
 
 % While we are here, let's initialize IC number information (we needed to

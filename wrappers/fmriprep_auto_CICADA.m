@@ -1,4 +1,4 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them. 
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
@@ -104,6 +104,10 @@ else
     confounds_info =  dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
     confoundsfile = [confounds_info.folder, '/', confounds_info.name];
 
+    if ~isfile(confoundsfile)
+        fprintf(['Cannot find confounds_file at ', confoundsfile, '\n'])
+        return;
+    end
     % and now grab from best anat folder
     % Note, if you use a different structural other than T1w, you may need
     % to change that below
@@ -131,6 +135,9 @@ else
     output_dir = [cicada_dir, '/sub-', sub_id, '/ses-01/', task_name];
 end
 
+if ~exist('tolerance', 'var')
+    tolerance = 3;
+end
 
 % Output everything to check:
 fprintf(['\nfmriprep_dir: ', fmriprep_dir, '\n'])
@@ -147,6 +154,6 @@ fprintf(['melodic folder: ', mel_fol, '\n\n'])
 % For melodic folder, we can just check if the melodic folder exists, does
 % it have one of the final inputs?
 
-Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob)
+Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
 
 end
