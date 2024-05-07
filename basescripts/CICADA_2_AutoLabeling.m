@@ -224,9 +224,11 @@ for i1 = 1:length(InOut_labels)
 end
 Tables.InOutBrain_generalprops_table = InOut_genprops_table;
 
-% Outbrain relative props can be based on signal as well
+% If more is outbrain than inbrain, then it is likely connecting outside of
+% the brain than within the brain, so therefore likely not GM. Sinus is
+% likely!
 InOut_relprops_table = InOut_genprops_table;
-InOut_relprops_table{:, 'Outbrain'} = InOut_relprops_table{:, 'Outbrain'} ./ (ROINetworks_genprops_table{:,'GM'} + InOut_relprops_table{:, 'Outbrain'}) ./ ROINetworks_genprops_table{:,'GM'};
+InOut_relprops_table{:, 'Outbrain'} = InOut_genprops_table{:, 'Outbrain'} ./ (InOut_genprops_table{:,'Inbrain'} + InOut_genprops_table{:, 'Outbrain'}); % don't divide by GM here because otherwise harder to catch sinuses!
 Tables.InOut_relativeprops_table = InOut_relprops_table;
 
 % While we are here, let's initialize IC number information (we needed to

@@ -357,10 +357,9 @@ fslmaths "${output_regionmask_dir}/Susceptibility_prob.nii.gz" -thrP 67 -bin "${
 #fslmaths "${funcfile}" -Tmean -uthrp 20 -thr 0 -bin -mul "${funcmask}" -mul "${output_regionmask_dir}/anatmask_resam.nii.gz" -bin "${output_regionmask_dir}/Susceptibility_mask.nii.gz"
 
 # Now calculate edge after removing susceptibility. Perimeter of funcmask, but not including susceptibility areas (i.e., edge must have strong enough signal)
-#fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz"
 fslmaths "${funcmask}" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz"
 fslmaths "${output_regionmask_dir}/anatmask_resam.nii.gz" -ero -fmean "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz"
-fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_anat.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
+fslmaths "${funcmask}" -sub "${output_regionmask_dir}/Susceptibility_mask.nii.gz" -sub "${output_regionmask_dir}/eroded_smoothed_tmp_func.nii.gz" -thr 0 "${output_regionmask_dir}/Edge_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/Edge_prob.nii.gz" -thrP 67 -bin "${output_regionmask_dir}/Edge_mask.nii.gz"
 
 ### Calculate GM, WM, and CSF by subtracting out Edge (perimeter) and susceptibility
