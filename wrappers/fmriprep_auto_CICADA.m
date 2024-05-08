@@ -17,11 +17,14 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_nam
 % for you, but if you already have a MELODIC folder you insist on using,
 % you can supply that here
 
+
 % check if fmriprep has sessions or not (if only one session, might not!)
-if isempty(ses_id)
-    has_ses = 0; % has no distinct sessions, assume only one occured. In transfer to CICADA, still label as ses-01 because otherwise tough with the code
-else
+if isfolder([fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id])
     has_ses = 1; % this is the expected structure, with multiple sessions
+else
+    has_ses = 0; 
+    ses_id = ''; % then give empty ses_id
+    anat_ses_id = '';
 end
 
 % Now check for non-necessary variables
