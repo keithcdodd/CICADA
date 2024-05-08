@@ -363,7 +363,7 @@ Results.Confounds = Data.Confounds;
 
 % Spikiness or overrideing drift can be based on magnitude of normalized max vs mean 
 ts_detrend = detrend(Data.TimeSeries,1);
-Spikiness = max(abs(ts_detrend))'; % a normalized response with larger values had greater spikes
+Spikiness = max(abs(Data.TimeSeries))'; % a normalized response with larger values had greater spikes
 Data.Spikiness = Spikiness;
 Spikiness_table = table();
 Spikiness_table{:, 'Spikiness'} = Spikiness;
@@ -595,7 +595,7 @@ end
 % Also, Low Highfreq is not good enough to be good
 worst_classification_labels = {'Low_GM', 'Low_best_power_overlap_norm'};
 bad_region_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
-    'High_OutbrainOnly', 'High_Outbrain'};
+    'High_OutbrainOnly'};
 
 bad_classification_labels = {'Low_GM', 'High_Edge', 'High_Subepe', 'High_CSF', 'High_Suscept', ...
     'High_OutbrainOnly', 'High_Outbrain', 'High_Highfreq', 'High_Spikiness', ...
@@ -718,11 +718,11 @@ g = 1;
 signal_decision = [];
 stop_num = tolerance;
 while stop_num > 0
-    % (1) Need to have one of the following High GM, High Best Power, or
-    % High Smoothness, and none of the worst (low of them)
-    if (sum(best_classification_table{signal_idx(g),:},2) > 0) && (sum(worst_classification_table{signal_idx(g),:},2) == 0)
-        %(2) Either need High_GM, or need no other bad region being high
-        if (best_classification_table.High_GM(signal_idx(g)) == 1) || (sum(bad_region_classification_table{signal_idx(g),:},2) == 0)
+    % (1) Need to have either High GM or High Best Power, and not Low GM, Low Best Power, or Low Smoothness
+    if ((best_classification_table.High_GM(signal_idx(g)) == 1) || ...
+            (best_classification_table.High_best_power_overlap_norm(signal_idx(g)) == 1)) && (sum(worst_classification_table{signal_idx(g),:},2) == 0)
+        % (2) Need no other bad region being high
+        if (sum(bad_region_classification_table{signal_idx(g),:},2) == 0)
             % (3) High GM AND either High Best Power, or High Smoothness is enough to
             % mark as signal. But if not High GM, then need to make sure
             % there is not another bad classification.
