@@ -401,14 +401,14 @@ cd(output_dir)
 final_qc_table = group_qc_table;
 final_qc_corrs_table = group_qc_corrs_table;
 
-% add in bold to high freq ratio
-boldfreq_highfreq = final_qc_table.BOLDfreq ./ final_qc_table.Highfreq;
-final_qc_table.boldfreq_highfreq_ratio = boldfreq_highfreq;
-Group_QC.boldfreq_highfreq_ratio = boldfreq_highfreq;
-
 % Now we can calculate outliers, but some are only calculated in this
 % manner IF it is CICADA data
 if cicada == 1
+    % add in bold to high freq ratio, if cicada based
+    boldfreq_highfreq = final_qc_table.BOLDfreq ./ final_qc_table.Highfreq;
+    final_qc_table.boldfreq_highfreq_ratio = boldfreq_highfreq;
+    Group_QC.boldfreq_highfreq_ratio = boldfreq_highfreq;
+
     % Number of total ICs (if very low -- bad data all round)
     Group_QC.low_number_total_ics = (isoutlier(final_qc_table.number_total_ics, "median")) & (final_qc_table.number_total_ics < mean(final_qc_table.number_kept_ics));
     % Low GM coverage, regular and dice 'gm_coverage_by_signal', 'signal_overlap_with_gm'

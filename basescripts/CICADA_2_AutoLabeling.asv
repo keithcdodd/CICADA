@@ -722,13 +722,10 @@ Results.Network_Overlap_ICs = Network_Overlap_ICs;
 
 % Each time you get noise, drop one in tolerance, if you get signal, add
 % one in tolerance (up to tolerance number), stop when tolerance is 0 or we are past the mean of signal_vals!
-% furtherst we can possibly go is to the mean of signal_vals. This allows
-% for a higher tolerance
 g = 1;
-g_end = sum(signal_vals > mean(signal_vals)) + 1; % with g incrementing, once we get past signal_vals mean (if we do), we should not go further
 signal_decision = [];
 stop_num = tolerance;
-while (stop_num > 0) && (g < g_end)
+while stop_num > 0
     % (1) Need to have either High GM or High Best Power (or High Best Task Power), and not Low GM, Low Best Power, or Low Smoothness
     if ((best_classification_table.High_GM(signal_idx(g)) == 1) || (best_classification_table.High_best_power_overlap_norm(signal_idx(g)) == 1) ...
             || ((classification_table.High_besttask_power_overlap(signal_idx(g)) == 1))) && (sum(worst_classification_table{signal_idx(g),:},2) == 0)
