@@ -95,6 +95,49 @@ if isfile(curr_noise_ICs)
     signal_selection_array = [signal_selection_array, curr_signal_indices];
 end
 
+% Can compare to your raters too!
+% KD comparison (Keith Dodd) Rater 1
+% need to grab noise ICs from the ic_manual_kd_checker.csv
+r1_checker = [task_dir, '/ic_auto_selection/ic_manual_kd_checker.csv'];
+if isfile(r1_checker)
+    r1_table = readtable(r1_checker);
+    curr_noise_ICs = r1_table.PotentialICs(~logical(r1_table.SignalLabel));
+    curr_label = "Rater_KD";
+
+    % Now we can convert noise labels to indices
+    curr_noise_indices = base_indices; 
+    curr_noise_indices(curr_noise_ICs) = 1;
+    curr_signal_indices = ~curr_noise_indices;
+
+    % update everything
+    noise_selection_labels = [noise_selection_labels, curr_label];
+    signal_selection_labels = [signal_selection_labels, curr_label];
+
+    noise_selection_array = [noise_selection_array, curr_noise_indices];
+    signal_selection_array = [signal_selection_array, curr_signal_indices];
+end
+
+% LS comparison (Lauren Sarabia) Rater 2
+% need to grab noise ICs from the ic_manual_kd_checker.csv
+r2_checker = [task_dir, '/ic_auto_selection/ic_manual_LS_checker.csv'];
+if isfile(r2_checker)
+    r2_table = readtable(r2_checker);
+    curr_noise_ICs = r2_table.PotentialICs(~logical(r2_table.SignalLabel));
+    curr_label = "Rater_LS";
+
+    % Now we can convert noise labels to indices
+    curr_noise_indices = base_indices; 
+    curr_noise_indices(curr_noise_ICs) = 1;
+    curr_signal_indices = ~curr_noise_indices;
+
+    % update everything
+    noise_selection_labels = [noise_selection_labels, curr_label];
+    signal_selection_labels = [signal_selection_labels, curr_label];
+
+    noise_selection_array = [noise_selection_array, curr_noise_indices];
+    signal_selection_array = [signal_selection_array, curr_signal_indices];
+end
+
 
 % Create confusion matrices:
 true_noise_array = zeros(size(1, width(noise_selection_array)));
