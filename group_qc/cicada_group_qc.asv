@@ -593,9 +593,7 @@ fprintf('Finished Group QC Plotting!\n')
 
 % remove outliers from the rest of analysis
 if cicada == 1
-    % CICADA outliers are the outliers determined by this script. Denoising
-    % outliers are the outliers that the user provided by the "outliers"
-    % parameter
+    %
     image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
 else
     image_keep = ~Group_QC.denoising_outliers;

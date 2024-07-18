@@ -41,7 +41,7 @@ end
 if ~exist('tolerance', 'var')
     tolerance = 3;
 end
-fprintf(['   Tolerance is ' num2str(tolerance), '. Standard is 3.\n'])
+fprintf(['   Tolerance is ' num2str(tolerance), '. Standard is 5.\n'])
 
 % read in the functional file to get necessary information
 cd(output_dir)
@@ -92,8 +92,7 @@ TR = repetitiontime;
 hrf_conditions_table = table([]);
 
 
-% model a double gamma hrf, based on spm (but without the need to install
-% spm). Still, cite spm since it is completely based on their code.
+% model a double gamma hrf
 p = [6 16 1 1 6 0 32]; fMRI_T = 16;
 dt = TR/fMRI_T; u = (0:(p(7)/dt)) - p(6)/dt;
 h1=p(1)/p(3); l1=dt/p(3);
@@ -102,10 +101,9 @@ f1 = exp( (h1-1).*log(u) +h1.*log(l1) - l1.*u - gammaln(h1));
 f2 = exp( (h2-1).*log(u) +h2.*log(l2) - l2.*u - gammaln(h2))/p(5);
 hrf = f1 - f2;
 hrf = hrf((0:(p(7)/TR))*fMRI_T + 1); hrf = hrf'/sum(hrf);
-hrf_plot_norm = hrf; % OK, this should be equivalent to spm defaults now.
+hrf_plot_norm = hrf; 
 Data.HRF_general.hrf_plot_norm = hrf_plot_norm;
 
-%hrf_plot_norm_spm = spm_hrf(2); % and now go on from there
 hrf_padded = [hrf_plot_norm', zeros(1,numvolumes-length(hrf_plot_norm))]'; % to give relevant resolution of full sampling
 % hrf_padded is a full hrf and then padded with zeros to length of scan,
 % not the most helpful
@@ -178,7 +176,7 @@ for i1 = 1:length(ICsum_labels)
 end
 Tables.ICmean = ICmean_table; Tables.ICnumvoxels = ICnumvoxels_table; Tables.ICsum_table = ICsum_table;
 
-% Now Calculate the proportaions for relevant things:
+% Now Calculate the proportions for relevant things:
 % For ROIs and Networks, just divide by the following:
 ROI_compare_labels = {'GM', 'Edge', 'Subepe', 'CSF', 'Suscept', 'OutbrainOnly'};
 ROINetworks_labels = [ROI_labels, Networks_labels];
@@ -279,7 +277,7 @@ Data.HRF_general.hrf_power_interp = interp1(f_hrf, Data.HRF_general.hrf_power_no
 Data.HRF_general.hrf_power_interp_norm = Data.HRF_general.hrf_power_interp ./ trapz(Data.HRF_general.hrf_power_interp);
 P1_single_hrf_bp = Data.HRF_general.hrf_power_interp_norm; % not actually bandpassed, but we don't really need to do that.
 Data.HRF_general.hrf_power_bp = P1_single_hrf_bp; % keep bandpassed naming here just for ease of coding
-% Can plot(HRF_general.f,HRF_general.hrf_power_bp) to see the power if you want to confirm
+% Can plot(frequencies,HRF_general.hrf_power_bp) to see the power if you want to confirm
 
 % OK, now calculate power spectrums for each IC:
 % set size of arrays explicitely to save computation time
@@ -897,10 +895,10 @@ Results.signal_ICs = signal_ICs;
 Results.noise_indices = noise_indices;
 Results.noise_ICs = noise_ICs;
 
-% If we did manual IC checker through this script, we would update
+% If we did manual IC checker through this script, we would, the past, update
 % IC_checker_table and then run just the part below. But we now have a
 % separate script for this. While redundent, this is still good to have as
-% a reference if every needed.
+% a reference if ever needed.
 %%%%% Update IC_checker_updated_table variable above before
 %%%%% re-evaluating everything below
 % need to reconvert table to not classification column(s) 

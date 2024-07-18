@@ -140,8 +140,8 @@ WMCSF_mean_var = mean_var_table.WMCSF_mean_var;
 CSF_mean_var = mean_var_table.CSF_mean_var;
 Suscept_mean_var = mean_var_table.Suscept_mean_var;
 
-% Get ratio of GM mean temporal standard deviation divided by NotGm
-% temporal standard deviation
+% Get ratio of GM mean temporal variance divided by NotGm
+% temporal variance
 GM_div_NotGM_mean_var = GM_mean_var ./ NotGM_mean_var; % This can be useful for qc checks. Want higher values.
 
 % If it is a CICADA file, then go in and grab additional things (e.g., signal and noise ic overlap file)
