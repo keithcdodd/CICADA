@@ -95,16 +95,18 @@ elseif ~isfolder(fmriprep_anat_dir)
 else
     % first grab things from func folder
     cd(fmriprep_func_dir)
-    funcfile_info = dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
+    % s* is to make sure it does not pull/find a temp file on accident and
+    % makes sure it starts with sub
+    funcfile_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*preproc_bold.nii.gz']);
     funcfile = [funcfile_info.folder, '/', funcfile_info.name];
     if ~isfile(funcfile)
         fprintf(['Cannot find fmriprep funcfile at ', funcfile, '\n'])
         return;
     end
 
-    funcmask_info = dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
+    funcmask_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
     funcmask = [funcmask_info.folder, '/', funcmask_info.name];
-    confounds_info =  dir(['*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_timeseries.tsv']);
+    confounds_info =  dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_*.tsv']);
     confoundsfile = [confounds_info.folder, '/', confounds_info.name];
 
     if ~isfile(confoundsfile)
@@ -115,20 +117,49 @@ else
     % Note, if you use a different structural other than T1w, you may need
     % to change that below
     cd(fmriprep_anat_dir)
-    anatfile_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
+    anatfile_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*preproc_T1w.nii.gz']);
     anatfile = [anatfile_info.folder, '/', anatfile_info.name];
-    if ~isfile(funcfile)
-        fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
-        return;
+    if ~isfile(anatfile)
+        % it is possible anat file is actually not in a session folder, but
+        % one level up. Try that
+        fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/anat'];
+        
+        % if this is not a folder, we are out of luck
+        if ~isfolder(fmriprep_anat_dir)
+            fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
+            return;
+        end
+        
+        cd(fmriprep_anat_dir)
+        anatfile_info = dir(['s*', sub_id, '*space-MNI*preproc_T1w.nii.gz']);
+        anatfile = [anatfile_info.folder, '/', anatfile_info.name];
+        
+        if ~isfile(anatfile)
+            fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
+            return;
+        end
+
+        % there will be no ses_id in anatomy stuff then
+        anatmask_info = dir(['s*', sub_id, '*space-MNI*desc-brain_mask.nii.gz']);
+        anatmask = [anatmask_info.folder, '/', anatmask_info.name];
+        gm_prob_info = dir(['s*', sub_id, '*space-MNI*label-GM_probseg.nii.gz']);
+        gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
+        wm_prob_info = dir(['s*', sub_id, '*space-MNI*label-WM_probseg.nii.gz']);
+        wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
+        csf_prob_info = dir(['s*', sub_id, '*space-MNI*label-CSF_probseg.nii.gz']);
+        csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
+
+    else
+        anatmask_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
+        anatmask = [anatmask_info.folder, '/', anatmask_info.name];
+        gm_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
+        gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
+        wm_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
+        wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
+        csf_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
+        csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
     end
-    anatmask_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*desc-brain_mask.nii.gz']);
-    anatmask = [anatmask_info.folder, '/', anatmask_info.name];
-    gm_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-GM_probseg.nii.gz']);
-    gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
-    wm_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-WM_probseg.nii.gz']);
-    wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
-    csf_prob_info = dir(['*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
-    csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
+    
 end
 
 if has_ses == 1
@@ -139,7 +170,7 @@ else
 end
 
 if ~exist('tolerance', 'var')
-    tolerance = 3;
+    tolerance = 5;
 end
 
 % Output everything to check:
@@ -148,7 +179,7 @@ fprintf(['cicada_dir: ', cicada_dir, '\n'])
 fprintf(['sub_id: ', sub_id, '\n'])
 fprintf(['ses_id: ', ses_id, '\n'])
 fprintf(['task_name: ', task_name, '\n'])
-fprintf(['ses_id for anat: ', anat_ses_id, '\n'])
+fprintf(['anat folder location: ', fmriprep_anat_dir, '\n'])
 fprintf(['task_events_file: ', task_events_file_record, '\n'])
 fprintf(['compare_file: ', compare_file_record, '\n'])
 fprintf(['melodic folder: ', mel_fol, '\n\n'])

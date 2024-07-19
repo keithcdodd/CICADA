@@ -1,0 +1,12 @@
+CICADA Dependencies:
+
+FSL (tested on version 6.0.5.2)
+Matlab (tested on version 2022a)
+
+Likely necessary Matlab Toolboxes include:
+Statistics & Machine Learning Toolbox
+Image Processing Toolbox
+Image Acquisition Toolbox
+Bioinformatics Toolbox
+
+More Toolboxes may be required.

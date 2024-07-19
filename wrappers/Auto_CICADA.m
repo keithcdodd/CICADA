@@ -129,7 +129,7 @@ fprintf('Done with CICADA_1\n\n')
 
 fprintf('Running: CICADA_2_AutoLabeling \n')
 if ~exist('tolerance', 'var')
-    tolerance = 3;
+    tolerance = 5;
 end
 cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, tolerance, mel_fol);
 fprintf('Done with CICADA_2\n\n')

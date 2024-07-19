@@ -1040,24 +1040,23 @@ auto_noise_dist_covariates = mixing_matrix(:, Results.noise_ICs');
 writematrix(auto_noise_dist_covariates, 'auto_noise_dist_covariates.txt', 'Delimiter', ' ')
 writematrix(auto_noise_dist_covariates, 'auto_noise_dist_covariates.csv')
 
-delete('._*') % delete hidden files that might be an issue ahead of time
-movefile('auto*', 'ic_auto_selection')
-movefile('*SignalIC*', 'ic_auto_selection')
-movefile('*NoiseIC*', 'ic_auto_selection')
-movefile('*IC_auto_checker.*', 'ic_auto_selection')
-movefile('*_auto_*.*', 'ic_auto_selection')
-movefile('ic_auto_selection/*signal_constrained*.*', './')
-movefile('*regressors*.*', 'regressors_timeseries')
-movefile('*timeseries.*', 'regressors_timeseries')
+movefile('./auto*', 'ic_auto_selection')
+movefile('./*SignalIC*', 'ic_auto_selection')
+movefile('./*NoiseIC*', 'ic_auto_selection')
+movefile('./*IC_auto_checker.*', 'ic_auto_selection')
+movefile('./*_auto_*', 'ic_auto_selection')
+movefile('./ic_auto_selection/*signal_constrained*', './')
+movefile('./*regressors*', 'regressors_timeseries
+movefile ./*timeseries.* regressors_timeseries
 % move confounds back out though so it is easier to find
 cd regressors_timeseries
-movefile('confounds_timeseries*', '../')
+movefile ./confounds_timeseries* ../
 cd ../
 
 % save a matrix of relevant variables if you want to examine later!
 save('DecisionVariables_Auto.mat', 'output_dir', 'subject_id', 'session_id', 'task_id', 'ICs', 'Data', 'Tables', 'Results')
 
-movefile('*Auto.*', 'ic_auto_selection')
+movefile ./*Auto.* ic_auto_selection
 
 % OK, now run the denoising: Start with CICADA
 task_dir = pwd;
