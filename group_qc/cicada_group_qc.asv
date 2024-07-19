@@ -34,7 +34,8 @@ end
 % now check that all lists are the same length, and that all are lists of
 % char arrays
 if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
-    fprintf('Your lists are different lengths... quitting\n')
+    fprintf('Your lists (sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files) are different lengths... quitting\n')
+    fprintf()
     return
 end
 
@@ -593,7 +594,9 @@ fprintf('Finished Group QC Plotting!\n')
 
 % remove outliers from the rest of analysis
 if cicada == 1
-    %
+    % CICADA outliers are the outliers determined by this script. Denoising
+    % outliers are the outliers that the user provided by the "outliers"
+    % parameter
     image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
 else
     image_keep = ~Group_QC.denoising_outliers;

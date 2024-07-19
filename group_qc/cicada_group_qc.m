@@ -34,7 +34,7 @@ end
 % now check that all lists are the same length, and that all are lists of
 % char arrays
 if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
-    fprintf('Your lists are different lengths... quitting\n')
+    fprintf('Your lists (sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files) exist at different lengths... quitting\n')
     return
 end
 
@@ -173,6 +173,7 @@ bd = 1;
 cicada_dir = cicada_home; % just for naming
 num_runs = length(sub_ids);
 bad_data_prefixes = ''; % initialize
+samps = max([500, round(10000/num_runs)]);
 for idx = 1:num_runs
     sub_id = sub_ids{idx};
     ses_id = ses_ids{idx};
@@ -311,14 +312,14 @@ for idx = 1:num_runs
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
     fprintf('Now calculating QC\n')
-    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file);
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file, samps);
     if ~isempty(orig_file)
-        [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file);
+        [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file, samps);
     else
         orig_qc_corrs_table = table();
     end
     if ~isempty(compare_file)
-        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file);
+        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file, samps);
     else
         compare_qc_corrs_table = table();
     end
@@ -353,7 +354,6 @@ for idx = 1:num_runs
     % And then move the qc photos to their respective folders & grab all qc
     % values (sampled). plot AFTER. 8p comparison is always a good base
     % comparison.
-    samps=500; % needs to match number of samps for denoised and orig data. 
     compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest to 8p only
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_vals.mat']); % specific to file tag of interest to 8p only
     if ~isempty(compare_file)

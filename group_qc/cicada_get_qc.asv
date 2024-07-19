@@ -1,4 +1,4 @@
-function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file, samps)
+function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 
@@ -99,13 +99,10 @@ confound_place = [task_dir, '/confounds_timeseries.csv'];
 allconfounds = readtable(confound_place);
 FD = table2array(allconfounds(:,{'framewise_displacement'}));
 DVARS = table2array(allconfounds(:,{'dvars'}));
-
-
-% if RMSD exists, record it too
 if any(strcmp('rmsd', allconfounds.Properties.VariableNames))
     RMS = table2array(allconfounds(:,{'rmsd'})); 
 else
-    RMS = NaN(size(DVARS));
+    RMS = NaN(size(D))
 end
 
 
@@ -267,9 +264,8 @@ end
 
 % Grab a sampling of the correlation values, because otherwise it might
 % become too much
-% don't forget to label by subject, session, and task as well
-% Note: IC QC plots look undersampled (e.g., you have too few participants), you could increase the samps number
-%samps = 500; % this is now called into the function
+% don't for get to label by subject, session, and task as well
+samps = 500;
 qc_corrs_table = grab_corr_sampling(sub_id, ses_id, task_name, Edge_Edge_corr, FD_GM_corr, DVARS_GM_corr, Outbrain_Outbrain_corr, WMCSF_WMCSF_corr, CSF_CSF_corr, NotGM_NotGM_corr, GM_GM_corr, Suscept_Suscept_corr, samps);
 
 end
