@@ -34,7 +34,7 @@ bp = 0;
 if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass) && (length(fpass) == 2)
     bp = 1; % Mark bandpass filtering down
     % OK, do bandpass!
-
+    fprintf(['  Bandpassing Filtering at ', num2str(fpass(1)), ' ', num2str(fpass(2)), ' Hz...\n'])
     % bandpass, can use fft and ifft
     N = T/tr; F = 1/tr;
     df = 1/T; N_freq = N/2 + 1;
@@ -45,41 +45,29 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
     high_hz = fpass(2);
 
     if low_hz < 0
-        fprintf('   Low Hz Cut Off for Bandpass Filtering is Below 0... setting to 0 Hz. \n')
+        fprintf('Low Hz Cut Off for BandPass Filtering is Below 0... setting to 0 Hz. \n')
         low_hz = 0;
     end
 
-    if high_hz > f(end)
-        fprintf(['   High Hz Cut Off For Bandpass Filtering is Above Highest Frequency... setting to highest frequency of ', num2str(f(end)) ,' Hz. \n'])
-        high_hz = f(end);
-    end
+    lower_phys_cutoff = round(low_hz / df) + 1; % start at freq 0 at position 1
+    higher_phys_cutoff = round(high_hz / df) + 1;
 
-    if low_hz >= high_hz
-        fprintf('   Error: Low Hz Cut Off is Equal to or Greater Than High Hz Cut Off. Not Applying Bandpass Filtering. \n')
-
-    else
-        % Now we can actually apply bp filtering
-        fprintf(['  Bandpassing Filtering at ', num2str(low_hz), ' ', num2str(high_hz), ' Hz...\n'])
-        lower_phys_cutoff = round(low_hz / df) + 1; % start at freq 0 at position 1
-        higher_phys_cutoff = round(high_hz / df) + 1;
-
-        % set up so if low value is below 0
-        
-        % create for loop to loop through each thing
-        filtered_signal_2D = zeros(size(file_detrended_2D));
-        for idx1 = 1:size(file_detrended_2D,1)
-            freq_signal = fftshift(fft(file_detrended_2D(idx1,:))); % center point at floor(N/2+1) is 0 Hz
-            low_freq_cutoffs = (floor(N/2)+1 - lower_phys_cutoff): (floor(N/2)+1 + lower_phys_cutoff);
-            high_freq_cutoffs_neg = 1:(floor(N/2)+1 - (higher_phys_cutoff+1));
-            high_freq_cutoffs_pos = (floor(N/2)+1 + (higher_phys_cutoff+1)):(N);
-            freq_signal_filtered = freq_signal;
-            freq_signal_filtered(low_freq_cutoffs) = 0;
-            freq_signal_filtered(high_freq_cutoffs_neg) = 0;
-            freq_signal_filtered(high_freq_cutoffs_pos) = 0;
-            freq_signal_filtered = fftshift(freq_signal_filtered);
-            filtered_signal = ifft(freq_signal_filtered);
-            filtered_signal_2D(idx1, :) = filtered_signal;
-        end                     
+    % set up so if low value is below 0
+    
+    % create for loop to loop through each thing
+    filtered_signal_2D = zeros(size(file_detrended_2D));
+    for idx1 = 1:size(file_detrended_2D,1)
+        freq_signal = fftshift(fft(file_detrended_2D(idx1,:))); % center point at floor(N/2+1) is 0 Hz
+        low_freq_cutoffs = (floor(N/2)+1 - lower_phys_cutoff): (floor(N/2)+1 + lower_phys_cutoff);
+        high_freq_cutoffs_neg = 1:(floor(N/2)+1 - (higher_phys_cutoff+1));
+        high_freq_cutoffs_pos = (floor(N/2)+1 + (higher_phys_cutoff+1)):(N);
+        freq_signal_filtered = freq_signal;
+        freq_signal_filtered(low_freq_cutoffs) = 0;
+        freq_signal_filtered(high_freq_cutoffs_neg) = 0;
+        freq_signal_filtered(high_freq_cutoffs_pos) = 0;
+        freq_signal_filtered = fftshift(freq_signal_filtered);
+        filtered_signal = ifft(freq_signal_filtered);
+        filtered_signal_2D(idx1, :) = filtered_signal;
     end
 else
     fprintf('   Not Applying Bandpass filtering!\n')

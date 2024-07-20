@@ -12,10 +12,17 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % for the call. 
 % file_tag: needs to be unique to the type of denoised/cleaned file you are
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
+
 % smoothing_kernel: gaussian smoothing kernel FWHMx size. Default is same
-% as current size of functional
-% (keeping it small)
-% fpass is Hz for bandpassing. 0.008 to 0.15 is recommended
+% as current size of functional (can do default by giving value of -1). QC
+% plots are most accurate if no smoothing (or minimal smoothing) is
+% applied. Smoothing will otherwise recorrelate nearby voxels and noise
+% profiles in QC plots will also bleed more together.
+
+% fpass is Hz for bandpassing. If used, 0.008 to 0.15 is recommended.
+% Default is no bandpassing []. Lower and higher frequencies should already
+% be diminished by ICA denoising. 
+
 % sub_ids e.g., {'102', '102', '103'}
 % ses_ids e.g., {'01', '02', '01'}
 % excludes (either 0 or 1 for exclude) e.g., {'0', '1', '0'}
