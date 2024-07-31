@@ -496,6 +496,9 @@ if cicada == 1
     %    Group_QC.low_Smoothing + Group_QC.low_power_overlap + ...
     %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
 
+    % poorly improved
+    Group_QC.poorly_improved = poorly_improved_list';
+
     % Factors involving GM coverage are good, alongside factors regarding
     % power spectrum frequency (because sometimes high motion can make
     % random ICs that look like high enough GM coverage, but are not at
@@ -506,8 +509,8 @@ if cicada == 1
     % 2 ICs kept as signal. Also, if the data was poorly improved (Either
     % average GM, Smoothing, or power overlap was not improved (increased), OR either
     % FD, DVARS, or spikiness was not improved (decreased).
-    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + poorly_improved);
-    Group_QC.poorly_improved = poorly_improved_list;
+    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
+    
 
     % add to final qc table
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
