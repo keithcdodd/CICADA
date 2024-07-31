@@ -262,8 +262,8 @@ for idx = 1:num_runs
             % need increased GM, Smoothing Retention, best power overlap,
             % and decreased FD, DVARS, & Spikiness
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
-                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | (compare_clean{"FD_Corr", "Percent_Change"} > 0) | ...
-                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0) | (compare_clean{"Spikiness", "Percent_Change"} > 0);
+                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | ((compare_clean{"FD_Corr", "Percent_Change"} > 0) & ...
+                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0));
         else
             % else, use file_tag, it was not manually adjusted, auto cicada
             cleaned_file_info = test_cleaned_file_info;
@@ -273,8 +273,8 @@ for idx = 1:num_runs
             % need increased GM, Smoothing Retention, best power overlap,
             % and decreased FD, DVARS, & Spikiness
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
-                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | (compare_clean{"FD_Corr", "Percent_Change"} > 0) | ...
-                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0) | (compare_clean{"Spikiness", "Percent_Change"} > 0);
+                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | ((compare_clean{"FD_Corr", "Percent_Change"} > 0) & ...
+                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0));
 
         end
     else
