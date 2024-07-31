@@ -256,9 +256,26 @@ for idx = 1:num_runs
                 fprintf('Do you have more than one CICADA*manual*.nii.gz file somehow?\n')
                 return;
             end
+
+            % grab compare cleaning file now, will help find outliers
+            compare_clean = readtable([task_dir, '/ic_manual_selection/compare_manual_cleaning.csv'], "ReadRowNames",true);
+            % need increased GM, Smoothing Retention, best power overlap,
+            % and decreased FD, DVARS, & Spikiness
+            poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
+                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | (compare_clean{"FD_Corr", "Percent_Change"} > 0) | ...
+                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0) | (compare_clean{"Spikiness", "Percent_Change"} > 0);
         else
-            % else, use file_tag
+            % else, use file_tag, it was not manually adjusted, auto cicada
             cleaned_file_info = test_cleaned_file_info;
+
+            % grab compare cleaning file now, will help find outliers
+            compare_clean = readtable([task_dir, '/ic_auto_selection/compare_auto_cleaning.csv'], "ReadRowNames",true);
+            % need increased GM, Smoothing Retention, best power overlap,
+            % and decreased FD, DVARS, & Spikiness
+            poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
+                (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | (compare_clean{"FD_Corr", "Percent_Change"} > 0) | ...
+                (compare_clean{"DVARS_Corr", "Percent_Change"} > 0) | (compare_clean{"Spikiness", "Percent_Change"} > 0);
+
         end
     else
         % this is not a cicada file, so we do not need to worry about
@@ -356,6 +373,7 @@ for idx = 1:num_runs
     tstd_list{m} = tstd;
     denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
+    poorly_improved_list{m} = logical(poorly_improved);
 
 
     % And then move the qc photos to their respective folders & grab all qc
@@ -485,8 +503,11 @@ if cicada == 1
     % important are power overlap and GM overlap. Also anything with 2 ICs
     % as signal or less need to be cut out, as 2 is a safety number and
     % very lenient. The data must be truly horrid to not have greater than
-    % 2 ICs kept as signal.
-    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal);
+    % 2 ICs kept as signal. Also, if the data was poorly improved (Either
+    % average GM, Smoothing, or power overlap was not improved (increased), OR either
+    % FD, DVARS, or spikiness was not improved (decreased).
+    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + poorly_improved);
+    Group_QC.poorly_improved = poorly_improved_list;
 
     % add to final qc table
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
@@ -502,6 +523,7 @@ if cicada == 1
     final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
     final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
     final_qc_table.cicada_outliers = Group_QC.cicada_outliers;   
+    final_qc_table.poorly_improved = Group_QC.poorly_improved;
 end
 
 % Now, get liberal outliers (not restrictive)

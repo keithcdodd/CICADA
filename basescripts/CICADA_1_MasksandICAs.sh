@@ -703,6 +703,7 @@ fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/cur
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
+# Ventral Attention is Salience
 tag="VentralAttention"
 val="4"
 fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
@@ -710,6 +711,7 @@ fslstats -t "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz" -M -V > ${ROIcalcfol}/cur
 awk '{print $1}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICmean.txt"
 awk '{print $2}' ${ROIcalcfol}/curr_tmp_calc.txt > "${ROIcalcfol}/${tag}_ICnumvoxels.txt"
 
+# FrontoParietal is Executive Control
 tag="FrontoParietal"
 val="5"
 fslmaths "${network_template}" -uthr ${val} -thr ${val} -bin -mul "${GMmask}" -mul "${calcfile}" "${ROIcalcfol}/${tag}_tmp_weighted.nii.gz"
