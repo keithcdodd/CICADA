@@ -1,10 +1,8 @@
 function Manual_CICADA(output_dir, compare_file, mel_fol, IC_manual_checker)
-% Make this into a function that does name=value, and specify what inputs
-% are required. 
-% Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
-% Strongly suggested inputs: subject specific anatfile, anatmask, gm_prob,
-% wm_prob, and csf_prob, as well as task_events_file (if task data).
-% can skip variables with [] input
+% use the IC_manual_checker.csv (that is a manually adjusted version of the
+% SignalLabels of the IC_auto_checker.csv and resaved as
+% IC_manual_checker.csv, to then apply the rest of CICADA using these new
+% IC classifications
 
 
 % need to make sure CICADA folder and subfolders are added to path!

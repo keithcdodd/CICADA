@@ -1,4 +1,4 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, smoothing_kernel, fpass, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -22,6 +22,12 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % fpass is Hz for bandpassing. If used, 0.008 to 0.15 is recommended.
 % Default is no bandpassing []. Lower and higher frequencies should already
 % be diminished by ICA denoising. 
+
+% detrended degree is the degree of polynomial to detrend at. Detrending to
+% the second polynomial is the default if this is input incorrectly. 
+
+% redo_melodic: whether or not to rerun the group melodic if it was already
+% run. 0 to not rerun, 1 to rerun regardless
 
 % sub_ids e.g., {'102', '102', '103'}
 % ses_ids e.g., {'01', '02', '01'}
@@ -61,6 +67,12 @@ end
 if ~exist('smoothing_kernel', 'var') || ~isnumeric(smoothing_kernel) || smoothing_kernel < 0
     fprintf('Default 3mm smoothing gaussian kernel will be applied\n')
     smoothing_kernel = 3;
+end
+
+% if no detrended degree exists, make it 2
+if ~exist('detrended_degree', 'var') || ~isnumeric(detrended_degree)
+    fprintf('Default 2nd degree detrending will be applied\n')
+    detrended_degree = 2;
 end
 
 % set up folders for outputs:
@@ -322,15 +334,15 @@ for idx = 1:num_runs
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     fprintf('Detrending & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
-    cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass);
+    cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
     if ~isempty(orig_file)
          fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
-        orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass);
+        orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
     end
     % do the same to the compare_file, if it exists
     if ~isempty(compare_file)
          fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
-        compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass);
+        compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
     end
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
@@ -497,7 +509,7 @@ if cicada == 1
     %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
 
     % poorly improved
-    Group_QC.poorly_improved = poorly_improved_list';
+    Group_QC.poorly_improved = cell2mat(poorly_improved_list)';
 
     % Factors involving GM coverage are good, alongside factors regarding
     % power spectrum frequency (because sometimes high motion can make

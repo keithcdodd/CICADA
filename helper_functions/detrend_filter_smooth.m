@@ -1,9 +1,11 @@
-function [cleaned_file] = detrend_filter_smooth(file, funcmask, output_dir, smoothing_kernel, fpass)
-% function to apply detrending (to 2nd polynomial) and apply gaussian
+function [cleaned_file] = detrend_filter_smooth(file, funcmask, output_dir, smoothing_kernel, fpass, detrend_degree)
+% function to apply detrending (to 2nd polynomial by default), bandpass, and apply gaussian
 % smoothing kernel, then write file to output dir
 % fpass should be an array of two numbers, representing bounds of Hz to
 % bandpass, e.g. [0.008,0.15]
 % One could do low pass filtering, for example, with [0,0.15].
+
+
 
 % Set up: read file, and get conversion between smoothing kernel from mm to
 % voxel size
@@ -23,12 +25,47 @@ if size(funcmask_data) ~= size(file_orig_data(:,:,:,1))
 end
 
 
-% detrend
-fprintf('   Detrending to 2nd polynomial...\n')
-file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
-file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
-file_detrended_2D = detrend(file_orig_data_2D',2)'; % mean is gone, back can be added back in later
-filtered_signal_2D = file_detrended_2D;
+% detrend, if asked to
+detrended = 0; % whether or not we detrended
+if (exist('detrend_degree', 'var') == 1) && (isa(detrend_degree, 'double') == 1) && ~isempty(detrend_degree)
+    % detrend degree is provided
+    if detrend_degree > 0
+        % OK, now it is actually legit
+        detrend_degree = round(detrend_degree); % round to nearest integer
+        fprintf('   Detrending to %d polynomial...\n', detrend_degree)
+        file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
+        file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
+        file_detrended_2D = detrend(file_orig_data_2D',detrend_degree)'; % mean is gone, back can be added back in later
+        filtered_signal_2D = file_detrended_2D;
+
+        detrended = 1;
+
+    else
+        % if 0 or negative value, don't detrend
+        fprintf('   Not Detrending!\n')
+
+        % still remove the mean to be consistent
+        file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
+        file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
+        file_detrended_2D = file_means_2D ; % mean is gone, back can be added back in later. Not actually detrended, just keeping naming consistent.
+        filtered_signal_2D = file_detrended_2D;
+
+    end
+else
+    % if detrend degree is not given, or not a number, go to default of 2
+    detrend_degree = 2;
+
+    fprintf('   Detrending to %d polynomial...\n', detrend_degree)
+    file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
+    file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
+    file_detrended_2D = detrend(file_orig_data_2D',detrend_degree)'; % mean is gone, back can be added back in later
+    filtered_signal_2D = file_detrended_2D;
+
+    detrended = 1;
+    
+end
+
+
 
 bp = 0;
 if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass) && (length(fpass) == 2)
@@ -62,8 +99,6 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
         fprintf(['  Bandpassing Filtering at ', num2str(low_hz), ' ', num2str(high_hz), ' Hz...\n'])
         lower_phys_cutoff = round(low_hz / df) + 1; % start at freq 0 at position 1
         higher_phys_cutoff = round(high_hz / df) + 1;
-
-        % set up so if low value is below 0
         
         % create for loop to loop through each thing
         filtered_signal_2D = zeros(size(file_detrended_2D));
@@ -113,28 +148,56 @@ if smoothing_kernel ~= 0
     end
 
     if bp == 1
-        % write to data dir and relabel cleaned file:
-        niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name], file_orig_data_info, "Compressed", true)
-        cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name, '.gz']; % update cleaned_file
+        if detrended == 1
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_bp_d', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_bp_d_', file_name, '.gz']; % update cleaned_file
+        else
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name, '.gz']; % update cleaned_file
+        end
     else
-        % write to data dir and relabel cleaned file:
-        niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_', file_name], file_orig_data_info, "Compressed", true)
-        cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_', file_name, '.gz']; % update cleaned_file
+        if detrended == 1
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_d_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_d_', file_name, '.gz']; % update cleaned_file
+        else
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_', file_name, '.gz']; % update cleaned_file
+        end
+        
     end
     
 
 else
     fprintf('   Not Smoothing! \n')
     if bp == 1
-        file_data = file_filtered_data; % not smoothed, only detrended and masked if smoothing kernel was set at 0
-        % write to data dir and relabel cleaned file:
-        niftiwrite(cast(file_data, 'single'), [output_dir, '/bp_', file_name], file_orig_data_info, "Compressed", true)
-        cleaned_file = [output_dir, '/bp_', file_name, '.gz']; % update cleaned_file
+        if detrended == 1
+            file_data = file_filtered_data; % not smoothed, only detrended, bandpassed, and masked if smoothing kernel was set at 0
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/bp_d_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/bp_d_', file_name, '.gz']; % update cleaned_file
+        else
+            file_data = file_filtered_data; % not smoothed, only bandpassed and masked if smoothing kernel was set at 0
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/bp_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/bp_', file_name, '.gz']; % update cleaned_file
+        end
     else
-        file_data = file_filtered_data; % not smoothed, only detrended and masked if smoothing kernel was set at 0
-        % write to data dir and relabel cleaned file:
-        niftiwrite(cast(file_data, 'single'), [output_dir, '/', file_name], file_orig_data_info, "Compressed", true)
-        cleaned_file = [output_dir, '/', file_name, '.gz']; % update cleaned_file
+        if detrended == 1
+            file_data = file_filtered_data; % not smoothed, only detrended and masked if smoothing kernel was set at 0
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/d_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/d_', file_name, '.gz']; % update cleaned_file
+        else
+            file_data = file_filtered_data; % not smoothed or detrended, just masked if smoothing kernel was set at 0
+            % write to data dir and relabel cleaned file:
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/', file_name, '.gz']; % update cleaned_file
+        end
+        
     end
   
 end
