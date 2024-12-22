@@ -1,18 +1,16 @@
-% try running Automatic CICADA (calls Auto_CICADA) on the test data to see if things are
-% seemingly configured and working properly!
+% Example code that would work with the files and file structure shown
+% in the example image. This is provided to help user(s) set up their own
+% data and function calls.
 
 % Note: After Auto_CICADA is successful you have two choices:
-% (1) Complete Automatic CICADA testing by running test_Group_CICADA.m
+% (1) Complete Automatic CICADA testing by running something similar to example_Group_CICADA.m
 % which runs cicada_group_qc.m to finish with Group CICADA. Make sure
 % file_tag = '_auto_'
 % (2) If you want to fully perform manual ICA denoising through CICADA, you can do the following: 
 % (2a) Manually adjust the SignalLabels in IC_auto_checker.csv in the ic_auto_checker directory for each cicada dataset and save the changes as IC_manual_checker.csv,
-% (2b) Then run test_Manual_CICADA.m
-% (2c) Now just run Group CICADA with test_Group_CICADA.m. Make sure
+% (2b) Then run example_Manual_CICADA.m
+% (2c) Now just run Group CICADA with example_Group_CICADA.m. Make sure
 % file_tag = '_manual_'; 
-
-% Note, after this runs successfully, you can also test Group CICADA
-% through the test_Group_CICADA.m which calls cicada_group_qc.m
 
 % Calling either fmriprep_auto_CICADA.m or Auto_CICADA.m should work with
 % the appropriate inputs if everything is configured correctly
@@ -20,10 +18,6 @@
 % Auto_CICADA.m is more applicable to different groupings of data, so will
 % use that here
 
-% test Auto_CICADA.m on the resting state example dataset!
-% Note: You will have to make sure the base directory is the test_CICADA
-% directory, and that the path to the CICADA scripts is correct (and/or
-% added)
 
 CICADA_script_path = '/Users/keithdodd/GitHub/CICADA';
 addpath(genpath(CICADA_script_path))

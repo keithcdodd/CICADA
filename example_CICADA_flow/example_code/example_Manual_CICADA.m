@@ -34,8 +34,6 @@ for i = 1:length(sub_ids)
 
     IC_manual_checker = [output_dir, '/ic_auto_selection/IC_manual_checker.csv'];
 
-
-
     Manual_CICADA(output_dir, compare_file, mel_fol, IC_manual_checker)
 end
 
