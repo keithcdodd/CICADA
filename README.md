@@ -3,7 +3,7 @@ Comprehensive Independent Component Analysis Denoising Assistant (for resting an
 
 CICADA can be broken down into three parts:
 (1) Automatic CICADA: Automatically denoising fMRI images
-(2) Manual CICADA: Save time with manual IC denoising by only having to examine and adjust a small subset of ICs through CICADA
+(2) Manual CICADA: Save time with manual ICA denoising by only having to examine and adjust a small subset of ICs through CICADA
 (3) Group CICADA: Run group-level quality control analyses and processing
 
 # Installation
