@@ -6,7 +6,7 @@ CICADA can be broken down into three parts:
 (2) Manual CICADA: Save time with manual ICA denoising by only having to examine and adjust a small subset of ICs through CICADA
 (3) Group CICADA: Run group-level quality control analyses and processing
 
-Some details on installation and use can be seen below. More details can be found in the word document.
+Some details on installation and use can be seen below. More details can be found in the word document "CICADA_Details".
 
 # Installation
 CICADA requires FSL (tested on 6.0) and Matlab (tested on 2022a). They must be configured to work together (e.g., call_fsl() in matlab calls fsl functions appropriately). Otherwise, this can be just be downloaded as a folder for the user, and the whole folder should be added to Matlab path (e.g., addpath(genpath()) to include all folders). See included word document for more installation and testing details.
