@@ -1,6 +1,6 @@
-% After running test_Auto_CICADA, you can try running Group CICADA:
+% After running example_Auto_CICADA, you can try running Group CICADA:
 
-% Note: You will have to make sure the base directory is the test_CICADA
+% Note: You will have to make sure the base directory is the example_CICADA
 % directory, and that the path to the CICADA scripts is correct (and/or
 % added)
 
