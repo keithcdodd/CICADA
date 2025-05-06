@@ -19,8 +19,8 @@ fs = 1/tr; % grab sampling rate for potential bandpass
 funcmask_data = niftiread(funcmask);
     
 % sigma is about FWHMx / 2.355
-voxel_size = mean(file_orig_data_info.PixelDimensions(1:3)); % to convert smoothing kernel for imgaussfilt3D
-fwhm_mm = smoothing_kernel; % FWHMx
+voxel_size = round(mean(file_orig_data_info.PixelDimensions(1:3))); % to convert smoothing kernel for imgaussfilt3D
+fwhm_mm = smoothing_kernel; % FWHM
 fwhm_voxels = fwhm_mm / voxel_size;   
 sigma = fwhm_voxels / 2.355; 
 
@@ -155,22 +155,22 @@ if smoothing_kernel ~= 0
     if bp == 1
         if detrended == 1
             % write to data dir and relabel cleaned file:
-            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_bp_d', file_name], file_orig_data_info, "Compressed", true)
-            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_bp_d_', file_name, '.gz']; % update cleaned_file
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_d', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_d_', file_name, '.gz']; % update cleaned_file
         else
             % write to data dir and relabel cleaned file:
-            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name], file_orig_data_info, "Compressed", true)
-            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_bp_', file_name, '.gz']; % update cleaned_file
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_', file_name, '.gz']; % update cleaned_file
         end
     else
         if detrended == 1
             % write to data dir and relabel cleaned file:
-            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_d_', file_name], file_orig_data_info, "Compressed", true)
-            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_d_', file_name, '.gz']; % update cleaned_file
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_d_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(round(smoothing_kernel)), '_d_', file_name, '.gz']; % update cleaned_file
         else
             % write to data dir and relabel cleaned file:
-            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(smoothing_kernel), '_', file_name], file_orig_data_info, "Compressed", true)
-            cleaned_file = [output_dir, '/s', num2str(smoothing_kernel), '_', file_name, '.gz']; % update cleaned_file
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_', file_name], file_orig_data_info, "Compressed", true)
+            cleaned_file = [output_dir, '/s', num2str(round(smoothing_kernel)), '_', file_name, '.gz']; % update cleaned_file
         end
         
     end

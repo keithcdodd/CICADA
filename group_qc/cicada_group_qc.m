@@ -1,4 +1,4 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -12,6 +12,10 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % for the call. 
 % file_tag: needs to be unique to the type of denoised/cleaned file you are
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
+
+% voxelwise_scale should be a 1 or a 0. If 1, voxelwise scaling is 
+% performed (after detrending, bandpassing, and smoothing). 
+% Otherwise, voxelwise scaling is not performed 
 
 % smoothing_kernel: gaussian smoothing kernel FWHMx size. Default is same
 % as current size of functional (can do default by giving value of -1). QC
@@ -63,11 +67,25 @@ if ~isequal(class(test_class{1}), class(sub_ids{1}), class(ses_ids{1}), class(ex
     return
 end
 
-% if no smoothing kernel exists, make it 3mm (small, but helpful)
-if ~exist('smoothing_kernel', 'var') || ~isnumeric(smoothing_kernel) || smoothing_kernel < 0
-    fprintf('Default 3mm smoothing gaussian kernel will be applied\n')
-    smoothing_kernel = 3;
+% if no voxelwise_scale exists, make it 0 (no voxelwise_scaling)
+if ~exist('voxelwise_scale', 'var') || ~isnumeric(voxelwise_scale)
+    voxelwise_scale = 0;
 end
+
+% default to no voxelwise scaling, only a 1 will result in doing it. Better
+% safe than sorry!
+if voxelwise_scale ~= 1
+    fprintf('Default no voxelwise scaling will be applied.\n')
+    voxelwise_scale = 0;
+end
+
+% if no smoothing kernel exists, make it default value
+default_smoothing = 0;
+if ~exist('smoothing_kernel', 'var') || ~isnumeric(smoothing_kernel) || smoothing_kernel < 0
+    fprintf('Default smoothing gaussian kernel (FWHMx = 1.5x voxel size) will be applied\n')
+    default_smoothing = 1; % flag to make it the default later on in the function
+end
+
 
 % if no detrended degree exists, make it 2
 if ~exist('detrended_degree', 'var') || ~isnumeric(detrended_degree)
@@ -83,7 +101,7 @@ if not(isfolder(output_dir))
 end
 
 if (~exist('fpass', 'var') == 1) || (~isa(fpass, 'double') == 1) || isempty(fpass)
-    fpass = []; % if bandpass frequencies are not readable, assume no bandpass applied
+    fpass = []; % if bandpass frequencies are not readable, assume default of no bandpassing
 end
 
 % Make separate photo folders, so it is easier to just scroll through them
@@ -166,6 +184,12 @@ end
 % grab tr, which can be relevant for melodic 
 first_image_nifi_info = niftiinfo([first_image_info.folder, '/', first_image_info.name]);
 tr = first_image_nifi_info.PixelDimensions(4); % for use later with melodic
+voxel_size = round(mean(first_image_nifi_info.PixelDimensions(1:3)));
+
+if default_smoothing == 1
+   smoothing_kernel = 1.5 * voxel_size; % default smoothing is 1.5 times the voxel size
+   fprintf(['Will smooth at FWHM of 1.5x voxel size: ', num2str(smoothing_kernel) ,' mm.\n'])
+end
 
 if contains(first_image_info.name, 'CICADA')
     cicada = 1; % mark if these will be CICADA files or not, important for qc tables
@@ -352,6 +376,8 @@ for idx = 1:num_runs
     % end
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
+    % smoothing kernel is FWHM mm, as this is then properly converted
+    % within the detrend_filter_smooth function
     fprintf('Detrending & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
     cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
     
@@ -360,16 +386,14 @@ for idx = 1:num_runs
 
     fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
     orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+
+    if voxelwise_scale == 1
+        fprintf('Performing Voxel-wise Scaling to Mean 100')
+        cleaned_file = voxelwise_scale(cleaned_file); % voxelwise scale each voxel to mean 100
+        compare_file = voxelwise_scale(compare_file); % voxelwise scale each voxel to mean 100
+        orig_file = voxelwise_scale(orig_file); % voxelwise scale each voxel to mean 100
+    end
     
-    % if ~isempty(orig_file)
-    %     fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
-    %     orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
-    % end
-    % % do the same to the compare_file, if it exists
-    % if ~isempty(compare_file)
-    %     fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
-    %     compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
-    % end
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
