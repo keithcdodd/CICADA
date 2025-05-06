@@ -90,6 +90,12 @@ end
 % all in the future. There is only 8p compare if auto, but 8p and auto if
 % manual 
 
+% initialize keeping track of data issues
+data_notes_columnNames = {'Subject', 'Session', 'Task', 'Type', 'Note'};
+data_notes_types = {'string', 'string', 'string', 'string', 'string'};
+data_notes = table('Size', [0, length(data_notes_columnNames)], 'VariableNames', data_notes_columnNames, 'VariableTypes', data_notes_types);
+data_notes_iter = 1;
+
 % go into first participant's info to extract the correct naming, just compare to 8p here for ease:
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest, can be multiples
@@ -198,7 +204,7 @@ for idx = 1:num_runs
     ses_id = ses_ids{idx};
     bad_data = excludes{idx}; % needs to be '1' for bad data, or '0' for OK data
     manually_adjusted = adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
-    denoising_outlier = outliers{idx};
+    denoising_outlier = outliers{idx}; % '1' for general outlier, '0' for OK data
     task_event_file = task_event_files{idx};
 
     fprintf(['\nRunning sub ', sub_id, ' ses ', ses_id, ' task ', task_name, '\n'])
@@ -210,8 +216,18 @@ for idx = 1:num_runs
         % with mriqc, or at time of scan), do not include in group qc
         % analysis
         bad_data_prefixes{bd} = ['sub-', sub_id, '_ses-', ses_id, '_task-', task_name];
+        data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'Excluded', 'Marked to Exclude by User Before Denoising'};
+        data_notes_iter = data_notes_iter + 1; % increment for table
         fprintf(['   Sub ', sub_id, ' ses ', ses_id, ' task ', task_name, ' was marked as bad data. Skipping...\n'])
         continue;
+    end
+
+    % if denoising outlier, we still keep it in group qc folder, but make
+    % sure it is marked (less aggressive than completely excluding it
+    if ~strcmp(denoising_outlier, '0')
+        % denoising outlier, make a note!
+        data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'Outlier', 'Marked as Denoising Outlier By User After Quality Control'};
+        data_notes_iter = data_notes_iter + 1; % increment for table
     end
 
     % Make sure task directory exists
@@ -262,6 +278,8 @@ for idx = 1:num_runs
         if ~strcmp(manually_adjusted, '0')
             % this was manually adjusted, grab manual version
             cleaned_file_info = dir([cleaned_dir, '*CICADA*manual*.nii.gz']);
+            data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'Manually Adjusted', 'Manual IC classification performed by User, with manual denoising used instead of automated because of better denoising performance.'};
+            data_notes_iter = data_notes_iter + 1; % increment for table
 
             % make sure only one file is grabbed
             if size(cleaned_file_info,1) ~= 1
@@ -289,6 +307,7 @@ for idx = 1:num_runs
                 (compare_clean{"DVARS_Corr", "Percent_Change"} > 0));
 
         end
+
     else
         % this is not a cicada file, so we do not need to worry about
         % manual CICADA adjustments
@@ -319,46 +338,57 @@ for idx = 1:num_runs
     end
     compare_file = [compare_file_info.folder, '/', compare_file_info.name];
 
-    if strcmp(compare_file, cleaned_file)
-        % then the cleaned file is the 8p file... no use comparing
-        % something to itself!
-        compare_file = '';
-    end
-
-    if strcmp(cleaned_file, orig_file)
-        % Then we are just trying to run stats on original files for
-        % comparison! Do not need compare or "orig" since "cleaned" is orig
-        compare_file = '';
-        orig_file = '';
-    end
+    % if strcmp(compare_file, cleaned_file)
+    %     % then the cleaned file is the 8p file... no use comparing
+    %     % something to itself!
+    %     compare_file = '';
+    % end
+    % 
+    % if strcmp(cleaned_file, orig_file)
+    %     % Then we are just trying to run stats on original files for
+    %     % comparison! Do not need compare or "orig" since "cleaned" is orig
+    %     compare_file = '';
+    %     orig_file = '';
+    % end
 
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     fprintf('Detrending & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
     cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
-    if ~isempty(orig_file)
-         fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
-        orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
-    end
-    % do the same to the compare_file, if it exists
-    if ~isempty(compare_file)
-         fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
-        compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
-    end
+    
+    fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
+    compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+
+    fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
+    orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+    
+    % if ~isempty(orig_file)
+    %     fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
+    %     orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+    % end
+    % % do the same to the compare_file, if it exists
+    % if ~isempty(compare_file)
+    %     fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
+    %     compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+    % end
     
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
     fprintf('Now calculating QC\n')
-    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, qc_table, qc_corrs_table, qc_photo_paths] = cicada_get_qc(cleaned_dir, cleaned_file, samps);
-    if ~isempty(orig_file)
-        [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file, samps);
-    else
-        orig_qc_corrs_table = table();
-    end
-    if ~isempty(compare_file)
-        [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file, samps);
-    else
-        compare_qc_corrs_table = table();
-    end
+    [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, cleaned_qc_table, ...
+        cleaned_qc_corrs_table, cleaned_qc_photo_paths, ...
+        compare_qc_table, compare_qc_corrs_table, ...
+        orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps);
+    
+    % if ~isempty(orig_file)
+    %     [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file, samps);
+    % else
+    %     orig_qc_corrs_table = table();
+    % end
+    % if ~isempty(compare_file)
+    %     [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file, samps);
+    % else
+    %     compare_qc_corrs_table = table();
+    % end
 
     % make and get tstd
     % Also calculate and grab a tstd and grab per region
@@ -388,6 +418,7 @@ for idx = 1:num_runs
     poorly_improved_list{m} = logical(poorly_improved);
 
 
+    % QC info!
     % And then move the qc photos to their respective folders & grab all qc
     % values (sampled). plot AFTER. 8p comparison is always a good base
     % comparison.
@@ -400,23 +431,45 @@ for idx = 1:num_runs
         photo_fol = [output_dir, '/qc_photos_', compare_tag];
         copyfile(curr_compare_image_file, photo_fol)
     end
-    
+
+    % now is a good time to grab network identifiability too!
+    network_identifiability_file = [task_dir, '/qc/network_identifiability.nii.gz'];
+    if isfile(network_identifiability_file)
+        fprintf('Copying network identifiability image information:\n')
+        curr_network_identifiability = niftiread(network_identifiability_file);
+        curr_denoised_network_identifiability = curr_network_identifiability(:,:,:,1);
+        curr_compare_network_identifiability = curr_network_identifiability(:,:,:,2);
+        curr_orig_network_identifiability = curr_network_identifiability(:,:,:,3);
+
+        % save organized data. Will need to write to nifti once complete
+        denoised_network_identifiability(:,:,:,m) = curr_denoised_network_identifiability;
+        compare_network_identifiability(:,:,:,m) = curr_compare_network_identifiability;
+        orig_network_identifiability(:,:,:,m) = curr_orig_network_identifiability;
+    else
+        fprintf('No network identifiability image found!\n')
+    end
 
     % Now, add all corrs into the group (compare is already done above in for loop)!
     if m == 1
          % if it is first instance, then group qc table is just subject qc
          % table
-         group_qc_table = qc_table;
-         group_qc_corrs_table = qc_corrs_table;
+         group_qc_table = cleaned_qc_table;
+         group_qc_corrs_table = cleaned_qc_corrs_table;
          if orig_only == 0
+             group_compare_qc_table = compare_qc_table;
+             group_orig_qc_table = orig_qc_table;
+
              group_orig_qc_corrs_table = orig_qc_corrs_table;
              group_compare_qc_corrs_table = compare_qc_corrs_table;
          end
     else
         % otherwise, tack it on to the end
-        group_qc_table = [group_qc_table; qc_table];
-        group_qc_corrs_table = [group_qc_corrs_table; qc_corrs_table];
+        group_qc_table = [group_qc_table; cleaned_qc_table];
+        group_qc_corrs_table = [group_qc_corrs_table; cleaned_qc_corrs_table];
         if orig_only == 0
+            group_orig_qc_table = [group_orig_qc_table; orig_qc_table];
+            group_compare_qc_table = [group_compare_qc_table; compare_qc_table];
+
             group_orig_qc_corrs_table = [group_orig_qc_corrs_table; orig_qc_corrs_table];
             group_compare_qc_corrs_table = [group_compare_qc_corrs_table; compare_qc_corrs_table];
         end
@@ -425,6 +478,7 @@ for idx = 1:num_runs
     m = m+1; % increment successful counter
 end
 fprintf('\n Done with calculating subject data\n')
+
 
 
 % record the bad data that was not even looked at, for easy reference later:
@@ -521,8 +575,16 @@ if cicada == 1
     % 2 ICs kept as signal. Also, if the data was poorly improved (Either
     % average GM, Smoothing, or power overlap was not improved (increased), OR either
     % FD, DVARS, or spikiness was not improved (decreased).
-    Group_QC.cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
-    
+    cicada_outliers = logical(Group_QC.low_gm_coverage_by_signal + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
+    Group_QC.cicada_outliers = cicada_outliers;
+
+    % record into data notes:
+    for ico = 1:length(cicada_outliers)
+        if cicada_outliers(ico)
+            data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'CICADA Outlier', 'Group CICADA automatically labeled this as an outlier compared to the other data.'};
+            data_notes_iter = data_notes_iter + 1; % increment for table
+        end
+    end
 
     % add to final qc table
     final_qc_table.low_number_total_ics = Group_QC.low_number_total_ics;
@@ -552,10 +614,33 @@ Group_QC.conservative_outliers = (final_qc_table.mean_FD > 0.25) | ...
 % And record Denoising outlier (which was manually selected by the user)
 Group_QC.denoising_outliers = cell2mat(denoising_outlier_list)';
 
+% sort data_notes
+data_notes_sorted = sortrows(data_notes, 'Subject', 'ascend');
+% save data notes, and write it as a table!
+Group_QC.data_notes = data_notes_sorted;
+writetable(data_notes_sorted, 'group_qc_data_notes_table.csv')
+
+% Make a final list of what images (out of the ones kept in group_qc_data)
+% are used for future analyses
+% remove outliers from the rest of analysis
+if cicada == 1
+    % CICADA outliers are the outliers determined by this script. Denoising
+    % outliers are the outliers that the user provided by the "outliers"
+    % parameter
+    image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
+else
+    image_keep = ~Group_QC.denoising_outliers;
+end
+
+% save image_keep so it is easy in the future to know what images were left
+% out
+Group_QC.Images_Used = image_keep;
+
 % add to final qc table
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
 final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
-final_qc_table.denoising_outliers = Group_QC.denoising_outliers;
+final_qc_table.denoising_outliers = Group_QC.denoising_outliers; % outliers user marked themselves after denoising (not including automated CICADA Outliers)
+final_qc_table.image_keep = Group_QC.Images_Used; % This is the final decision of which images to use, based on what is in the group_qc_table (both denoising outliers and automated CICADA outliers)
 
 writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_signal and signal_gm proportions and also number_kept_ics to help find the bad or adjustable data
 writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv')
@@ -564,18 +649,29 @@ Group_QC.final_qc_corrs_table = final_qc_corrs_table;
 if orig_only == 0
     % there is only a compare and orig qc corrs table if we are not just
     % looking at the original data only
+    Group_QC.compare_qc_table = group_compare_qc_table;
+    Group_QC.orig_qc_table = group_orig_qc_table;
+
     Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
     Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
 else
+    group_compare_qc_table = table();
+    group_orig_qc_table = table();
+
     group_compare_qc_corrs_table = table();
     group_orig_qc_corrs_table = table();
+
+    Group_QC.compare_qc_table = group_compare_qc_table;
+    Group_QC.orig_qc_table = group_orig_qc_table;
+
     Group_QC.compare_qc_corrs_table = group_compare_qc_corrs_table;
     Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
 end
 
 
 % Save qc corrs data for quick and easy comparison plotting
-save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table' )
+save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table')
+save('qc_data.mat', 'group_qc_table', 'group_compare_qc_table', 'group_orig_qc_table')
 
 % Now do group plotting
 dcorrt = group_qc_corrs_table; % same as final qc corrs table
@@ -632,22 +728,28 @@ end
 
 fprintf('Finished Group QC Plotting!\n')
 
-
-% Now work on the images:
-
-% remove outliers from the rest of analysis
-if cicada == 1
-    % CICADA outliers are the outliers determined by this script. Denoising
-    % outliers are the outliers that the user provided by the "outliers"
-    % parameter
-    image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
-else
-    image_keep = ~Group_QC.denoising_outliers;
+% Now write network identifiability nifti files!
+if isfile(network_identifiability_file)
+    network_identifiability_info = niftiinfo(network_identifiability_file);
+    network_identifiability_info.ImageSize = [network_identifiability_info.ImageSize(1:3), (m-1)];
+    network_identifiability_info.Datatype = 'single';
+    
+    % denoised
+    network_identifiability_info.Filename = [output_dir, '/network_identifiability_', cleaned_file_tag, '.nii.gz'];
+    niftiwrite(single(denoised_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
+    
+    % compare
+    compare_file_tag = extractAfter(compare_tag, '_vs_');
+    network_identifiability_info.Filename = [output_dir, '/network_identifiability_', compare_file_tag, '.nii.gz'];
+    niftiwrite(single(compare_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
+    
+    % orig
+    network_identifiability_info.Filename = [output_dir, '/network_identifiability_orig.nii.gz'];
+    niftiwrite(single(orig_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
 end
 
-% save image_keep so it is easy in the future to know what images were left
-% out
-Group_QC.Images_Used = image_keep;
+
+% Now work on the images (we already have image_keep set from earlier)
 
 % merge signalandnoise_overlap into a 4D file, if CICADA
 if cicada == 1
@@ -681,6 +783,10 @@ if ~isempty(data_signal_mask_list)
     funcmask_signal_overlap_command = ['fslmaths ', output_dir, '/signal_funcmasks.nii.gz -Tmin ', output_dir, '/group_signal_funcmask.nii.gz'];
     [~, ~] = call_fsl(funcmask_signal_overlap_command);
 end
+
+% Potential Future Idea: After group MELODIC, make automatic decisions on signal or
+% noise like ICs, based on spatial map and back projections of power
+% spectrum.. etc.
 
 % Run Group MELODIC
 % First, make text file of the image names

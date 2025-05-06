@@ -112,7 +112,9 @@ if ~strcmp(task_events_file, '')
     if isfile(task_events_file)
         task_events_table = readtable(task_events_file, 'FileType', 'delimitedtext');
         % remove 'baseline' if it exists (do not want to model a baseline)
-        baseline_exists = find(strcmp(task_events_table{:,3}, 'baseline'));
+        % NOTE: column needs to be called trial_type, otherwise an error will occur here!
+        % Also, if you have baselines, they need to be called baseline
+        baseline_exists = find(strcmp(task_events_table.trial_type, 'baseline'));
         if ~isempty(baseline_exists)
             task_events_table(baseline_exists, :) = [];
         end
@@ -350,8 +352,27 @@ Freq_relprops_table{:,'Highfreq'} = Freq_genprops_table{:,'Highfreq'} ./ (Freq_g
 Tables.Freq_relativeprops_table = Freq_relprops_table;
 
 % (3) Correlations: to dvars, FD, tasks (if not resting state):
-confound_place = 'confounds_timeseries.csv';
-allconfounds = readtable(confound_place);
+% fmriprep historically has labeled confounds as csv, but been tab
+% delimited... so just check that filename matches true filetype.
+
+% NOTE: if you get an error around here, you may have an ill-configured
+% confounds file! It needs to be tsv or csv, and needs to have the columns
+% with exact labeling convention as shown to be imported below! Also, if
+% .tsv then make sure it is actually tab-delimited. If .csv, make sure it
+% is actually comma-delimited!
+if exist('confounds_timeseries.tsv', 'file') ~= 0
+    confound_place = 'confounds_timeseries.tsv';
+    % if it is a .tsv, then it should be tab delimited.
+    allconfounds = readtable(confound_place, 'FileType', 'text', 'Delimiter', '\t');
+elseif exist('confounds_timeseries.csv', 'file') ~= 0
+    confound_place = 'confounds_timeseries.csv';
+    % matlab can natively read csv no problem. CSV is probably better.
+    allconfounds = readtable(confound_place);
+else
+    fprintf('ERROR: Cannot find confounds_timeseries as either csv or tsv?')
+    return;
+end
+
 Data.Confounds.Nineparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z', 'white_matter', 'csf', 'global_signal'}));
 Data.Confounds.Eightparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z', 'white_matter', 'csf'}));
 Data.Confounds.Sixmotionparam = table2array(allconfounds(:,{'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'}));
@@ -384,21 +405,36 @@ condition_names = {};
 condition_corrs = [];
 condition_corrs_table = table();
 if isfile(task_events_file)
-    condition_names = unique(task_events_table{:,3})';
+    fprintf('Examining Task Events. onset, duration, and trial_type MUST be named completely accurately! See User Guide.\n')
+    % ideally this is worked to look for the names: "onset", "duration",
+    % "trial_type"
+
+    condition_names = unique(task_events_table.trial_type)';
     block = zeros(numvolumes, length(condition_names));
     
     for j = 1:length(condition_names)
         curr_condition_name = condition_names{j};
-        curr_condition_rows = find(strcmp(task_events_table{:,3}, curr_condition_name));
+        curr_condition_rows = find(strcmp(task_events_table.trial_type, curr_condition_name));
+        onsets = task_events_table.onset;
+        durations = task_events_table.duration;
         for k = 1:length(curr_condition_rows)
             % ceiling is used incase it is some weird task that does not
             % fit TR lengths, round up to model a delayed HRF
             % start index add 1 because if start at timepiont 0, index is 1
             % in matlab
-            start_ind = ceil(task_events_table{curr_condition_rows(k),1}./TR)+1;
+            start_ind = ceil(onsets(curr_condition_rows(k))./TR)+1;
             % don't add one for stop index, because in relation to start
             % index
-            stop_ind = start_ind + ceil(task_events_table{curr_condition_rows(k),2}./TR);
+            % (duration / TR) -> round up for number of blocks, but
+            % start_ind counts as a block, so subtract 1. This works for
+            % everything but 0 (impulse) since rounding up still gives 0. 
+            stop_ind = start_ind + ceil(durations(curr_condition_rows(k))./TR) - 1;
+
+            % To fix the 0 duration issue (impulse) just set stop_ind to
+            % start_ind
+            if stop_ind < start_ind
+                stop_ind = start_ind;
+            end
             block(start_ind:stop_ind, j) = 1;
         end
     end

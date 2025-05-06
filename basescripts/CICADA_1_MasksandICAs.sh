@@ -13,11 +13,11 @@ echo
 
 usage(){
 >&2 cat << EOF
-Usage: `basename $0` -o /cicada_dir/sub_id/ses_id/task_id -F funcfile.nii.gz -f funcmask.nii.gz -C confoundsfile.csv -A anatfile.nii.gz -a anatmask.nii.gz -g gm_prob.nii.gz -w wm_prob.nii.gz -c csf_prob.nii.gz
+Usage: `basename $0` -o /cicada_dir/sub_id/ses_id/task_id -F funcfile.nii.gz -f funcmask.nii.gz -C confoundsfile.tsv -A anatfile.nii.gz -a anatmask.nii.gz -g gm_prob.nii.gz -w wm_prob.nii.gz -c csf_prob.nii.gz
   [ -o input : (necessary) output_dir: where to put the outputs, should be cicada_dir/sub_id/sess_id/task_id. Make it two levels deeper than subject_id folder! ]
   [ -F input : (necessary) funcfile: unmasked functional file ]
   [ -f input : (necessary) funcmask: current functional mask ]
-  [ -C input : (necessary) confoundsfile: csv of confounds as columns with headers. Need 6 motion parameters (e.g., rot_x, trans_x, etc.), dvars, framewise_displacement, csf, white_matter, and global_signal ]
+  [ -C input : (necessary) confoundsfile: tsv or csv of confounds as columns with headers. Need 6 motion parameters (e.g., rot_x, trans_x, etc.), dvars, framewise_displacement, csf, white_matter, and global_signal ]
   [ -A input : (preferred) anatfile: anatomy file, will default to MNI 2009c asym T1 ]
   [ -a input : (preferred) anatmask: anatomy mask, will default to MNI 2009c asym mask ]
   [ -g input : (preferred) gm_prob: grey matter probability file, will default to MNI 2009c asym ]
@@ -121,7 +121,7 @@ if [ "${funcmask}" = "x" ]; then
   exit
 fi
 if [ "${confoundsfile}" = "x" ]; then
-  echo "Missing a confounds file. Should be .csv, confounds are in columns with headers."
+  echo "Missing a confounds file. Should be .tsv or .csv, confounds are in columns with headers."
   usage
   exit
 fi
@@ -291,10 +291,15 @@ anatfile="${output_anatfol}/anatfile.nii.gz"
 
 
 # copy over session functional files and confounds file
+
+# get confounds file name, in case of tsv or csv, want to maintain type:
+confounds_filename=$(basename "${confoundsfile}")
+confounds_extension="${confounds_filename##*.}"
+
 funcfilename="funcfile"
 cp "${funcfile}" "${output_dir}/${funcfilename}_unmasked.nii.gz"
 cp "${funcmask}" "${output_dir}/funcmask_orig.nii.gz"
-cp "${confoundsfile}" "${output_dir}/confounds_timeseries.csv"
+cp "${confoundsfile}" "${output_dir}/confounds_timeseries.${confounds_extension}"
 
 # remake task-specific regionmask folder, just in case
 if [ -d "${output_dir}/region_masks" ]

@@ -17,7 +17,12 @@ N = file_orig_data_info.ImageSize(4); % number of samples
 T = N * tr; % total time scanned
 fs = 1/tr; % grab sampling rate for potential bandpass
 funcmask_data = niftiread(funcmask);
-mm_div = mean(file_orig_data_info.PixelDimensions(1:3)); % to convert smoothing kernel for imgaussfilt3D
+    
+% sigma is about FWHMx / 2.355
+voxel_size = mean(file_orig_data_info.PixelDimensions(1:3)); % to convert smoothing kernel for imgaussfilt3D
+fwhm_mm = smoothing_kernel; % FWHMx
+fwhm_voxels = fwhm_mm / voxel_size;   
+sigma = fwhm_voxels / 2.355; 
 
 if size(funcmask_data) ~= size(file_orig_data(:,:,:,1))
     fprintf('   Funcmask size does not match Data size...\n')
@@ -141,7 +146,7 @@ if smoothing_kernel ~= 0
     file_data = zeros(size(file_orig_data));
     % gaussian smooth and remask
     for idx2 = 1:size(file_orig_data,4)
-        curr_file_data = imgaussfilt3(file_filtered_data(:,:,:, idx2), round(smoothing_kernel ./ mm_div)); % convert kernel from mm to voxel
+        curr_file_data = imgaussfilt3(file_filtered_data(:,:,:, idx2), sigma); % convert kernel from mm to voxel
         curr_file_data(funcmask_data == 0) = 0; % mask it
         curr_file_data(curr_file_data < 0.01) = 0; % and get rid of negative numbers, if they exist
         file_data(:,:,:, idx2) = curr_file_data;

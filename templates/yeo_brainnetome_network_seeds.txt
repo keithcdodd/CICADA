@@ -1,0 +1,9 @@
+1. Default
+2. Sensorimotor
+3. Visual
+4. Salience
+5. Dorsal Attention
+6. Executive Control
+7. Reward/Limbic
+
+Looked at regions overlap between brainnetome and yeo atlas, and picked some choice regions with solid overlap to make seeds.

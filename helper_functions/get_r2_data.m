@@ -29,16 +29,7 @@ NotGM_r2 = NotGM_GM_corr.^2;
 GM_r2 = GM_GM_corr.^2;
 
 
-% Convert R2s to Fs - might be useful (good for comparing against each other, i.e., two sample testing)
-% df1 = k; df2 = timeseries_n-(k+1); % should be the same for all of them
-% Edge_f = ((Edge_r2) ./ (1-Edge_r2)) .* (df2 / df1);
-% FD_f = ((FD_r2) ./ (1-FD_r2)) .* (df2 / df1);
-% DVARS_f = ((DVARS_r2) ./ (1-DVARS_r2)) .* (df2 / df1);
-% Outbrain_f = ((Outbrain_r2) ./ (1-Outbrain_r2)) .* (df2 / df1);
-% WMCSF_f = ((WMCSF_r2) ./ (1-WMCSF_r2)) .* (df2 / df1);
-% CSF_f = ((CSF_r2) ./ (1-CSF_r2)) .* (df2 / df1);
-% NotGM_f = ((NotGM_r2) ./ (1-NotGM_r2)) .* (df2 / df1);
-% GM_f = ((GM_r2) ./ (1-GM_r2)) .* (df2 / df1);
+
 
 
 % Calculate p value of mean r2 from beta distribution beta( (k-1)/2 , (n-k) / 2)

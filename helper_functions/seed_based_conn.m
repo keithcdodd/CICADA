@@ -1,0 +1,95 @@
+function seed_based_conn(func_path, seed_path, smooth_kern, output_path, brain_mask_path)
+
+    func_info = niftiinfo(func_path);
+    func_data = niftiread(func_info);  % 4D: X x Y x Z x T
+
+    voxel_size = mean(func_info.PixelDimensions(1:3)); % to do the mm smoothing you want
+    
+    % sigma is about FWHMx / 2.355
+    fwhm_mm = smooth_kern; % FWHMx
+    fwhm_voxels = fwhm_mm / voxel_size;   
+    sigma = fwhm_voxels / 2.355; 
+
+    seed_prob_info = niftiinfo(seed_path);
+    seed_prob_data = niftiread(seed_prob_info);  % Probability map, 0-100
+
+    % resample seed probability
+    target_size = func_info.ImageSize(1:3);
+    if ~isequal(size(seed_prob_data), target_size)
+        fprintf('Resampling seed prob data from %s to %s...\n', ...
+            mat2str(size(seed_prob_data)), mat2str(target_size));
+        seed_prob_data = imresize3(single(seed_prob_data), target_size);
+    end
+
+    if nargin >= 5 && ~isempty(brain_mask_path)
+        brain_mask_info = niftiinfo(brain_mask_path);
+        mask_data = niftiread(brain_mask_info);
+
+        % Resample brain mask
+        target_size = func_info.ImageSize(1:3);
+        if ~isequal(size(mask_data), target_size)
+            fprintf('Resampling brain mask from %s to %s...\n', ...
+                mat2str(size(mask_data)), mat2str(target_size));
+            resampled_mask = imresize3(single(mask_data), target_size, 'nearest');
+            brain_mask = resampled_mask > 0.5; % binarize again
+        else
+            brain_mask = mask_data > 0;
+        end
+        fprintf('Using brain mask from: %s\n', brain_mask_path);
+    else
+        brain_mask = true(func_info.ImageSize(1:3));  % Default to all voxels
+        fprintf('No brain mask provided, using all voxels.\n');
+    end
+
+    % Smoothing
+    fprintf('Smoothing functional data with kernel = %.2f mm\n', smooth_kern);
+    func_smoothed = zeros(size(func_data), 'like', func_data);
+
+    for t = 1:size(func_data, 4)
+        func_smoothed(:,:,:,t) = imgaussfilt3(func_data(:,:,:,t), sigma);
+    end
+
+    % mean timeseries
+    seed_prob = single(seed_prob_data);
+    seed_prob(seed_prob <= 50) = 0;
+    seed_prob = seed_prob / sum(seed_prob(:)); % normalize to sum of 1
+
+    % Reshape functional data and seed_prob to apply weight
+    [X, Y, Z, T] = size(func_data); % don't smooth for ROI
+    func_2d = reshape(func_data, [], T);        % [voxels x time]
+    seed_wts = seed_prob(:);                        % [voxels x 1]
+    
+    % Weighted average across voxels
+    seed_mean_ts = seed_wts' * func_2d;             % [1 x time]
+
+    % Voxel correlation of smoothed data, with brain mask if desired
+    fprintf('Computing correlations within brain mask...\n');
+    voxel_mask = brain_mask(:);
+    func_2d_smoothed = reshape(func_smoothed, [], T);  
+    all_voxel_ts = func_2d_smoothed(voxel_mask, :);
+
+    % Z-score
+    seed_z = (seed_mean_ts - mean(seed_mean_ts)) / std(seed_mean_ts);
+    all_z = (all_voxel_ts - mean(all_voxel_ts, 2)) ./ std(all_voxel_ts, 0, 2);
+
+    % Correlation
+    corr_vals = (all_z * seed_z') / (T - 1);
+    corr_vals(isnan(corr_vals)) = 0;
+
+    % Z transform
+    z_vals = atanh(corr_vals); 
+
+    % create 3D output
+    z_map = zeros(prod(func_info.ImageSize(1:3)), 1, 'single');
+    z_map(voxel_mask) = z_vals;
+    z_map_3d = reshape(z_map, func_info.ImageSize(1:3));
+
+    % save!
+    func_info.Filename = output_path;
+    func_info.Datatype = 'single';
+    func_info.ImageSize = func_info.ImageSize(1:3);
+    func_info.PixelDimensions = func_info.PixelDimensions(1:3);
+    niftiwrite(z_map_3d, output_path, func_info, 'Compressed', true);
+
+    fprintf('Fisher z-transformed correlation map saved to: %s\n', output_path);
+end

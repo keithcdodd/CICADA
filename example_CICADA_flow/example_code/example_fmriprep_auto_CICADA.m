@@ -14,7 +14,7 @@ mel_fol = [];
 
 
 cicada_dir = [base_dir, '/bids_data/derivatives/cicada'];
-sub_ids = {'132', '135', '140'};
+sub_ids = {'107', '158'};
 ses_id = '01'; % which scan has the functional scan
 anat_ses_id = '01'; % which session has the anatomical scan of interest
 task_name = 'rest';
