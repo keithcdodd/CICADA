@@ -864,7 +864,7 @@ command = ['fslmerge -t ./melodic/ICprobabilities.nii.gz ', probmapnames];
 % And load this now, 4th dimension is the ICs
 IC_probs = niftiread('./melodic/ICprobabilities.nii.gz');
 IC_probs_info = niftiinfo('./melodic/ICprobabilities.nii.gz');
-IC_probs_99 = logical(IC_probs > 0.99); % keeps only very best overlap
+IC_probs_mask = logical(IC_probs > 0.99); % keeps only very best overlap
 
 % grab melodic file too - can be good for later images
 IC_mel = niftiread('./melodic/melodic_IC.nii.gz');
@@ -887,97 +887,47 @@ for i1 = 1:7
     networks(:,:,:,i1) = logical(networks_combined == i1);
 end
 
-% OK, now you can just multiply this by ICprobabilities file since each 4th
-% dimension is an IC
-% because matlab does not love a 4th dimension, the code is a little
-% complex
-% initialize:
-IC_in_network = zeros(size(IC_probs_99,4), size(networks,4));
-network_in_IC = IC_in_network;
-dice_IC_network = IC_in_network;
-for i1 = 1:size(networks,4)
-    curr_network = networks(:,:,:,i1);
+Group_QC.networks = networks;
+Group_QC.IC_probs_mask = IC_probs_mask; % 99% mask
+network_names = {'Visual', 'Sensorimotor', 'Dorsal Attention', 'Salience', 'Executive', 'Default', 'Subcortical'};
+IC_assignment_table = assign_ICs_to_networks_clust(networks, IC_probs_mask, network_names);
 
-    curr_IC_network_overlap = zeros(size(IC_probs_99));
-    for i2 = 1:size(IC_probs_99,4)
-        % make matrix only showing overlap between probability maps and
-        % current network
-        curr_IC_network_overlap(:,:,:,i2) = logical(IC_probs_99(:,:,:,i2) .* curr_network); % Try to mask in 4th dimension
-    end
-    
-    % sum across everything except ICs & squeeze to reduce dimensions to
-    % calculate proportional overlap per IC
-    IC_in_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ squeeze(sum(sum(sum(IC_probs_99,1),2),3));
-    network_in_IC(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) / sum(curr_network(:));
+% Also just write out the melodic ICs that are maintained overall!
+kept_ICs_mel = IC_mel(:,:,:, IC_assignment_table.IC_Index);
+IC_mel_info.Datatype = 'single';
+IC_mel_info.ImageSize = [IC_mel_info.ImageSize(1:end-1), length(IC_assignment_table.IC_Index)];
+niftiwrite(cast(kept_ICs_mel, 'single'), 'IC_mel_networks', IC_mel_info, 'Compressed', true)
 
-    dice_IC_network(:,i1) = squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)) ./ ...
-        (squeeze(sum(sum(sum(IC_probs_99,1),2),3)) + sum(curr_network(:)) ...
-        - squeeze(sum(sum(sum(curr_IC_network_overlap,1),2),3)));
-end
+% record table
+writetable(IC_assignment_table, 'IC_assignment_table.csv', 'Delimiter',',')
 
-Group_QC.IC_in_network = IC_in_network;
-Group_QC.network_in_IC = network_in_IC;
-Group_QC.dice_IC_network = dice_IC_network;
+networks_IC_probs = IC_probs(:,:,:,IC_assignment_table.IC_Index);
+niftiwrite(cast(networks_IC_probs, 'single'), 'IC_probs_networks', IC_mel_info, 'Compressed', true) % max of probability files for related networks
 
-% Idea: select ICs that contribute toward networks:
-% For each network, sort ICs by dice . Loop through those calculating new
-% dice for each IC addition. Once new_dice < old_dice, stop. Output ICs
-% that contributed
-networks_ICs = cell(size(networks,4),1);
-networks_dice = zeros(size(networks,4),1);
-networks_IC_probs_99 = zeros(size(networks));
-networks_IC_probs_final = networks_IC_probs_99;
-networks_IC_mel_max_final = networks_IC_probs_99;
-for i1 = 1:size(networks,4)
-    curr_dice = 0;
-    curr_network_dices = dice_IC_network(:,i1);
-    curr_network = networks(:,:,:,i1);
-    [~, b] = sort(curr_network_dices, 'descend');
 
-    % initialize
-    curr_IC_prob_cum = zeros(size(networks(:,:,:,1)));
-    go = 1; i2 = 1; network_ICs = [];
-    while go > 0
-        curr_IC_prob_cum = curr_IC_prob_cum + IC_probs_99(:,:,:,b(i2));
-        curr_IC_and_network = logical(curr_IC_prob_cum .* curr_network); % A & B
-        curr_IC_or_network = logical(curr_IC_prob_cum + curr_network); % A or B
-        % dice = A&B / (AorB-A&B)
-        dice_new = sum(curr_IC_and_network(:)) ./ sum(curr_IC_or_network(:));
-        if dice_new <= curr_dice
-            go = 0;
-        else
-            curr_dice = dice_new;
-            network_ICs = [network_ICs, b(i2)]; % save a list of the ICs to use for each network
-            updated_IC_prob_99 = int8(logical(curr_IC_prob_cum));
-        end
-        i2 = i2+1;
-    end
-    
+% make files for masking each network and maximum z score too
+networks_IC_probs_mask = zeros(size(networks));
+networks_IC_mel_max = zeros(size(networks));
+for i1 = 1:max(IC_assignment_table.Assigned_Network)
+
+    curr_network_ICs = IC_assignment_table.IC_Index(IC_assignment_table.Assigned_Network == i1);
+
     % writeout IC prob network file:
-    networks_IC_probs_99(:,:,:,i1) = updated_IC_prob_99;
-    networks_IC_probs_final(:,:,:,i1) = logical(updated_IC_prob_99 .* int8(curr_network)); % keep within network file
+    networks_IC_probs_mask(:,:,:,i1) = max(IC_probs(:,:,:, curr_network_ICs),[], 4);
 
     % write out melodic max version, a solid reference
-    curr_network_IC_mel = IC_mel(:,:,:, sort(network_ICs));
-    networks_IC_mel_max_final(:,:,:,i1) = max(curr_network_IC_mel,[],4);
-
-    networks_dice(i1) = curr_dice;
-    networks_ICs{i1} = {network_ICs};
+    curr_network_IC_mel = IC_mel(:,:,:, curr_network_ICs);
+    [~, max_pos_abs_z] = max(abs(curr_network_IC_mel),[],4, 'linear');
+    networks_IC_mel_max(:,:,:,i1) = curr_network_IC_mel(max_pos_abs_z); % will follow the sign now
 end
 
-IC_probs_info.Datatype = 'single';
-IC_probs_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
-niftiwrite(cast(networks_IC_probs_99, 'single'), 'IC_probs_networks', IC_probs_info, 'Compressed', true)
-niftiwrite(cast(networks_IC_probs_final, 'single'), 'IC_probs_networks_final', IC_probs_info, 'Compressed', true)
-niftiwrite(cast(networks_IC_mel_max_final, 'single'), 'IC_mel_networks_final', IC_probs_info, 'Compressed', true)
+IC_3D_info = IC_probs_info;
+IC_3D_info.Datatype = 'single';
+IC_3D_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
 
-Group_QC.networks_dice = networks_dice;
-Group_QC.networks_ICs = networks_ICs;
-
+niftiwrite(cast(networks_IC_probs_mask, 'single'), 'IC_mask_networks', IC_3D_info, 'Compressed', true) % mask of max 99%+ probability for related networks
+niftiwrite(cast(networks_IC_mel_max, 'single'), 'IC_mel_networks_zmax', IC_3D_info, 'Compressed', true) % maximum (positive or negative) z values for ICs in network
 
 
 save('group_qc.mat', 'Group_QC')
-% When this is done, create your own table, with same image_numbers and
-% image_names, with a list of what you are keeping versus not. Go through
-% any you don't want to keep for qc reasons, and check if manual IC
-% selection can be improved to help save it.
+

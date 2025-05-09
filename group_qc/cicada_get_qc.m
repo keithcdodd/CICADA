@@ -11,7 +11,7 @@ function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, ...
 % may need to add to path for base scripts
 
 if not(isfile(cleaned_file))
-    fprintf(['Denoised file ', cleaned_file, 'does not exist\n'])
+    fprintf(['Denoised file ', cleaned_file, ' does not exist\n'])
     return;
 end
 

@@ -155,7 +155,7 @@ if smoothing_kernel ~= 0
     if bp == 1
         if detrended == 1
             % write to data dir and relabel cleaned file:
-            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_d', file_name], file_orig_data_info, "Compressed", true)
+            niftiwrite(cast(file_data, 'single'), [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_d_', file_name], file_orig_data_info, "Compressed", true)
             cleaned_file = [output_dir, '/s', num2str(round(smoothing_kernel)), '_bp_d_', file_name, '.gz']; % update cleaned_file
         else
             % write to data dir and relabel cleaned file:
