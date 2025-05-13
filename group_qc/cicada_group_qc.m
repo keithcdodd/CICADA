@@ -118,6 +118,7 @@ data_notes_iter = 1;
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
 compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest, can be multiples
 
+
 comparison_only = 0; % to change in following if else statement
 orig_only = 0; % to change in following if else statement
 % make sure that the dir call actually found the file(s) of images that
@@ -822,6 +823,7 @@ data_files = cleaned_data_list;
 all_data_files = data_files;
 data_files = all_data_files(image_keep);
 writecell(data_files, 'image_names.txt')
+group_funcmask_file = fullfile(pwd, 'group_funcmask.nii.gz');
 
 % Resample mni to be the background image for melodic
 flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -out mni_resampled.nii.gz -usesqform -applyxfm'];
@@ -889,6 +891,7 @@ end
 
 Group_QC.networks = networks;
 Group_QC.IC_probs_mask = IC_probs_mask; % 99% mask
+Group_QC.data_files = data_files;
 network_names = {'Visual', 'Sensorimotor', 'Dorsal Attention', 'Salience', 'Executive', 'Default', 'Subcortical'};
 IC_assignment_table = assign_ICs_to_networks_clust(networks, IC_probs_mask, network_names);
 
@@ -928,6 +931,63 @@ IC_3D_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
 niftiwrite(cast(networks_IC_probs_mask, 'single'), 'IC_mask_networks', IC_3D_info, 'Compressed', true) % mask of max 99%+ probability for related networks
 niftiwrite(cast(networks_IC_mel_max, 'single'), 'IC_mel_networks_zmax', IC_3D_info, 'Compressed', true) % maximum (positive or negative) z values for ICs in network
 
+
+% OK, and then we can also just sort group IC from most to least gray
+% matter
+% Grab DVARS and FD though so you can easily measure correlations too
+subj_func_files = data_files;
+DVARS_all = {};
+FD_all = {};
+notGM_all = {};
+for i1 = 1:length(data_files)
+    curr_subj_home = [cicada_home, '/', group_qc_table.subject{i1}, '/', group_qc_table.session{i1}, '/', group_qc_table.task{i1}];
+
+    % grab notGM mask
+    curr_notGM_mask = [curr_subj_home, '/region_masks/NotGM_mask.nii.gz'];
+    notGM_all{end+1} = curr_notGM_mask;
+
+    if exist([curr_subj_home, '/confounds_timeseries.tsv'], 'file') ~= 0
+        confound_place = [curr_subj_home, '/confounds_timeseries.tsv'];
+        % if it is a .tsv, then it should be tab delimited.
+        allconfounds = readtable(confound_place, 'FileType', 'text', 'Delimiter', '\t');
+    elseif exist([curr_subj_home, '/confounds_timeseries.csv'], 'file') ~= 0
+        confound_place = [curr_subj_home, '/confounds_timeseries.csv'];
+        % matlab can natively read csv no problem. CSV is probably better.
+        allconfounds = readtable(confound_place);
+    else
+        fprintf('ERROR: Cannot find confounds_timeseries as either csv or tsv?\n')
+        return;
+    end
+    curr_DVARS = table2array(allconfounds(:,{'dvars'}));
+    curr_FD = table2array(allconfounds(:,{'framewise_displacement'}));
+
+    DVARS_all{end+1} = curr_DVARS;
+    FD_all{end+1} = curr_FD;
+
+    %% grab HRF information:
+    mat_file = [curr_subj_home, '/ic_auto_selection/DecisionVariables_Auto.mat'];
+    load(mat_file)
+
+    % Only load HRF_task if it exists
+    
+    if isfield(Data, 'HRF_task')
+        hrf_general_power = Data.HRF_general.hrf_power_interp_norm;
+        hrf_task_power = Data.HRF_task.hrf_power_norm;
+        hrf_conditions = Data.Task.hrf_conditions;
+    else
+        % only general power!
+
+        hrf_general_power = Data.HRF_general.hrf_power_interp_norm;
+        hrf_task_power = []; % just set it to be the same thing for ease (keep in mind, will normally have multiple columns)
+        hrf_conditions = [];
+    end
+end
+
+% Now output general group IC results with information that can be helpful
+% in deciding if true signal or not. (Power spectra, GM overlap, timeseries
+% correlations)
+% make sure to test with task data too
+T_results = rank_ICs_by_group_NSP(output_dir, IC_mel, group_funcmask_file, subj_func_files, notGM_all, tr, FD_all, DVARS_all, hrf_general_power, hrf_task_power, hrf_conditions);
 
 save('group_qc.mat', 'Group_QC')
 

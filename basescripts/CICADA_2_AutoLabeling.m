@@ -369,7 +369,7 @@ elseif exist('confounds_timeseries.csv', 'file') ~= 0
     % matlab can natively read csv no problem. CSV is probably better.
     allconfounds = readtable(confound_place);
 else
-    fprintf('ERROR: Cannot find confounds_timeseries as either csv or tsv?')
+    fprintf('ERROR: Cannot find confounds_timeseries as either csv or tsv?\n')
     return;
 end
 
