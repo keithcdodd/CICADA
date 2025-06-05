@@ -37,7 +37,7 @@ task_event_file = {''}; % path to the task event file relevant for all data (ass
 ses_ids = repmat(ses_id, size(sub_ids));
 
 % Generate task event file list
-if isempty(testing{1})
+if isempty(task_event_file{1})
     task_event_files = {}; % proper formatting for CICADA
 else
     % this is the variable you would edit if you have different task event
