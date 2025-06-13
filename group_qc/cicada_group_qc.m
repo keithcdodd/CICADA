@@ -1,4 +1,4 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, task_event_files)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -6,7 +6,7 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % will end up like the following: group_qc_home/task_name/output_dirname
 % task_name: The task id for the group qc data, e.g. 'visual_run-01', or
 % 'rest'
-% sub_ids, ses_ids, excludes, outliers, adjusteds, and
+% sub_ids, ses_ids, excludes, adjusteds, and
 % task_event_files should all be cell arrays of characters of the same number of
 % rows. This function will loop through each row of them all and match them
 % for the call. 
@@ -36,7 +36,6 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % sub_ids e.g., {'102', '102', '103'}
 % ses_ids e.g., {'01', '02', '01'}
 % excludes (either 0 or 1 for exclude) e.g., {'0', '1', '0'}
-% outliers (either 0 or 1 for outlier) e.g., {'0', '1', '0'}
 % adjusteds (either 0 or 1 for manually IC adjusted) e.g., {'0', '1', '0'}
 % task_event_files should contain paths to the task_event_file(s)
 % (optional), also as a cell array
@@ -50,19 +49,19 @@ end
 
 % now check that all lists are the same length, and that all are lists of
 % char arrays
-if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(outliers), length(adjusteds), length(task_event_files))
-    fprintf('Your lists (sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files) exist at different lengths... quitting\n')
+if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(adjusteds), length(task_event_files))
+    fprintf('Your lists (sub_ids, ses_ids, excludes, adjusteds, task_event_files) exist at different lengths... quitting\n')
     return
 end
 
 test_class = {''};
 
-if ~isequal(class(test_class), class(sub_ids), class(ses_ids), class(excludes), class(outliers), class(adjusteds), class(task_event_files))
+if ~isequal(class(test_class), class(sub_ids), class(ses_ids), class(excludes), class(adjusteds), class(task_event_files))
     fprintf('Your lists are not all cell arrays \n')
     return
 end
 
-if ~isequal(class(test_class{1}), class(sub_ids{1}), class(ses_ids{1}), class(excludes{1}), class(outliers{1}), class(adjusteds{1}), class(task_event_files{1}))
+if ~isequal(class(test_class{1}), class(sub_ids{1}), class(ses_ids{1}), class(excludes{1}), class(adjusteds{1}), class(task_event_files{1}))
     fprintf('Your lists do not contain all chars (should be cell arrays of characters!) \n')
     return
 end
@@ -229,7 +228,6 @@ for idx = 1:num_runs
     ses_id = ses_ids{idx};
     bad_data = excludes{idx}; % needs to be '1' for bad data, or '0' for OK data
     manually_adjusted = adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
-    denoising_outlier = outliers{idx}; % '1' for general outlier, '0' for OK data
     task_event_file = task_event_files{idx};
 
     fprintf(['\nRunning sub ', sub_id, ' ses ', ses_id, ' task ', task_name, '\n'])
@@ -245,14 +243,6 @@ for idx = 1:num_runs
         data_notes_iter = data_notes_iter + 1; % increment for table
         fprintf(['   Sub ', sub_id, ' ses ', ses_id, ' task ', task_name, ' was marked as bad data. Skipping...\n'])
         continue;
-    end
-
-    % if denoising outlier, we still keep it in group qc folder, but make
-    % sure it is marked (less aggressive than completely excluding it
-    if ~strcmp(denoising_outlier, '0')
-        % denoising outlier, make a note!
-        data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'Outlier', 'Marked as Denoising Outlier By User After Quality Control'};
-        data_notes_iter = data_notes_iter + 1; % increment for table
     end
 
     % Make sure task directory exists
@@ -438,7 +428,6 @@ for idx = 1:num_runs
     data_signal_mask_list{m} = data_signal_mask;
     signalandnoise_overlap_list{m} = signalandnoise_overlap;
     tstd_list{m} = tstd;
-    denoising_outlier_list{m} = strcmp(denoising_outlier, '1');
     task_event_file_exist_list{m} = ~isempty(task_event_file);
     poorly_improved_list{m} = logical(poorly_improved);
 
@@ -636,9 +625,6 @@ Group_QC.conservative_outliers = (final_qc_table.mean_FD > 0.25) | ...
     (final_qc_table.Percent_FD_gt_point2mm > 20) | ...
     (final_qc_table.AnyFD_gt_5mm);
 
-% And record Denoising outlier (which was manually selected by the user)
-Group_QC.denoising_outliers = cell2mat(denoising_outlier_list)';
-
 % sort data_notes
 data_notes_sorted = sortrows(data_notes, 'Subject', 'ascend');
 % save data notes, and write it as a table!
@@ -649,26 +635,23 @@ writetable(data_notes_sorted, 'group_qc_data_notes_table.csv')
 % are used for future analyses
 % remove outliers from the rest of analysis
 if cicada == 1
-    % CICADA outliers are the outliers determined by this script. Denoising
-    % outliers are the outliers that the user provided by the "outliers"
-    % parameter
-    image_keep = ~Group_QC.cicada_outliers & ~Group_QC.denoising_outliers;
+    % CICADA outliers are the outliers determined by this script. 
+    image_keep = ~Group_QC.cicada_outliers;
 else
-    image_keep = ~Group_QC.denoising_outliers;
+    image_keep = true(size(Group_QC.liberal_outliers)); % keep everyone if you do not have cicada outliers
 end
 
 % save image_keep so it is easy in the future to know what images were left
-% out
+% out of MELODIC Group IC
 Group_QC.Images_Used = image_keep;
 
 % add to final qc table
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
 final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
-final_qc_table.denoising_outliers = Group_QC.denoising_outliers; % outliers user marked themselves after denoising (not including automated CICADA Outliers)
-final_qc_table.image_keep = Group_QC.Images_Used; % This is the final decision of which images to use, based on what is in the group_qc_table (both denoising outliers and automated CICADA outliers)
+final_qc_table.image_keep = Group_QC.Images_Used; % All images except cicada_outliers
 
 writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_signal and signal_gm proportions and also number_kept_ics to help find the bad or adjustable data
-writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv')
+writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv') % does have subject, session, and task recorded as column variables too!
 Group_QC.final_qc_table = final_qc_table;
 Group_QC.final_qc_corrs_table = final_qc_corrs_table;
 if orig_only == 0
@@ -693,14 +676,49 @@ else
     Group_QC.orig_qc_corrs_table = group_orig_qc_corrs_table;
 end
 
+% also make a qc_corrs table that is without the cicada outliers!
+
+% Step 1: Identify bad subject-session-task combinations
+cicada_outlier_combos = group_qc_table(image_keep == 0, {'subject', 'session', 'task'}); % Marked by CICADA as a "cicada_outlier" 
+
+% Step 2: Start with full table, then remove bad rows
+group_qc_corrs_cicada_outliers_removed_table = group_qc_corrs_table;
+group_compare_qc_corrs_cicada_outliers_removed_table = group_compare_qc_corrs_table;
+group_orig_qc_corrs_cicada_outliers_removed_table = group_orig_qc_corrs_table;
+
+% Step 3: Loop through each bad combination and remove matches
+for i = 1:height(cicada_outlier_combos)
+    is_bad_cicada_cleaned = strcmp(group_qc_corrs_cicada_outliers_removed_table.subject, cicada_outlier_combos.subject{i}) & ...
+             strcmp(group_qc_corrs_cicada_outliers_removed_table.session, cicada_outlier_combos.session{i}) & ...
+             strcmp(group_qc_corrs_cicada_outliers_removed_table.task, cicada_outlier_combos.task{i});
+
+    is_bad_cicada_compare = strcmp(group_compare_qc_corrs_cicada_outliers_removed_table.subject, cicada_outlier_combos.subject{i}) & ...
+             strcmp(group_compare_qc_corrs_cicada_outliers_removed_table.session, cicada_outlier_combos.session{i}) & ...
+             strcmp(group_compare_qc_corrs_cicada_outliers_removed_table.task, cicada_outlier_combos.task{i});
+
+    is_bad_cicada_orig = strcmp(group_orig_qc_corrs_cicada_outliers_removed_table.subject, cicada_outlier_combos.subject{i}) & ...
+             strcmp(group_orig_qc_corrs_cicada_outliers_removed_table.session, cicada_outlier_combos.session{i}) & ...
+             strcmp(group_orig_qc_corrs_cicada_outliers_removed_table.task, cicada_outlier_combos.task{i});
+
+    group_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_cleaned, :) = [];  % remove matching rows
+    group_compare_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_compare, :) = [];  % remove matching rows
+    group_orig_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_orig, :) = [];  % remove matching rows
+    
+end
+
 
 % Save qc corrs data for quick and easy comparison plotting
-save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table')
+save('qc_corrs_data.mat', 'group_qc_corrs_table', 'group_compare_qc_corrs_table', 'group_orig_qc_corrs_table', ...
+    'group_qc_corrs_cicada_outliers_removed_table', 'group_compare_qc_corrs_cicada_outliers_removed_table', 'group_orig_qc_corrs_cicada_outliers_removed_table')
 save('qc_data.mat', 'group_qc_table', 'group_compare_qc_table', 'group_orig_qc_table')
 
-% Now do group plotting
+% Now do group plotting, first with all data
 dcorrt = group_qc_corrs_table; % same as final qc corrs table
 ocorrt = group_orig_qc_corrs_table;
+
+dcorrt_cor = group_qc_corrs_cicada_outliers_removed_table; % cicada outliers removed
+ocorrt_cor = group_orig_qc_corrs_cicada_outliers_removed_table;
+
 
 % Plotting depends on the existence of comparison tables
 % Don't plot if it is just original data
@@ -708,13 +726,14 @@ ocorrt = group_orig_qc_corrs_table;
 if ~isempty(group_compare_qc_corrs_table)
     
     ccorrt = group_compare_qc_corrs_table;
+    ccorrt_cor = group_compare_qc_corrs_cicada_outliers_removed_table; % cicada_outliers removed
 
     
     % Set appropriate titles and destination
     title_string = ['Group_QC_', compare_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
-    % now we can plot
+    % now we can plot everyone
     plot_qc(cell2mat(dcorrt.Edge_Edge_Corr), cell2mat(dcorrt.FD_GM_Corr), ...
         cell2mat(dcorrt.DVARS_GM_Corr), cell2mat(dcorrt.Outbrain_Outbrain_Corr), ...
         cell2mat(dcorrt.WMCSF_WMCSF_Corr), cell2mat(dcorrt.CSF_CSF_Corr), ...
@@ -731,7 +750,30 @@ if ~isempty(group_compare_qc_corrs_table)
         cell2mat(ocorrt.Suscept_Suscept_Corr), ...
         [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 
+   
+    % Set appropriate titles and destination
+    title_string_cor = ['Group_QC_', compare_tag, '_cicada_outliers_removed'];
+    qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
+    
+    % now we can plot with cicada_outliers removed for comparison
+    plot_qc(cell2mat(dcorrt_cor.Edge_Edge_Corr), cell2mat(dcorrt_cor.FD_GM_Corr), ...
+        cell2mat(dcorrt_cor.DVARS_GM_Corr), cell2mat(dcorrt_cor.Outbrain_Outbrain_Corr), ...
+        cell2mat(dcorrt_cor.WMCSF_WMCSF_Corr), cell2mat(dcorrt_cor.CSF_CSF_Corr), ...
+        cell2mat(dcorrt_cor.NotGM_NotGM_Corr), cell2mat(dcorrt_cor.GM_GM_Corr), ...
+        cell2mat(dcorrt_cor.Suscept_Suscept_Corr), cell2mat(ccorrt_cor.Edge_Edge_Corr), ...
+        cell2mat(ccorrt_cor.FD_GM_Corr), cell2mat(ccorrt_cor.DVARS_GM_Corr), ...
+        cell2mat(ccorrt_cor.Outbrain_Outbrain_Corr), cell2mat(ccorrt_cor.WMCSF_WMCSF_Corr), ...
+        cell2mat(ccorrt_cor.CSF_CSF_Corr), cell2mat(ccorrt_cor.NotGM_NotGM_Corr), ...
+        cell2mat(ccorrt_cor.GM_GM_Corr), cell2mat(ccorrt_cor.Suscept_Suscept_Corr), ...
+        cell2mat(ocorrt_cor.Edge_Edge_Corr), cell2mat(ocorrt_cor.FD_GM_Corr), ...
+        cell2mat(ocorrt_cor.DVARS_GM_Corr), cell2mat(ocorrt_cor.Outbrain_Outbrain_Corr), ...
+        cell2mat(ocorrt_cor.WMCSF_WMCSF_Corr), cell2mat(ocorrt_cor.CSF_CSF_Corr), ...
+        cell2mat(ocorrt_cor.NotGM_NotGM_Corr), cell2mat(ocorrt_cor.GM_GM_Corr), ...
+        cell2mat(ocorrt_cor.Suscept_Suscept_Corr), ...
+        [], [], [], title_string_cor, qc_plots_dest_cor, cleaned_file_tag)
+
 elseif ~isempty(group_orig_qc_corrs_table)
+    
     % we can plot now! There is no compare data
     title_string = ['Group_QC_' cleaned_file_tag, '_vs_orig'];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
@@ -749,6 +791,24 @@ elseif ~isempty(group_orig_qc_corrs_table)
             cell2mat(ocorrt.NotGM_NotGM_Corr), cell2mat(ocorrt.GM_GM_Corr), ...
             cell2mat(ocorrt.Suscept_Suscept_Corr), ...
             [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
+
+    % Set appropriate titles and destination
+    title_string_cor = ['Group_QC_', cleaned_file_tag, '_vs_orig_cicada_outliers_removed'];
+    qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
+    
+    % now we can plot with cicada_outliers removed for comparison
+    plot_qc(cell2mat(dcorrt_cor.Edge_Edge_Corr), cell2mat(dcorrt_cor.FD_GM_Corr), ...
+        cell2mat(dcorrt_cor.DVARS_GM_Corr), cell2mat(dcorrt_cor.Outbrain_Outbrain_Corr), ...
+        cell2mat(dcorrt_cor.WMCSF_WMCSF_Corr), cell2mat(dcorrt_cor.CSF_CSF_Corr), ...
+        cell2mat(dcorrt_cor.NotGM_NotGM_Corr), cell2mat(dcorrt_cor.GM_GM_Corr), ...
+        cell2mat(dcorrt_cor.Suscept_Suscept_Corr), ...
+        [], [], [], [], [], [], [], [], [], ...
+        cell2mat(ocorrt_cor.Edge_Edge_Corr), cell2mat(ocorrt_cor.FD_GM_Corr), ...
+        cell2mat(ocorrt_cor.DVARS_GM_Corr), cell2mat(ocorrt_cor.Outbrain_Outbrain_Corr), ...
+        cell2mat(ocorrt_cor.WMCSF_WMCSF_Corr), cell2mat(ocorrt_cor.CSF_CSF_Corr), ...
+        cell2mat(ocorrt_cor.NotGM_NotGM_Corr), cell2mat(ocorrt_cor.GM_GM_Corr), ...
+        cell2mat(ocorrt_cor.Suscept_Suscept_Corr), ...
+        [], [], [], title_string_cor, qc_plots_dest_cor, cleaned_file_tag)
 end
 
 fprintf('Finished Group QC Plotting!\n')
@@ -821,7 +881,7 @@ end
 % remove
 data_files = cleaned_data_list;
 all_data_files = data_files;
-data_files = all_data_files(image_keep);
+data_files = all_data_files(image_keep); % removing cicada_outliers if they exist
 writecell(data_files, 'image_names.txt')
 group_funcmask_file = fullfile(pwd, 'group_funcmask.nii.gz');
 

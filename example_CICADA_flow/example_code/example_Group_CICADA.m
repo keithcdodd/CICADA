@@ -20,12 +20,14 @@ detrended_degree = 2; % what degree of polynomial to detrend to. 2nd polynomial 
 redo_melodic = 0;
 sub_ids = {'132', '135', '140'};
 ses_id = {'01'}; % session id you are comparing across
-exclude = {''}; % list of sub_ids you are excluding data from the dataset entirely (do not put into group CICADA folder) due to some error (e.g., scanner stopped halfway, incomplete image), see cicada_group_qc.m for more detail
-outlier = {''}; % list of sub_ids you are excluding data you have marked as an outlier (e.g., scanner issue that clearly corrupted image), see cicada_group_qc.m for more detail
+exclude = {''}; % list of sub_ids you want to fully exclude, for example had clear scanning issues or some other reason why it should be excluded from consideration
 adjusted = {''}; % list of sub-ids that you have performed Manual CICADA on (e.g., for some reason Auto CICADA was not very accurate for subject_01, so you performed manual ICA denoising through Manual CICADA and want to use that image instead.
 task_event_file = {''}; % path to the task event file relevant for all data (assuming same task, same timing).
 % NOTE: if you have different task event files per subject/session, then
 % you will need to edit task_event_files variable below
+
+
+
 
 
 
@@ -47,13 +49,11 @@ end
 
 % Initialize other output lists
 excludes = cell(size(sub_ids));
-outliers = cell(size(sub_ids));
 adjusteds = cell(size(sub_ids));
 
 % Fill in 0 or 1
 for i = 1:length(sub_ids)
     excludes{i}  = num2str(double(ismember(sub_ids{i}, exclude)));
-    outliers{i}  = num2str(double(ismember(sub_ids{i}, outlier)));
     adjusteds{i} = num2str(double(ismember(sub_ids{i}, adjusted)));
 end
 
@@ -61,10 +61,9 @@ end
 % Example formatting for three sub_ids in resting-state (no task):
 % ses_ids = {'01', '01', '01'}; % needs to be same length as sub_ids, since they will match up one for one
 % excludes = {'0', '0', '0'}; % if '1', you are excluding data from the dataset entirely (do not put into group CICADA folder) due to some error (e.g., scanner stopped halfway, incomplete image), see cicada_group_qc.m for more detail
-% outliers = {'0', '0', '0'}; % if '1', you are excluding data you have marked as an outlier (e.g., scanner issue that clearly corrupted image), see cicada_group_qc.m for more detail
 % adjusteds = {'0', '0', '0'}; % if '1', there are image(s) that you have performed Manual CICADA on (e.g., for some reason Auto CICADA was not very accurate for subject_01, so you performed manual ICA denoising through Manual CICADA and want to use that image instead.
 % task_event_files = {}; % the paths to the task event files, if this was task based.
 
 
 % Actually run Group CICADA!
-cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, outliers, adjusteds, task_event_files)
+cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, task_event_files)
