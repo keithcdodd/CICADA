@@ -180,7 +180,7 @@ mean_abs_fd_corr = mean(abs(fd_corr_subjectwise), 1, 'omitnan');
 mean_abs_dvars_corr = mean(abs(dvars_corr_subjectwise), 1, 'omitnan');
 
 %% Group NSP (roughly)
-gNSP = mean_gm_overlap(:).^2 .* mean_power_overlap(:) .* mean_smoothness(:);
+gNSP = mean_gm_overlap(:) .* mean_power_overlap(:) .* mean_smoothness(:);
 
 %% Rank by group NSP (GM, power overlap, smoothness)
 [~, sorted_idx] = sort(gNSP, 'descend');
@@ -193,7 +193,7 @@ mean_abs_fd_corr_norm = normalize(mean_abs_fd_corr, 'range');
 mean_abs_dvars_corr_norm = normalize(mean_abs_dvars_corr, 'range');
 
 % kmeans cluster signal and not
-[idx, ~] = kmeans(gNSP_norm(:), 3, 'Start', [0; 0.5; 1]); % higher GM is more likely to be signal
+[idx, ~] = kmeans(gNSP_norm(:), 3, 'Start', [0; median(gNSP_norm(:)); 1]);
 signal_label = double(idx ~= 1)';
 
 %% Output table

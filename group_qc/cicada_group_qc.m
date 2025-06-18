@@ -1049,5 +1049,5 @@ end
 % make sure to test with task data too
 T_results = rank_ICs_by_group_NSP(output_dir, IC_mel, group_funcmask_file, subj_func_files, notGM_all, tr, FD_all, DVARS_all, hrf_general_power, hrf_task_power, hrf_conditions);
 
-save('group_qc.mat', 'Group_QC')
+save('group_qc.mat', 'Group_QC', 'T_results')
 
