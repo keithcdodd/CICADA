@@ -7,8 +7,8 @@ function voxelwise_scaled_nii = voxelwise_scale(input_nii)
 %   output_nii: Full path to output scaled .nii.gz file (auto-named)
 
     % Ensure FSL is available
-    if isempty(which('fsl_call'))
-        error('fsl_call not found. Make sure FSL and fsl_call are configured.');
+    if isempty(which('call_fsl'))
+        error('call_fsl not found. Make sure FSL and call_fsl are configured.');
     end
 
     % Output path (same directory, suffix _mean100.nii.gz)
@@ -24,13 +24,13 @@ function voxelwise_scaled_nii = voxelwise_scale(input_nii)
     norm_img = fullfile(tempdir, [in_name '_norm.nii.gz']);
 
     % Step 1: Compute voxel-wise mean over time
-    fsl_call(['fslmaths ' input_nii ' -Tmean ' mean_img]);
+    call_fsl(['fslmaths ' input_nii ' -Tmean ' mean_img]);
 
     % Step 2: Divide input by mean (voxel-wise)
-    fsl_call(['fslmaths ' input_nii ' -div ' mean_img ' ' norm_img]);
+    call_fsl(['fslmaths ' input_nii ' -div ' mean_img ' ' norm_img]);
 
     % Step 3: Multiply by 100
-    fsl_call(['fslmaths ' norm_img ' -mul 100 ' voxelwise_scaled_nii]);
+    call_fsl(['fslmaths ' norm_img ' -mul 100 ' voxelwise_scaled_nii]);
 
     % Optional: clean up temp files
     delete(mean_img);
