@@ -32,7 +32,7 @@ function fwhm_avg = estimate_ic_smoothness(ic_1d, func_mask_3d_nii, voxel_dim_3D
     mask_file = func_mask_3d_nii;
 
     % Save IC map
-    niftiwrite(single(ic_3d), ic_file, funcmask_info, 'Compressed', true);
+    niftiwrite(single(ic_3d), [temp_prefix, '_ic'], funcmask_info, 'Compressed', true);
 
     % Call FSL smoothest
     fsl_cmd = sprintf('smoothest -z %s -m %s', ic_file, mask_file);
