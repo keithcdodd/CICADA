@@ -563,8 +563,8 @@ if cicada == 1
     % High FD_Corr
     Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_mean_abs_corr), "median")) & (abs(final_qc_table.FD_GM_mean_abs_corr) > median(abs(final_qc_table.FD_GM_mean_abs_corr)));
 
-    % if both high dvars_corr AND high_FD_corr, that is a bad sign
-    Group_QC.high_DVARS_and_FD_corr = Group_QC.high_DVARS_corr & Group_QC.high_FD_corr;
+    % if the mean is above 0.15 in both, it often looks bad in QC!
+    Group_QC.high_retained_motion = (abs(final_qc_table.DVARS_GM_mean_abs_corr) >= 0.15) | (abs(final_qc_table.FD_GM_mean_abs_corr) >= 0.15); % 0.15 is when QC plots tend to really break down visually. This is still liberally keeping data.
 
 
     % Low GM_NotGM_mean_var_prop (high GM variance and low NotGM variance
@@ -593,7 +593,7 @@ if cicada == 1
     % 2 ICs kept as signal. Also, if the data was poorly improved (Either
     % average GM, Smoothing, or power overlap was not improved (increased), OR either
     % FD, DVARS, or spikiness was not improved (decreased).
-    cicada_outliers = logical(Group_QC.high_DVARS_and_FD_corr + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
+    cicada_outliers = logical(Group_QC.high_retained_motion + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
     Group_QC.cicada_outliers = cicada_outliers;
 
     % record into data notes:
@@ -617,7 +617,7 @@ if cicada == 1
     final_qc_table.low_GM_NotGM_mean_var_prop = Group_QC.low_GM_NotGM_mean_var_prop;
     final_qc_table.high_DVARS_corr = Group_QC.high_DVARS_corr;
     final_qc_table.high_FD_corr = Group_QC.high_FD_corr;
-    final_qc_table.high_DVARS_and_FD_corr = Group_QC.high_DVARS_and_FD_corr;
+    final_qc_table.high_retained_motion = Group_QC.high_retained_motion;
     final_qc_table.cicada_outliers = Group_QC.cicada_outliers;   
     final_qc_table.poorly_improved = Group_QC.poorly_improved;
 end
