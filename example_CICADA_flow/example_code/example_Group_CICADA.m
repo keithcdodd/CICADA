@@ -12,7 +12,7 @@ group_qc_home = [base_dir, '/bids_data/derivatives/cicada_group_qc']; % general 
 task_name = 'rest';
 output_dirname = 'CICADA_auto_ses_01'; % unique name for the outputs specific to this group
 file_tag = '_auto_'; % '_auto_' for Automatic CICADA, '_manual_' for Manual CICADA, because these tags are unique to auto and manual cicada files
-voxelwise_scale = 0; % if set to 1, will perform voxelwise scaling after detrending, bandpassing, and smoothing
+voxelwise_scale_flag = 0; % if set to 1, will perform voxelwise scaling after detrending, bandpassing, and smoothing
 smoothing_kernel = 0; % -1 would force default, which is 3mm smoothing kernel (after detrending and bandpass filtering). Manuscript does no smoothing.
 % More common would be something like 6 (i.e., 6 mm), but you can also just smooth the images yourself after CICADA if desired since smoothing is the last step!
 fpass = []; % bandpassing in Hz, performed after detrending. A great choice might be [0.008, 0.15]. Default is no bandpassing (like in the manuscript). [0.008, 0.1] is pretty commonplace.
@@ -66,4 +66,4 @@ end
 
 
 % Actually run Group CICADA!
-cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, task_event_files)
+cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, task_event_files)

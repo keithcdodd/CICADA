@@ -382,7 +382,7 @@ for idx = 1:num_runs
         fprintf('Performing Voxel-wise Scaling to Mean 100\n')
         cleaned_file = voxelwise_scale(cleaned_file); % voxelwise scale each voxel to mean 100
         compare_file = voxelwise_scale(compare_file); % voxelwise scale each voxel to mean 100
-        orig_file = voxelwise_scale(orig_file); % voxelwise scale each voxel to mean 100
+        orig_file = voxelwise_scale_flag(orig_file); % voxelwise scale each voxel to mean 100
     end
     
     
