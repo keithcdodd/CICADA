@@ -224,8 +224,9 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     nifti_info.Datatype = 'single';
     nifti_info.PixelDimensions = [nifti_info.PixelDimensions, 1];
     nifti_info.ImageSize = [nifti_info.ImageSize, 3]; % cleaned, compare, orig
+    nifti_basename = [output_dir, '/network_identifiability'];
     nifti_info.Filename = [output_dir, '/network_identifiability.nii.gz'];
-    niftiwrite(single(dominantNetworkMaps), nifti_info.Filename, nifti_info, 'Compressed', true);
+    niftiwrite(single(dominantNetworkMaps), nifti_basename, nifti_info, 'Compressed', true);
 
     % Return results
     ident_table = results;
