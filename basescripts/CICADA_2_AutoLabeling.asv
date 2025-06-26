@@ -413,33 +413,15 @@ gs_deriv_param = {'global_signal_derivative1'};
 gs_power_param = {'global_signal_power2'};
 gs_deriv_power_param = {'global_signal_derivative1_power2'};
 
-% save and also take into account NaNs for the first row for derivatives
-Data.Confounds.Sixparam = table2array(allconfounds(:, motion_params)); 
-Data.Confounds.Sixparam(isnan(Data.Confounds.Sixparam)) = 0;
-
-Data.Confounds.Eightparam = table2array(allconfounds(:, [motion_params, phys_params]));
-Data.Confounds.Eightparam(isnan(Data.Confounds.Eightparam)) = 0;
-
-Data.Confounds.Nineparam = table2array(allconfounds(:, [motion_params, phys_params, gs_param]));
-Data.Confounds.Nineparam(isnan(Data.Confounds.Nineparam)) = 0;
-
-Data.Confounds.Twelveparam = table2array(allconfounds(:, [motion_params, motion_deriv_params]));
-Data.Confounds.Twelveparam(isnan(Data.Confounds.Twelveparam)) = 0;
-
-Data.Confounds.Sixteenparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, phys_params, phys_deriv_params]));
-Data.Confounds.Sixteenparam(isnan(Data.Confounds.Sixteenparam)) = 0;
-
-Data.Confounds.Eighteenparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, phys_params, phys_deriv_params, gs_param, gs_deriv_param]));
-Data.Confounds.Eighteenparam(isnan(Data.Confounds.Eighteenparam)) = 0;
-
-Data.Confounds.Twentyfourparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params]));
-Data.Confounds.Twentyfourparam(isnan(Data.Confounds.Twentyfourparam)) = 0;
-
-Data.Confounds.Thirtytwoparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, phys_power_params, phys_deriv_power_params]));
-Data.Confounds.Thirtytwoparam(isnan(Data.Confounds.Thirtytwoparam)) = 0;
-
-Data.Confounds.Thirtysixparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, phys_power_params, phys_deriv_power_params, gs_param, gs_deriv_param, gs_power_param, gs_deriv_power_param]));
-Data.Confounds.Thirtysixparam(isnan(Data.Confounds.Thirtysixparam)) = 0;
+Data.Confounds.Sixparam = table2array(allconfounds(:,motion_params));
+Data.Confounds.Eightparam = table2array(allconfounds(:,[motion_params, phys_params]));
+Data.Confounds.Nineparam = table2array(allconfounds(:,[motion_params, phys_params, gs_param]));
+Data.Confounds.Twelveparam = table2array(allconfounds(:,[motion_params, motion_deriv_params]));
+Data.Confounds.Sixteenparam = table2array(allconfounds(:,[motion_params, motion_deriv_params, phys_params, phys_deriv_params]));
+Data.Confounds.Eighteenparam = table2array(allconfounds(:,[motion_params, motion_deriv_params, phys_params, phys_deriv_params, gs_param, gs_deriv_param]));
+Data.Confounds.Twentyfourparam = table2array(allconfounds(:,[motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params]));
+Data.Confounds.Thirtytwoparam = table2array(allconfounds(:,[motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, phys_power_params, phys_deriv_power_params]));
+Data.Confounds.Thirtysixparam = table2array(allconfounds(:,[motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, phys_power_params, phys_deriv_power_params, gs_param, gs_deriv_param, gs_power_param, gs_deriv_power_param]));
 
 
 Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
@@ -1183,7 +1165,6 @@ save('DecisionVariables_Auto.mat', 'output_dir', 'subject_id', 'session_id', 'ta
 
 movefile('*Auto.*', 'ic_auto_selection')
 
-cd(output_dir)
 % OK, now run the denoising: Start with CICADA
 task_dir = pwd;
 prefix = [subject_id, '_', session_id, '_task-', task_id];
@@ -1249,7 +1230,6 @@ end
 copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
 movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
 movefile(['sub*ses*task*', compare_tag, '*.nii.gz'], cleaned_dir)
-movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
 
 % movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
 % movefile('sub*ses*task*9p*.nii.gz', cleaned_dir)

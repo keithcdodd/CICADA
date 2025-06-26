@@ -32,15 +32,25 @@ if ~exist('redo_mel', 'var') || (redo_mel ~= 0 && redo_mel ~=1)
     redo_mel = 0; % default is to not redo melodic
 end
 
+
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
-    compare_file=[];
+    compare_file = '';
     compare_file_record = 'Standard 8 parameter compare';
 elseif ~isfile(compare_file)
-    fprintf(['Compare file not found at ', compare_file, '\n'])
-    return;
+    % check to see if it is a valid tag instead!
+    valid_tags = {'6p', '8p', '12p', '16p', '18p', '24p', '32p', '36p'}; % for compare file if you want to use an inbuilt one!
+    if ~ismember(compare_file, valid_tags)
+        fprintf('Not a valid tag or file... Will compare to 8p regression.\n')
+        compare_file = '';
+        compare_file_record = 'Standard 8 parameter compare';
+    else
+        fprintf(['Will compare to ', compare_file, ' regression!\n'])
+        compare_file_record = [compare_file, ' compare'];
+    end
 else
     compare_file_record = compare_file;
 end
+
 
 % if task_events_file does not exist, make it empty array [], 'x' would
 % work too given how I wrote the scripts.

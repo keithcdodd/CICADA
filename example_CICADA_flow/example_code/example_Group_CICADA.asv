@@ -14,13 +14,8 @@ output_dirname = 'CICADA_auto_ses_01'; % unique name for the outputs specific to
 file_tag = '_auto_'; % '_auto_' for Automatic CICADA, '_manual_' for Manual CICADA, because these tags are unique to auto and manual cicada files
 voxelwise_scale_flag = 0; % if set to 1, will perform voxelwise scaling after detrending, bandpassing, and smoothing
 smoothing_kernel = 0; % -1 would force default, which is 3mm smoothing kernel (after detrending and bandpass filtering). Manuscript does no smoothing.
+compare_tag = '8p'; % comparing to 8 parameter regression is standard, but this just needs to be an identifiabl could compare to any of the following: '6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'
 % More common would be something like 6 (i.e., 6 mm), but you can also just smooth the images yourself after CICADA if desired since smoothing is the last step!
-
-compare_tag = '8p'; % comparing to 8 parameter regression is standard, 
-% but this just needs to be an identifiable tag of other cleaned data in your cleaned dir that you want to compare to. 
-% e.g.,: '6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p', or
-% whatever fits what you already have in your cleaned_dirs!
-
 fpass = []; % bandpassing in Hz, performed after detrending. A great choice might be [0.008, 0.15]. Default is no bandpassing (like in the manuscript). [0.008, 0.1] is pretty commonplace.
 detrended_degree = 2; % what degree of polynomial to detrend to. 2nd polynomial may be good as a bare minimum.
 redo_melodic = 0;

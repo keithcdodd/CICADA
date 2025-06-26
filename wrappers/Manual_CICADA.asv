@@ -65,16 +65,22 @@ compare_file_2 = '';
 % Now check for non-necessary variables
 if ~exist('compare_file', 'var') || ~ischar(compare_file)
     fprintf('Will compare to standard 8 parameter and auto CICADA \n')
-    compare_file=''; % easy to capture empty character array
+    compare_file='x'; % need it to be something that you can catch. 'x' is good.
+
+    % It is good to compare manual to auto as well!
+    compare_file_2_info = dir([output_dir, '/cleaned/*CICADA*auto*.nii.gz']);
+    compare_file_2 = [compare_file_2_info.folder, '/', compare_file_2_info.name];
 end
 
 valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
-compare_file = find_compare_file(output_dir, compare_file, valid_tags); % if it is a tag instead of file, this will fix it
 
-if ~isfile(compare_file)
+compare_file = find_compare_file(output_dir, compare_file, valid_tags); % if it is a tag instead of file, this will fix it
+% the above returns an empty character array if it cannot find it!
+
+if isempty(compare_file)
     % in this case, try to create it! Because this script should always be
     % run after Auto CICADA
-    compare_file = create_compare_file(output_dir, compare_file);
+    compare_file = create_compare_file;
 
     if isempty(compare_file)
         fprintf('No valid compare file anywhere we could find... that should not happen in this script!\nDid you run this before Auto CICADA?\n')
@@ -82,10 +88,11 @@ if ~isfile(compare_file)
     end
 end
 
-% OK, also compare to Auto CICADA, always good!
+% OK, also compare to CICADA auto
 compare_file_2_info = dir([output_dir, '/cleaned/*CICADA*auto*.nii.gz']);
 compare_file_2 = [compare_file_2_info.folder, '/', compare_file_2_info.name];
 
+ 
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || ~isfolder(mel_fol)
     fprintf('Will put Melodic in standard location \n')

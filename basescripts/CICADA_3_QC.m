@@ -8,6 +8,8 @@ function CICADA_3_QC(cleaned_file, compare_file)
 % While default compare file is 8p, you could feed it the cicada auto file
 % if you were doing manual cicada step, for example. The file does need to
 % already exist.
+% compare_file can either be a fullfile path, OR can be one of the
+% acceptable tags to an inbuilt denoiser: valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
 
 fprintf('\n')
 close all
@@ -28,6 +30,8 @@ end
 cd(cleaned_dir)
 cd('../')
 [~, task_dir_name, ~]=fileparts(pwd); % grab task dir name
+task_dir = pwd;
+output_dir = task_dir;
 cd('../')
 [~, ses_dir_name, ~]=fileparts(pwd); % grab ses dir name
 cd('../')
@@ -41,12 +45,14 @@ orig_file = [orig_file_info.folder, '/', orig_file_info.name];
 
 % catch if there is no compare_file, and if so, do standard 8p (and auto
 % later if cicada is manual version)
-if ~exist('compare_file', 'var') || strcmp(compare_file, 'x')
+if ~exist('compare_file', 'var') || isempty(compare_file) || ~ischar(compare_file) || strcmp(compare_file, 'x')
     fprintf('Will compare to standard 8 parameter \n')
-    compare_file_info = dir('*8p*');
-    compare_file=[compare_file_info.folder, '/', compare_file_info.name]; % Give it default 8p to compare against
+    compare_file_info = dir([cleaned_dir, '/*8p*']);
+    compare_file = [compare_file_info.folder, '/', compare_file_info.name]; % Give it default 8p to compare against
 end
 
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+compare_file = find_compare_file(output_dir, compare_file, valid_tags); % outputs empty char array if corresponding file does not exist
 
 if ~isfile(compare_file)
     fprintf(['ERROR, cannot find compare file: ', compare_file, '\n'])

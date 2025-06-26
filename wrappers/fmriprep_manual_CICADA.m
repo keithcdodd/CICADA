@@ -20,15 +20,36 @@ if isempty(ses_id)
     ses_id = '01';
 end
 
+output_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
+
+if ~isfolder(output_dir)
+    fprintf(['Cannot find output_dir (task_dir) at ' output_dir, '. Is your folder structure wrong perhaps?'])
+    return;
+end
+
 % Now check for non-necessary variables
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
-    compare_file=[];
+    compare_file='';
     compare_file_record = 'Standard 8 parameter compare';
-elseif ~isfile(compare_file)
-    fprintf(['Compare file not found at ', compare_file, '\n'])
-    return;
 else
-    compare_file_record = compare_file;
+    % double check that you have the compare file, if it exists
+    valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'}; % standard parameter regression
+    compare_tag = compare_file;
+    compare_file = find_compare_file(output_dir, compare_file, valid_tags); % if it is a tag instead of file, this will fix it if it exists!
+
+    if ~isfile(compare_file)
+        % in this case, try to create it! Because this script should always be
+        % run after Auto CICADA
+        compare_file = create_compare_file(output_dir, compare_file); % returns empty character array if it cannot create a compare file!
+    
+        if isempty(compare_file)
+            fprintf('No valid compare file anywhere we could find... that should not happen in this script!\nDid you run this before Auto CICADA?\n')
+            return
+        end
+        
+    end
+
+    compare_file_record = [compare_tag, ' compare'];
 end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol) || isempty(mel_fol)
@@ -39,12 +60,7 @@ elseif ~isfolder(mel_fol)
     fprintf(['Will run new melodic in new default folder: ' mel_fol, '\n'])
 end
 
-output_dir = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name];
 
-if ~isfolder(output_dir)
-    fprintf(['Cannot find output_dir (task_dir) at ' output_dir, '. Is your folder structure wrong perhaps?'])
-    return;
-end
 
 if ~exist('IC_manual_checker', 'var') || isempty(IC_manual_checker) || ~isfile(IC_manual_checker)
     % If not given assume it is in its normal spot and look for it

@@ -8,6 +8,8 @@ function CICADA_3_QC(cleaned_file, compare_file)
 % While default compare file is 8p, you could feed it the cicada auto file
 % if you were doing manual cicada step, for example. The file does need to
 % already exist.
+% compare_file can either be a fullfile path, OR can be one of the
+% acceptable tags to an inbuilt denoiser: valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
 
 fprintf('\n')
 close all
@@ -41,12 +43,73 @@ orig_file = [orig_file_info.folder, '/', orig_file_info.name];
 
 % catch if there is no compare_file, and if so, do standard 8p (and auto
 % later if cicada is manual version)
-if ~exist('compare_file', 'var') || strcmp(compare_file, 'x')
+if ~exist('compare_file', 'var') || isempty(compare_file) || strcmp(compare_file, 'x')
     fprintf('Will compare to standard 8 parameter \n')
-    compare_file_info = dir('*8p*');
+    compare_file_info = dir([cleaned_dir, '/*8p*']);
     compare_file=[compare_file_info.folder, '/', compare_file_info.name]; % Give it default 8p to compare against
 end
 
+
+
+
+% Validate compare_file against allowed values in case it is a valid tag instead
+% of a full file
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+if ismember(compare_file, valid_tags)
+    fprintf(['Will compare to standard ', compare_file, ' regression. \n'])
+    compare_file_info = dir(['*', compare_file, '*']); % help see if file exists as it should
+    
+    if isempty(compare_file_info)
+        % that means the file itself was not made in basescript 2... but
+        % basescript 2 should have made the required components, so try to
+        % compute it!
+        fprintf('Cannot find the compare file in cleaned directory... will try to recreate it from files from basescript 2!\n')
+        task_dir = [cleaned_dir, '/../']; % up one level from cleaned_dir always
+        compare_tag = compare_file; % since it is truly a tag here, not a full filepath
+
+        % make sure the regressors file exists!
+        if isfile([task_dir, '/regressors_timeseries/', compare_tag, '_regressors_intercept.mat'])
+
+            % great, we should be able to make it!
+            % can get the appropriate prefix and suffix from the orig data:
+            orig_file_info = dir(['*', compare_file, '*']);
+            parts = split(orig_file_info.name, '_orig_');
+            prefix = parts{1};
+            suffix = parts{2};
+    
+            % grab Tmean to add back in
+            tmean_command = ['fslmaths ', task_dir, '/funcfile.nii.gz -Tmean ', task_dir, '/tmean_funcfile.nii.gz'];
+            [~, ~] = call_fsl(tmean_command);
+            
+            % Now, run regression for comparison file of interest!
+            compare_regress_command = ['fsl_glm -i ', task_dir, '/funcfile.nii.gz -d ', task_dir, ...
+                '/regressors_timeseries/', compare_tag, '_regressors_intercept.mat -m ', task_dir, '/funcmask.nii.gz ', ...
+                '--out_res=', prefix, '_', compare_tag, '_', suffix];
+            fprintf(['Running: ', compare_regress_command, '\n'])
+            [~, ~] = call_fsl(compare_regress_command);
+            
+            % Because fsl_glm is dumb, it resets the TR to 1... need to run fslmerge
+            % with tr option to reset the tr correctly...
+            reset_tr_compare_command = ['fslmerge -tr ', prefix, '_', compare_tag, '_', suffix, ' ', prefix, '_', compare_tag, '_', suffix, ' ', num2str(TR)];
+            [~, ~] = call_fsl(reset_tr_compare_command);
+            
+            % add Tmean back onto compare file 
+            tmean_add_compare_command = ['fslmaths ', prefix, '_', compare_tag, '_', suffix, ' -add ', task_dir, '/tmean_funcfile.nii.gz ', prefix, '_', compare_tag, '_', suffix];
+            [~, ~] = call_fsl(tmean_add_compare_command);
+
+            compare_file_info = dir(['*', compare_tag, '*']); % Nowwwww, it should find it!
+        else
+            fprintf('Missing (?) regressor mat file for fsl_glm that should have been made by the 2nd basescript... that is bad...\n')
+            fprintf('Will just use 8p which should always be made by default!\n')
+            compare_file_info = dir('*8p*'); % 8 parameter! Should always exist since it is run by default!
+        
+        end
+
+        
+    end
+
+    compare_file = [compare_file_info.folder, '/', compare_file_info.name]; % Update it to match to the tagged type of comparison denoiser
+end
 
 if ~isfile(compare_file)
     fprintf(['ERROR, cannot find compare file: ', compare_file, '\n'])
@@ -226,10 +289,11 @@ writetable(orig_significance_table, [qc_output_dir, '/', prefix, '_', cleaned_ta
 
 delete tmp*.nii.gz
 
-% check network identifiability (keep it within the best data with
+% Make Network Identifiability Image for QC (keep it within the best data with
 % funcmask_constrained.nii.gz, remove outbrain because of potential high
 % variance from noise)
-network_names = {"Default", "Sensorimotor", "Visual", "Salience", "Dorsal Attention", "Executive Control", "Limbic_Reward"};
+%network_names = {"Visual", "Sensorimotor", "Dorsal Attention", "Salience", "Limbic_Reward", "Executive_Control", "Default"};
+network_names = {"Default", "Sensorimotor", "Visual", "Salience", "Dorsal_Attention", "Executive_Control", "Limbic_Reward"};
 network_identifiability_table = network_identifiability([template_dir, '/yeo_brainnetome_network_labels.nii.gz'], cleaned_file, compare_file, orig_file, [qc_output_dir, '/../funcmask.nii.gz'], [qc_output_dir, '/../region_masks/GM_mask.nii.gz'], 6, network_names, qc_output_dir);
 
 % Create seed-based connectivity of the PCC to show how at least DMN

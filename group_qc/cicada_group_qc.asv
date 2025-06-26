@@ -12,8 +12,6 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % for the call. 
 % file_tag: needs to be unique to the type of denoised/cleaned file you are
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
-% compare_rag: similar to file tag, for the file you are comparing against,
-% e.g., '8p' being the default
 
 % voxelwise_scale_flag should be a 1 or a 0. If 1, voxelwise scaling is 
 % performed (after detrending, bandpassing, and smoothing). 
@@ -53,18 +51,12 @@ if ~exist('compare_tag', 'var') || isempty(compare_tag)
     compare_tag = '8p'; % just use standard 8p comparison if it is not provided by user
 end
 
-if isfile(compare_tag)
-    fprintf('Error. You seem to have provided a whole singular compare file, but it needs to be an identifiable tag of a file in the cleaned dir!\n')
-    return
-end
-
 valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
 if ~ismember(compare_tag, valid_tags)
-    compare_tag = '8p'; % set to default if it is not an appropriate tag
+    compare_tag = '8p';
 end
 
-% now compare_tag is an appropriate one!
-fprintf(['Comparing to ', compare_tag, '.\n'])
+f
 
 % now check that all lists are the same length, and that all are lists of
 % char arrays
@@ -134,7 +126,7 @@ data_notes_iter = 1;
 
 % go into first participant's info to extract the correct naming, just compare to 8p here for ease:
 first_task_dir = [cicada_home, '/sub-', sub_ids{1}, '/ses-', ses_ids{1}, '/', task_name];
-compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*', compare_tag, '*qc_plots.jpg']); % specific to file tag of interest, can be multiples
+compare_image_info = dir([first_task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest, can be multiples
 
 
 comparison_only = 0; % to change in following if else statement
@@ -364,10 +356,10 @@ for idx = 1:num_runs
     end
     orig_file = [orig_file_info.folder, '/', orig_file_info.name];
 
-    compare_file_info = dir([cleaned_dir, '/sub*ses*task*', task_name, '*_' compare_tag, '_*.nii.gz']); % need to make sure this is not the same as cleaned file
+    compare_file_info = dir([cleaned_dir, '/sub*ses*task*', task_name, '*_8p_*.nii.gz']); % need to make sure this is not the same as cleaned file
     % make sure only one file is grabbed
     if size(compare_file_info,1) ~= 1
-        fprintf(['Are there no _', compare_tag, '_ files (or more than one) in cleaned dir? Check naming conventions!\n'])
+        fprintf('Are there no _8p_ files (or more than one) in cleaned dir?\n')
         return;
     end
     compare_file = [compare_file_info.folder, '/', compare_file_info.name];
@@ -455,8 +447,8 @@ for idx = 1:num_runs
     % And then move the qc photos to their respective folders & grab all qc
     % values (sampled). plot AFTER. 8p comparison is always a good base
     % comparison.
-    compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*' compare_tag, '*qc_plots.jpg']); % specific to file tag of interest to 8p only
-    compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*', compare_tag, '*qc_vals.mat']); % specific to file tag of interest to 8p only
+    compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_plots.jpg']); % specific to file tag of interest to 8p only
+    compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*8p*qc_vals.mat']); % specific to file tag of interest to 8p only
     if ~isempty(compare_file)
         curr_compare_image_file = [compare_image_info.folder, '/', compare_image_info.name];
         compare_tag = extractBetween(compare_image_info.name, [task_name, '_'], '_qc_plots.jpg');

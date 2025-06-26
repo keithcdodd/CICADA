@@ -1,4 +1,4 @@
-function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
+function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, task_events_file, compare_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
 % Make this into a function that does name=value, and specify what inputs
 % are required. 
 % Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
@@ -101,7 +101,6 @@ if ~isfile(compare_file)
     compare_tag = compare_file;
 
     if isempty(compare_tag)
-        compare_tag = '8p'; % to the default! Because it was not a valid file or tag
     end
 end
 
