@@ -50,7 +50,7 @@ if length(compare_files) ~= length(sub_ids)
 end
 
 if length(task_events_files) ~= length(sub_ids)
-    if length(task_events_files) ~= 1 || ~isempty(task_events_files)
+    if length(task_events_files) ~= 1 && ~isempty(task_events_files)
         % assuming you are running one session and one task at a time here
         fprintf('Task event files must either be the same length as the subjects you are looking at, or length of 1, or length of 0\n')
         return;
