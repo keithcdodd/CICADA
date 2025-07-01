@@ -9,7 +9,7 @@ savepath
 
 
 % Make sure fsl is set up correctly as well!
-if (~contains(path, 'fsl/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
+if (~contains(path, 'fsl*/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
     % FSL was not set up correctly, try to do that here
     fprintf('FSL with Matlab was not set up properly? Trying to do that for you now...\n')
     setenv( 'FSLDIR', '/usr/local/fsl' );
@@ -29,3 +29,5 @@ if ~contains(curr_system_path, fsldir)
     setenv('PATH', new_system_path)
 end
 clear fsldir curr_system_path
+
+savepath
