@@ -21,10 +21,10 @@ addpath(basescript_dir); % add the basescripts to path if not already done
 
 
 % Make sure fsl is set up correctly as well!
-if (~contains(path, 'fsl/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
+if (~contains(path, 'fsl*/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
     % FSL was not set up correctly, try to do that here
     fprintf('FSL with Matlab was not set up properly? Trying to do that for you now...\n')
-    setenv( 'FSLDIR', '/usr/local/fsl' );
+    setenv( 'FSLDIR', '/usr/local/fsl' ); % this path may be different for you
     setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
     fsldir = getenv('FSLDIR');
     fsldirmpath = sprintf('%s/etc/matlab',fsldir);
