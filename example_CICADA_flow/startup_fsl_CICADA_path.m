@@ -1,3 +1,4 @@
+% if you run this before any of CICADA (modify paths to your system settings!), it should help set things up to you
 % Auto_CICADA.m should already set this all up for you as is, but in case you run into issues, here is the general code in order to run CICADA with fsl.
 
 % This will almost certainly require modifications specific to your system, especially CICADA_software_dir and potentially your fsl path
@@ -5,7 +6,7 @@
 
 CICADA_software_dir = '/home/GitHub/CICADA'; % edit to your actual path
 addpath(genpath(CICADA_software_dir))
-savepath
+
 
 
 % Make sure fsl is set up correctly as well!
