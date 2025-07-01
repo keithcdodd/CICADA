@@ -19,29 +19,14 @@ basescript_dir=pwd;
 cd(Auto_CICADA_dir);
 addpath(basescript_dir); % add the basescripts to path if not already done 
 
-
-% Make sure fsl is set up correctly as well!
-if (~contains(path, 'fsl*/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
-    % FSL was not set up correctly, try to do that here
-    fprintf('FSL with Matlab was not set up properly? Trying to do that for you now...\n')
-    setenv( 'FSLDIR', '/usr/local/fsl' ); % this path may be different for you
-    setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
-    fsldir = getenv('FSLDIR');
-    fsldirmpath = sprintf('%s/etc/matlab',fsldir);
-    path(path, fsldirmpath);
-    clear fsldir fsldirmpath;
+% now, run the start up script to connect Matlab to FSL
+% note: if this does not work, then you must go into the associated file and modify it as needed:
+if ~isfile([Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m'])
+	fprintf(['Cannot find ', Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m !!!\n'])
+	return
 end
 
-% system path must also have fsl in it, otherwise will not work
-curr_system_path = getenv('PATH');
-fsldir = getenv('FSLDIR');
-if ~contains(curr_system_path, fsldir)
-    fprintf('Matlab System Path does not have fsl. Trying to add that for you now...\n') 
-    new_system_path = [curr_system_path, ':', fsldir, '/bin'];
-    setenv('PATH', new_system_path)
-end
-clear fsldir curr_system_path
-
+run([Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m']) % sets up FSL and Matlab, if not done already
 
 % Now, check for required variables 
 if ~exist('output_dir', 'var') || ~ischar(output_dir)

@@ -1,13 +1,11 @@
-% if you run this before any of CICADA (modify paths to your system settings!), it should help set things up to you
-% Auto_CICADA.m should already set this all up for you as is, but in case you run into issues, here is the general code in order to run CICADA with fsl.
+% modify as needed for your CICADA, FSL, Matlab set up!
+% you can then either run this yourself, or Auto_CICADA will run it for you too
 
 % This will almost certainly require modifications specific to your system, especially CICADA_software_dir and potentially your fsl path
 
 
 CICADA_software_dir = '/home/GitHub/CICADA'; % edit to your actual path
 addpath(genpath(CICADA_software_dir))
-
-
 
 % Make sure fsl is set up correctly as well!
 if (~contains(path, 'fsl*/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
