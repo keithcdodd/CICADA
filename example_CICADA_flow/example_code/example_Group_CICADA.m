@@ -18,7 +18,7 @@ smoothing_kernel = 0; % -1 would force default, which is 3mm smoothing kernel (a
 
 compare_tag = '8p'; % comparing to 8 parameter regression is standard, 
 % but this just needs to be an identifiable tag of other cleaned data in your cleaned dir that you want to compare to. 
-% e.g.,: '6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p', or
+% e.g.,: '6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p', or
 % whatever fits what you already have in your cleaned_dirs!
 
 fpass = []; % bandpassing in Hz, performed after detrending. A great choice might be [0.008, 0.15]. Default is no bandpassing (like in the manuscript). [0.008, 0.1] is pretty commonplace.

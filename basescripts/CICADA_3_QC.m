@@ -9,7 +9,7 @@ function CICADA_3_QC(cleaned_file, compare_file)
 % if you were doing manual cicada step, for example. The file does need to
 % already exist.
 % compare_file can either be a fullfile path, OR can be one of the
-% acceptable tags to an inbuilt denoiser: valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+% acceptable tags to an inbuilt denoiser: valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
 
 fprintf('\n')
 close all
@@ -51,7 +51,7 @@ if ~exist('compare_file', 'var') || isempty(compare_file) || ~ischar(compare_fil
     compare_file = [compare_file_info.folder, '/', compare_file_info.name]; % Give it default 8p to compare against
 end
 
-valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
 compare_file = find_compare_file(output_dir, compare_file, valid_tags); % outputs empty char array if corresponding file does not exist
 
 if ~isfile(compare_file)

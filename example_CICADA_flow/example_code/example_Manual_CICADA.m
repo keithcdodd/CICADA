@@ -27,7 +27,7 @@ task_name = 'rest';
 % full filepath for each subject you want to compare (same length as
 % sub_ids)
 % alternatively, you can feed it one of the valid compare_tags for standard
-% comparison: '6p', '8p', '12p', '16p', '18p', '24p', '32p', or '36p'
+% comparison: '6p', '8p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', or '36p'
 % '8p' is the standard 8 parameter regression (6 motion + CSF + WM)!
 compare_files = {'8p'};
 

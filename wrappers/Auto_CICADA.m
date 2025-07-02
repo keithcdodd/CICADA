@@ -7,7 +7,7 @@ function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, me
 % can skip variables with [] input
 % compare_file allows you to compare the denoising to any file you want,
 % just needs the full path. Alternatively, you can set compare_file to the
-% characters of either '6p', '8p', '12p', '16p', '18p', '24p', '32p', or
+% characters of either '6p', '8p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', or
 % '36p' to do any of those standard regressions for comparison (e.g., 8
 % parameter regression)
 
@@ -70,7 +70,7 @@ if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_fil
 elseif ~isfile(compare_file)
     % it is a char array, but not a valid file
     % check to see if it is a valid tag instead!
-    valid_tags = {'6p', '8p', '12p', '16p', '18p', '24p', '32p', '36p'}; % for compare file if you want to use an inbuilt one!
+    valid_tags = {'6p', '8p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'}; % for compare file if you want to use an inbuilt one!
     if ~ismember(compare_file, valid_tags)
         fprintf('Not a valid tag or file... Will compare to 8p regression.\n')
         compare_file = '';

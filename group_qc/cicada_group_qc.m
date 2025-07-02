@@ -58,7 +58,7 @@ if isfile(compare_tag)
     return
 end
 
-valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
 if ~ismember(compare_tag, valid_tags)
     compare_tag = '8p'; % set to default if it is not an appropriate tag
 end

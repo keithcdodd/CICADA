@@ -61,7 +61,7 @@ if ~ischar(compare_tag)
 end
 
 % Validate compare_tag against allowed values
-valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
 if ~ismember(compare_tag, valid_tags)
     warning('Compare tag is not one of the valid options. Using 8p regression for comparison.')
     compare_tag = '8p';
@@ -435,6 +435,12 @@ Data.Confounds.Eighteenparam(isnan(Data.Confounds.Eighteenparam)) = 0;
 Data.Confounds.Twentyfourparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params]));
 Data.Confounds.Twentyfourparam(isnan(Data.Confounds.Twentyfourparam)) = 0;
 
+Data.Confounds.Twentyeightparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params]));
+Data.Confounds.Twentyeightparam(isnan(Data.Confounds.Twentyeightparam)) = 0;
+
+Data.Confounds.Thirtyparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, gs_param, gs_deriv_param]));
+Data.Confounds.Thirtyparam(isnan(Data.Confounds.Thirtyparam)) = 0;
+
 Data.Confounds.Thirtytwoparam = table2array(allconfounds(:, [motion_params, motion_deriv_params, motion_power_params, motion_deriv_power_params, phys_params, phys_deriv_params, phys_power_params, phys_deriv_power_params]));
 Data.Confounds.Thirtytwoparam(isnan(Data.Confounds.Thirtytwoparam)) = 0;
 
@@ -446,7 +452,7 @@ Data.Confounds.DVARS = table2array(allconfounds(:,{'dvars'}));
 Data.Confounds.FD = table2array(allconfounds(:,{'framewise_displacement'}));
 Results.Confounds = Data.Confounds;  
 
-% Spikiness or overrideing drift can be based on magnitude of normalized max vs mean 
+% Spikiness or overriding drift can be based on magnitude of normalized max vs mean 
 ts_detrend = detrend(Data.TimeSeries,1);
 Spikiness = max(abs(Data.TimeSeries))'; % a normalized response with larger values had greater spikes
 Data.Spikiness = Spikiness;
@@ -607,6 +613,8 @@ writematrix(Data.Confounds.Twelveparam, '12p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Sixteenparam, '16p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Eighteenparam, '18p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Twentyfourparam, '24p_regressors.txt', 'Delimiter', ' ')
+writematrix(Data.Confounds.Twentyeightparam, '28p_regressors.txt', 'Delimiter', ' ')
+writematrix(Data.Confounds.Thirtyparam, '30p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Thirtytwoparam, '32p_regressors.txt', 'Delimiter', ' ')
 writematrix(Data.Confounds.Thirtysixparam, '36p_regressors.txt', 'Delimiter', ' ')
 
@@ -620,6 +628,8 @@ writematrix([intercept, Data.Confounds.Twelveparam], '12p_regressors_intercept.t
 writematrix([intercept, Data.Confounds.Sixteenparam], '16p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Eighteenparam], '18p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Twentyfourparam], '24p_regressors_intercept.txt', 'Delimiter', ' ')
+writematrix([intercept, Data.Confounds.Twentyeightparam], '28p_regressors_intercept.txt', 'Delimiter', ' ')
+writematrix([intercept, Data.Confounds.Thirtyparam], '30p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Thirtytwoparam], '32p_regressors_intercept.txt', 'Delimiter', ' ')
 writematrix([intercept, Data.Confounds.Thirtysixparam], '36p_regressors_intercept.txt', 'Delimiter', ' ')
 
@@ -631,6 +641,8 @@ writematrix([intercept, Data.Confounds.Thirtysixparam], '36p_regressors_intercep
 [~, ~] = call_fsl('Text2Vest 16p_regressors_intercept.txt 16p_regressors_intercept.mat');
 [~, ~] = call_fsl('Text2Vest 18p_regressors_intercept.txt 18p_regressors_intercept.mat');
 [~, ~] = call_fsl('Text2Vest 24p_regressors_intercept.txt 24p_regressors_intercept.mat');
+[~, ~] = call_fsl('Text2Vest 28p_regressors_intercept.txt 28p_regressors_intercept.mat');
+[~, ~] = call_fsl('Text2Vest 30p_regressors_intercept.txt 30p_regressors_intercept.mat');
 [~, ~] = call_fsl('Text2Vest 32p_regressors_intercept.txt 32p_regressors_intercept.mat');
 [~, ~] = call_fsl('Text2Vest 36p_regressors_intercept.txt 36p_regressors_intercept.mat');
 
@@ -1217,7 +1229,7 @@ tmean_add_compare_command = ['fslmaths ', output_dir, '/', prefix, '_', compare_
 [~, ~] = call_fsl(tmean_add_compare_command);
 
 if ~strcmp(compare_tag, '8p')
-    % 8p was not run, but is good to always run be default too!
+    % 8p was not run, but is good to always run the default too!
     eightparam_regress_command = ['fsl_glm -i ', task_dir, '/funcfile.nii.gz -d ', task_dir, ...
         '/regressors_timeseries/8p_regressors_intercept.mat -m ', task_dir, '/funcmask.nii.gz ', ...
         '--out_res=', output_dir, '/', prefix, '_8p_', suffix];
