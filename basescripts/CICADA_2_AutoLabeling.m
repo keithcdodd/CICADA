@@ -1261,7 +1261,10 @@ end
 copyfile('funcfile.nii.gz', [cleaned_dir, '/', prefix, '_orig_', suffix])
 movefile('sub*ses*task*CICADA*.nii.gz', cleaned_dir)
 movefile(['sub*ses*task*', compare_tag, '*.nii.gz'], cleaned_dir)
-movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
+if ~strcmp(compare_tag, '8p')
+	movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
+end
+
 
 % movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
 % movefile('sub*ses*task*9p*.nii.gz', cleaned_dir)
