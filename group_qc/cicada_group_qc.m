@@ -164,9 +164,9 @@ end
 % only or orig only, then do not need (e.g., 8p)
 if comparison_only == 0 && orig_only == 0
     for h = 1:size(compare_image_info,1)
-    compare_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
-    compare_tag = compare_tag{:};
-    photo_fol = [output_dir, '/qc_photos_', compare_tag];
+    comparison_tag = extractBetween(compare_image_info(h).name, [task_name, '_'], '_qc_plots.jpg');
+    comparison_tag = comparison_tag{:};
+    photo_fol = [output_dir, '/qc_photos_', comparison_tag];
     qc_photo_fols{h} = photo_fol; % for potential use for later for copy and paste
         if not(isfolder(photo_fol))
             mkdir(photo_fol)
@@ -459,9 +459,9 @@ for idx = 1:num_runs
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*', compare_tag, '*qc_vals.mat']); % specific to file tag of interest to 8p only
     if ~isempty(compare_file)
         curr_compare_image_file = [compare_image_info.folder, '/', compare_image_info.name];
-        compare_tag = extractBetween(compare_image_info.name, [task_name, '_'], '_qc_plots.jpg');
-        compare_tag = compare_tag{:};
-        photo_fol = [output_dir, '/qc_photos_', compare_tag];
+        comparison_tag = extractBetween(compare_image_info.name, [task_name, '_'], '_qc_plots.jpg');
+        comparison_tag = comparison_tag{:};
+        photo_fol = [output_dir, '/qc_photos_', comparison_tag];
         copyfile(curr_compare_image_file, photo_fol)
     end
 
@@ -754,7 +754,7 @@ if ~isempty(group_compare_qc_corrs_table)
 
     
     % Set appropriate titles and destination
-    title_string = ['Group_QC_', compare_tag];
+    title_string = ['Group_QC_', comparison_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
     % now we can plot everyone
@@ -776,7 +776,7 @@ if ~isempty(group_compare_qc_corrs_table)
 
    
     % Set appropriate titles and destination
-    title_string_cor = ['Group_QC_', compare_tag, '_cicada_outliers_removed'];
+    title_string_cor = ['Group_QC_', comparison_tag, '_cicada_outliers_removed'];
     qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
     
     % now we can plot with cicada_outliers removed for comparison
