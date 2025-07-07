@@ -18,14 +18,24 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 % You can see if GM mean is empty for denoised
 
 fprintf('Creating Figures\n')
-
 if isempty(denoised_GM_mean)
-    figure('Position', [50, 200, 1700, 750])
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 10, 4.5]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, 10, 4.5]);
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    figure('Position', [50, 50, 1700, 1000])
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 10, 6]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, 10, 6]);
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
+
+
+%if isempty(denoised_GM_mean)
+%	fig = figure('Position', [50, 200, 1700, 750], 'Visible', 'off');
+%    t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
+%else
+%    fig = figure('Position', [50, 50, 1700, 1000], 'Visible', 'off');
+%    t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
+%end
 
 title(t, title_string, 'Interpreter', 'none')
 
@@ -277,5 +287,7 @@ if ~isempty(denoised_GM_mean)
 end
 
 fprintf('Saving Figure\n')
-exportgraphics(t, qc_plot_dest, 'Resolution', 300)
+save_figure_robust(fig, qc_plot_dest, 300)
+
+%exportgraphics(t, qc_plot_dest, 'Resolution', 300)
 end
