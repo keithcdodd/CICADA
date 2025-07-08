@@ -40,7 +40,35 @@ function save_figure_robust(fig, filename, dpi)
     switch ext
         case {'.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
             set(fig, 'Renderer', 'opengl');
-            fmt = ['-d' ext(2:end)];
+            % Determine output format
+			[~, ~, ext] = fileparts(filename);
+			ext = lower(ext);
+
+			switch ext
+    			case '.png'
+        			set(fig, 'Renderer', 'opengl');
+        			fmt = '-dpng';
+    			case {'.jpg', '.jpeg'}
+        			set(fig, 'Renderer', 'opengl');
+        			fmt = '-djpeg';
+    			case '.tiff'
+        			set(fig, 'Renderer', 'opengl');
+        			fmt = '-dtiff';
+    			case '.bmp'
+        			set(fig, 'Renderer', 'opengl');
+        			fmt = '-dbmp';
+    			case '.pdf'
+        			set(fig, 'Renderer', 'painters');
+        			fmt = '-dpdf';
+    			case '.eps'
+        			set(fig, 'Renderer', 'painters');
+        			fmt = '-depsc';
+    			otherwise
+        			warning('Unknown extension "%s". Defaulting to PNG.', ext);
+        			set(fig, 'Renderer', 'opengl');
+        			fmt = '-dpng';
+        			filename = [filename '.png'];
+			end
         case {'.pdf'}
             set(fig, 'Renderer', 'painters');  % Use vector graphics
             fmt = '-dpdf';
