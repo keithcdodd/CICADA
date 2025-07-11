@@ -1,5 +1,5 @@
 function save_figure_robust(fig, filename, dpi)
-%SAVE_FIGURE_ROBUST Save figure reliably across platforms and MATLAB versions.
+%SAVE_FIGURE_ROBUST Save a figure reliably across platforms and MATLAB versions.
 %
 %   save_figure_robust(fig, filename, dpi)
 %
@@ -8,14 +8,22 @@ function save_figure_robust(fig, filename, dpi)
 %     - filename: Output file path (e.g., 'myplot.png', 'fig.pdf') (required)
 %     - dpi:      Output resolution in dots per inch (default = 300)
 %
-%   This function uses 'print' instead of 'saveas', configures appropriate
-%   renderer, and works in headless/server environments.
+%   Features:
+%     - Automatically selects correct renderer (OpenGL or Painters)
+%     - Handles missing extensions by defaulting to PNG
+%     - Works on headless servers via software OpenGL
+%     - Applies consistent formatting (font size, white background)
 
     if nargin < 3 || isempty(dpi)
         dpi = 300;
     end
 
-    % Ensure software OpenGL to avoid GPU/display issues on servers
+    % Ensure figure handle is valid
+    if ~ishandle(fig) || ~strcmp(get(fig, 'Type'), 'figure')
+        error('First argument must be a valid figure handle.');
+    end
+
+    % Attempt to enforce software OpenGL (for headless or CI environments)
     try
         opengl('save', 'software');
         opengl('software');
@@ -23,72 +31,52 @@ function save_figure_robust(fig, filename, dpi)
         warning('Could not set OpenGL to software mode.');
     end
 
-    % Enforce consistent appearance
+    % Standard appearance
     set(fig, 'Visible', 'off', ...
              'PaperPositionMode', 'auto', ...
              'InvertHardcopy', 'off', ...
-             'Color', 'w');  % White background
-
-    % Standardize font size (adjust as needed)
+             'Color', 'w');  % white background
     set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
 
-    % Determine output format
-    [~, ~, ext] = fileparts(filename);
+    % Handle missing extension (default to PNG)
+    [filepath, name, ext] = fileparts(filename);
+    if isempty(ext)
+        ext = '.png';
+        filename = fullfile(filepath, [name ext]);
+    end
     ext = lower(ext);
 
-    % Set renderer based on output type
+    % Select format and renderer
     switch ext
-        case {'.png', '.jpg', '.jpeg', '.tiff', '.bmp'}
-            set(fig, 'Renderer', 'opengl');
-            % Determine output format
-			[~, ~, ext] = fileparts(filename);
-			ext = lower(ext);
-
-			switch ext
-    			case '.png'
-        			set(fig, 'Renderer', 'opengl');
-        			fmt = '-dpng';
-    			case {'.jpg', '.jpeg'}
-        			set(fig, 'Renderer', 'opengl');
-        			fmt = '-djpeg';
-    			case '.tiff'
-        			set(fig, 'Renderer', 'opengl');
-        			fmt = '-dtiff';
-    			case '.bmp'
-        			set(fig, 'Renderer', 'opengl');
-        			fmt = '-dbmp';
-    			case '.pdf'
-        			set(fig, 'Renderer', 'painters');
-        			fmt = '-dpdf';
-    			case '.eps'
-        			set(fig, 'Renderer', 'painters');
-        			fmt = '-depsc';
-    			otherwise
-        			warning('Unknown extension "%s". Defaulting to PNG.', ext);
-        			set(fig, 'Renderer', 'opengl');
-        			fmt = '-dpng';
-        			filename = [filename '.png'];
-			end
-        case {'.pdf'}
-            set(fig, 'Renderer', 'painters');  % Use vector graphics
-            fmt = '-dpdf';
-        case {'.eps'}
-            set(fig, 'Renderer', 'painters');  % Use vector graphics
-            fmt = '-depsc';
+        case '.png'
+            set(fig, 'Renderer', 'opengl');  fmt = '-dpng';
+        case {'.jpg', '.jpeg'}
+            set(fig, 'Renderer', 'opengl');  fmt = '-djpeg';
+        case '.tiff'
+            set(fig, 'Renderer', 'opengl');  fmt = '-dtiff';
+        case '.bmp'
+            set(fig, 'Renderer', 'opengl');  fmt = '-dbmp';
+        case '.pdf'
+            set(fig, 'Renderer', 'painters'); fmt = '-dpdf';
+        case '.eps'
+            set(fig, 'Renderer', 'painters'); fmt = '-depsc';
+        case '.svg'
+            set(fig, 'Renderer', 'painters'); fmt = '-dsvg';  % MATLAB R2020a+
         otherwise
             warning('Unknown extension "%s". Defaulting to PNG.', ext);
             set(fig, 'Renderer', 'opengl');
             fmt = '-dpng';
-            filename = [filename '.png'];
+            filename = fullfile(filepath, [name '.png']);
     end
 
-    % Save figure using print
+    % Save the figure
     try
         print(fig, filename, fmt, ['-r' num2str(dpi)]);
+        fprintf('Figure saved to: %s\n', filename);
     catch ME
         error('Failed to save figure: %s', ME.message);
     end
 
-    % Optional: close figure after saving
+    % Optional: close figure automatically after saving
     % close(fig);
 end
