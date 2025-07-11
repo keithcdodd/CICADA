@@ -19,12 +19,12 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 
 fprintf('Creating Figures\n')
 if isempty(denoised_GM_mean)
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 12, 5.4]);
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 24, 10.8]);
     set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, 12, 5.4]);
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 12, 7.2]);
-    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, 12, 7.2]);
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, 24, 14.4]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, 24, 14.4]);
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
