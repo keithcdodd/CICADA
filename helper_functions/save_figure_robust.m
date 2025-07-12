@@ -23,10 +23,12 @@ function save_figure_robust(fig, filename, dpi)
         error('First argument must be a valid figure handle.');
     end
 
-    % Attempt to enforce software OpenGL (for headless or CI environments)
-    try
-        opengl('save', 'software');
-        opengl('software');
+   try
+        if usejava('desktop') && feature('opengl','supported')
+            opengl('software');
+        else
+            warning('OpenGL not supported or no desktop environment; skipping OpenGL setup.');
+        end
     catch
         warning('Could not set OpenGL to software mode.');
     end
