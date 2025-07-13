@@ -18,21 +18,22 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 % You can see if GM mean is empty for denoised
 
 fprintf('Creating Figures\n')
-row_three_prop = 2.5;
-row_four_prop = 1.77;
-fig_width = 15;
+row_height = 2;
+fig_width = 11;
 if isempty(denoised_GM_mean)
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, fig_width+1, fig_width/row_three_prop+1]);
-    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, fig_width+1, fig_width/row_three_prop+1]);
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, fig_width+1, row_height*3+1]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, fig_width+1, row_height*3+1]);
+    set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
     t = tiledlayout(3,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 else
-    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, fig_width+1, fig_width/row_four_prop+1]);
-    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, fig_width+1, fig_width/row_four_prop+1]);
+    fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, fig_width+1, row_height*4+1]);
+    set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, fig_width+1, row_height*4+1]);
+    set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
-lgd_font_size = 6;
-axes_font_size = 11;
+lgd_font_size = 8;
+axes_font_size = 10;
 
 set(fig, 'DefaultLegendFontSize', lgd_font_size);
 set(fig, 'DefaultLegendBox', 'off');

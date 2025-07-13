@@ -38,7 +38,7 @@ function save_figure_robust(fig, filename, dpi)
              'PaperPositionMode', 'auto', ...
              'InvertHardcopy', 'off', ...
              'Color', 'w');  % white background
-    set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
+    %set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
 
     % Handle missing extension (default to PNG)
     [filepath, name, ext] = fileparts(filename);
