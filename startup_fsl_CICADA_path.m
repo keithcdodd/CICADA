@@ -3,15 +3,18 @@
 
 % This will almost certainly require modifications specific to your system, especially CICADA_software_dir and potentially your fsl path
 
+% NOTE: likely need to edit at least these next two lines
+CICADA_software_dir = '/home/GitHub/CICADA'; % NOTE: edit to your actual path to CICADA
+fslpath = '/usr/local/fsl'; % NOTE: edit to your actual path to fsl (which fsl)
 
-CICADA_software_dir = '/home/GitHub/CICADA'; % edit to your actual path
+
 addpath(genpath(CICADA_software_dir))
 
 % Make sure fsl is set up correctly as well!
-if (~contains(path, 'fsl*/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
+if isempty(regexp(path, '.*fsl.*/etc/matlab', 'once')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
     % FSL was not set up correctly, try to do that here
     fprintf('FSL with Matlab was not set up properly? Trying to do that for you now...\n')
-    setenv( 'FSLDIR', '/usr/local/fsl' );
+    setenv( 'FSLDIR', fslpath ); % 
     setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
     fsldir = getenv('FSLDIR');
     fsldirmpath = sprintf('%s/etc/matlab',fsldir);
