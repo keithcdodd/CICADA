@@ -32,7 +32,7 @@ else
     t = tiledlayout(4,3, 'Padding', 'compact', 'TileSpacing', 'compact');
 end
 
-lgd_font_size = 8;
+lgd_font_size = 7;
 axes_font_size = 10;
 
 set(fig, 'DefaultLegendFontSize', lgd_font_size);
