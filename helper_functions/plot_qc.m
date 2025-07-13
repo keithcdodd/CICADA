@@ -18,8 +18,8 @@ function plot_qc(denoised_Edge_Edge_corr, denoised_FD_GM_corr, denoised_DVARS_GM
 % You can see if GM mean is empty for denoised
 
 fprintf('Creating Figures\n')
-row_height = 2;
-fig_width = 11;
+row_height = 2.5;
+fig_width = 15;
 if isempty(denoised_GM_mean)
     fig = figure('Visible', 'off', 'Units', 'inches', 'Position', [1, 1, fig_width+1, row_height*3+1]);
     set(fig, 'PaperUnits', 'inches', 'PaperPosition', [0, 0, fig_width+1, row_height*3+1]);
@@ -62,17 +62,17 @@ if ~isempty(compare_Edge_Edge_corr) && (range(orig_Edge_Edge_corr) > 0.01)
     histogram(compare_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-	set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+	set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_Edge_Edge_corr) < 0.01)
     histogram(compare_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-	set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+	set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Edge_Edge_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -91,11 +91,11 @@ if ~isempty(compare_FD_GM_corr)
     histogram(compare_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(denoised_FD_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -115,11 +115,11 @@ if ~isempty(compare_DVARS_GM_corr)
     histogram(compare_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(denoised_DVARS_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -138,17 +138,17 @@ if ~isempty(compare_Outbrain_Outbrain_corr) && (range(orig_Outbrain_Outbrain_cor
     histogram(compare_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_Outbrain_Outbrain_corr) < 0.01)
     histogram(compare_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Outbrain_Outbrain_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -167,17 +167,17 @@ if ~isempty(compare_WMCSF_WMCSF_corr) && (range(orig_WMCSF_WMCSF_corr) > 0.01)
     histogram(compare_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_WMCSF_WMCSF_corr) < 0.01)
     histogram(compare_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_WMCSF_WMCSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -197,17 +197,17 @@ if ~isempty(compare_CSF_CSF_corr) && (range(orig_CSF_CSF_corr) > 0.01)
     histogram(compare_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_CSF_CSF_corr) < 0.01)
     histogram(compare_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_CSF_CSF_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -228,17 +228,17 @@ if ~isempty(compare_Suscept_Suscept_corr) && (range(orig_Suscept_Suscept_corr) >
     histogram(compare_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_Suscept_Suscept_corr) < 0.01)
     histogram(compare_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_Suscept_Suscept_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -257,17 +257,17 @@ if ~isempty(compare_NotGM_NotGM_corr) && (range(orig_NotGM_NotGM_corr) > 0.01)
     histogram(compare_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_NotGM_NotGM_corr) < 0.01)
     histogram(compare_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_NotGM_NotGM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -287,17 +287,17 @@ if ~isempty(compare_GM_GM_corr) && (range(orig_GM_GM_corr) > 0.01)
     histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 elseif (range(orig_GM_GM_corr) < 0.01)
     histogram(compare_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(2,:), 'LineWidth', 1.5)
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 else
     histogram(orig_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'LineWidth', 1.5)
     histogram(denoised_GM_GM_corr, 'Normalization', 'pdf', 'DisplayStyle', 'stairs', 'EdgeColor', colorord(3,:), 'LineWidth', 1.5)
     lgd = legend('orig', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
 end
 %xline(0, 'DisplayName','r = 0')
 xlabel('Correlation (r)')
@@ -316,7 +316,7 @@ if ~isempty(denoised_GM_mean)
     plot(detrend(compare_GM_mean,2), 'LineWidth', 1.5)
     plot(detrend(denoised_GM_mean,2), 'LineWidth', 1.5)
     lgd = legend('orig', 'compare', sprintf('%s', denoised_name), 'Interpreter', 'none');
-    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northeast');
+    set(lgd, 'FontSize', lgd_font_size, 'Box', 'off', 'Location', 'northwest');
     xlabel('Timepoints')
     ylabel('Signal')
     xlim([0, length(orig_GM_mean)])
