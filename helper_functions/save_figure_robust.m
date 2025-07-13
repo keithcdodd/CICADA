@@ -27,10 +27,10 @@ function save_figure_robust(fig, filename, dpi)
         if usejava('desktop') && feature('opengl','supported')
             opengl('software');
         else
-            warning('OpenGL not supported or no desktop environment; skipping OpenGL setup.');
+            warning('OpenGL not supported or no desktop environment; skipping OpenGL setup. This is usually not an issue. Check QC plots!');
         end
     catch
-        warning('Could not set OpenGL to software mode.');
+        warning('Could not set OpenGL to software mode. This is usually not an issue. Check QC plots.');
     end
 
     % Standard appearance
