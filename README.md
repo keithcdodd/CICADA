@@ -38,5 +38,5 @@ Run cicada_group_qc function. See included word document for more details.
 The MNI template that is used in fMRIPrep is provided. This can be utilized for more general analysis if you have warped to the same space, but do not have or want to use the subject specific segmentation.
 
 # Citations
-Publication is currently under review: Dodd K, McHugo M, Sarabia L, Wylie KP, Legget KT, Cornier MA, Tregellas JR. CICADA: An automated and flexible tool for comprehensive fMRI noise reduction. Imaging Neuroscience, 2024.
+Dodd K, McHugo M, Sarabia L, Wylie KP, Legget KT, Cornier MA, Tregellas JR. CICADA: An automated and flexible tool for comprehensive fMRI noise reduction. Imaging Neuroscience, 2025.
 
