@@ -1,7 +1,7 @@
 # CICADA
 Comprehensive Independent Component Analysis Denoising Assistant (for resting and task-based functional magnetic resonance analysis)
 
-CICADA is similar in function to other ICA fMRI denoisers such as ICA-AROMA and ICA-FIX. CICADA is unique, however, in that it can both be fully automated (without training a model from a manual subset) and targets the most common types of fMRI noise sources when performing IC classification. In short, CICADA aims to fully automate the manual ICA denoising gold-standard, while also offering quality control analyses and the ability to easily manually adjust IC classification if desired.
+CICADA is similar in function to other ICA fMRI denoisers such as ICA-AROMA and ICA-FIX. CICADA is unique, however, in that it both can be fully automated (without training a model from a manual subset) and targets the most common types of fMRI noise sources when performing IC classification. In short, CICADA aims to fully automate the manual ICA denoising gold-standard, while also offering quality control analyses and the ability to easily manually adjust IC classification if desired.
 
 CICADA can be broken down into three parts:
 (1) Automatic CICADA: Automatically denoising fMRI images
