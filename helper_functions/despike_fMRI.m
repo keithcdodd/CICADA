@@ -1,11 +1,12 @@
-function [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data4D, varargin)
-% despike_fMRI_derivative - Robust derivative-based despiking of 4D fMRI data
+function [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, varargin)
+% despike_fMRI - Robust derivative-based despiking of 4D fMRI data
 %
 % Syntax:
-%   [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data4D, 'Param', Value, ...)
+%   [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, 'Param', Value, ...)
 %
 % Inputs:
-%   data4D     - 4D fMRI data array (X x Y x Z x T)
+%   funcfile: gzipped nifti file (.nii.gz) of the functional file you want
+%   to despike
 %
 % Optional Parameters (Name-Value pairs):
 %   'ZThreshold'      - z-score threshold for spike detection (default: 6)
@@ -15,7 +16,7 @@ function [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivati
 %   'SaveLogPath'     - full path to save despiking summary text file (default: '')
 %
 % Outputs:
-%   dataDespiked - despiked 4D fMRI data array, same size as input
+%   funcfile_despiked - despiked 4D fMRI gzipped nifi filepath (.nii.gz)
 %   madMap       - 3D map of MAD-derived robust std dev of derivative for each voxel
 %   spikeCounts  - 3D map of number of spikes detected per voxel
 %   logSummary   - struct with summary statistics:
@@ -30,7 +31,6 @@ function [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivati
 %   [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data, ...
 %       'ZThreshold', 6, 'Mask', gmMask, 'SaveLogPath', 'sub-01/despike_log.txt');
 %
-% Author: ChatGPT, adapted for your pipeline
 % Date: 2025-07-06
 
 % Parse inputs
@@ -51,6 +51,9 @@ saveLogPath = p.Results.SaveLogPath;
 if verbose
     fprintf('Starting despiking with z-threshold = %.2f, scale = %.2f\n', zThresh, scale);
 end
+
+data4D = niftiread(funcfile);
+data4D_info = niftiinfo(funcfile);
 
 [X, Y, Z, T] = size(data4D);
 if T < 3
@@ -169,15 +172,15 @@ if ~isempty(saveLogPath)
             end
         end
     catch ME
-        warning('Error saving despiking log: %s', ME.message);
+        warning('Error saving despiking log to %s\n', saveLogPath');
     end
 end
 
-% Call like: saveFile = fullfile(subjectFolder, 'despike_summary.txt');
-% but I like full brain bask instead of gmMask
-
-%[dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data4D, ...
+% Call like: 
+% [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data4D, ...
 %    'ZThreshold', 6, 'Scale', 2, 'Mask', gmMask, 'SaveLogPath', saveFile, 'Verbose', true);
 
+% I like full brain bask instead of gmMask, but this is
+% debatbale
 
 end
