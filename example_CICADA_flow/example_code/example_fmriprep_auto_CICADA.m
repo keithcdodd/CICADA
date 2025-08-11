@@ -32,6 +32,13 @@ compare_files = {'8p'};
 % (similar to compare_files)
 task_events_files = {};
 
+% Set despike to 1 if you want to lightly despike the fMRI data before running ICA
+% Note: the idea is to very lightly denoise the fMRI data to potentially
+% assist with IC decomposition. This is largely untested, but theoretically
+% may help with particularly noisy data and should have low threshold to
+% hurt the analysis. This was not used as part of the original paper.
+despike = 0;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if isempty(compare_files)
     compare_files = {'8p'}; % if just doing default or forgot to set the parameter
@@ -87,6 +94,6 @@ for i = 1:length(sub_ids)
     % default tolerance
     tolerance = 5;
 
-    fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance)
+    fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike)
 end
 

@@ -1,5 +1,9 @@
-function [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, varargin)
-% despike_fMRI - Robust derivative-based despiking of 4D fMRI data
+function [funcfile_despiked, dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, varargin)
+% despike_fMRI - Robust derivative-based despiking of 4D fMRI data, by
+% default, this is a very soft despiking, only despiking really large
+% spikes. This is to be conservative to minimize impact on true neuronal
+% signal. The goal is simply to lightly improve motion artifact to ideally
+% assist IC decomposition following.
 %
 % Syntax:
 %   [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, 'Param', Value, ...)
@@ -150,7 +154,8 @@ end
 dataDespiked = reshape(dataDespiked2D, X, Y, Z, T);
 
 % write file
-niftiwrite(data, funcfile_despiked_name, data4D_info, 'Compressed', true);
+data4D_info.Filename = funcfile_despiked;
+niftiwrite(dataDespiked, [filepath, '/', funcfile_despiked_name], data4D_info, 'Compressed', true);
 fprintf('New file written to: %s\n', funcfile_despiked);
 
 pctVoxelsWithSpikes = 100 * nnz(spikeCounts) / Nvox;

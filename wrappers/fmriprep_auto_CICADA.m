@@ -1,4 +1,4 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them. 
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
@@ -31,6 +31,11 @@ end
 if ~exist('redo_mel', 'var') || (redo_mel ~= 0 && redo_mel ~=1)
     redo_mel = 0; % default is to not redo melodic
 end
+
+if ~exist('despike', 'var') || (despike ~= 0 && despike ~=1)
+    despike = 0; % default is to not despike
+end
+
 
 
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
@@ -112,6 +117,13 @@ else
     if ~isfile(funcfile)
         fprintf(['Cannot find fmriprep funcfile at ', funcfile, '\n'])
         return;
+    end
+
+    if despike == 1
+        % lightly despike the functional data first!
+        fprintf('Lightly Despiking the Data...\n')
+        [funcfile_despiked] = despike_fMRI(funcfile);
+        funcfile = funcfile_despiked;
     end
 
     funcmask_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);

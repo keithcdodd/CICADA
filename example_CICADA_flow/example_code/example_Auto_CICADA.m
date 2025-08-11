@@ -47,6 +47,14 @@ task_events_files = {};
 ses_id = '01';
 task_name = 'rest';
 fmriprep_dir = [base_dir, '/bids_data/derivatives/fmriprep'];
+
+% Set despike to 1 if you want to lightly despike the fMRI data before running ICA
+% Note: the idea is to very lightly denoise the fMRI data to potentially
+% assist with IC decomposition. This is largely untested, but theoretically
+% may help with particularly noisy data and should have low threshold to
+% hurt the analysis. This was not used as part of the original paper.
+despike = 0;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if isempty(compare_files)
@@ -105,6 +113,13 @@ for i = 1:length(sub_ids)
     funcfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-preproc_bold.nii.gz'];
     funcmask = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz'];
     confoundsfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_desc-confounds_timeseries.tsv'];
+
+    if despike == 1
+        % lightly despike the functional data first!
+        fprintf('Lightly Despiking the Data Before IC Decomposition!\n')
+        [funcfile_despiked] = despike_fMRI(funcfile);
+        funcfile = funcfile_despiked;
+    end
     
     % grab anatomicals
     anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/anat'];
