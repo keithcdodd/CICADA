@@ -28,7 +28,7 @@ function [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(fun
 %   with tanh-based compression. Minimal distortion otherwise.
 %
 % Example usage:
-%   [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data, ...
+%   [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(data, ...
 %       'ZThreshold', 6, 'Mask', gmMask, 'SaveLogPath', 'sub-01/despike_log.txt');
 %
 % Date: 2025-07-06
@@ -51,6 +51,22 @@ saveLogPath = p.Results.SaveLogPath;
 if verbose
     fprintf('Starting despiking with z-threshold = %.2f, scale = %.2f\n', zThresh, scale);
 end
+
+
+% Get path components
+[filepath, name, ext] = fileparts(funcfile);
+
+% Handle .nii.gz case (fileparts will treat .gz as the extension)
+if strcmp(ext, '.gz')
+    % Strip the .gz to get .nii
+    [filepath, name2, ext2] = fileparts(fullfile(filepath, name));
+    name = name2; % funcfile
+    ext = strcat(ext2, ext); % .nii.gz
+end
+
+% Create output file name
+funcfile_despiked_name = [name '_despiked'];
+funcfile_despiked = fullfile(filepath, [funcfile_despiked_name, ext]);
 
 data4D = niftiread(funcfile);
 data4D_info = niftiinfo(funcfile);
@@ -133,6 +149,10 @@ end
 
 dataDespiked = reshape(dataDespiked2D, X, Y, Z, T);
 
+% write file
+niftiwrite(data, funcfile_despiked_name, data4D_info, 'Compressed', true);
+fprintf('New file written to: %s\n', funcfile_despiked);
+
 pctVoxelsWithSpikes = 100 * nnz(spikeCounts) / Nvox;
 
 logSummary.totalSpikes = totalSpikes;
@@ -177,7 +197,7 @@ if ~isempty(saveLogPath)
 end
 
 % Call like: 
-% [dataDespiked, madMap, spikeCounts, logSummary] = despike_fMRI_derivative(data4D, ...
+% [funcfile_despiked, madMap, spikeCounts, logSummary] = despike_fMRI(funcfile, ...
 %    'ZThreshold', 6, 'Scale', 2, 'Mask', gmMask, 'SaveLogPath', saveFile, 'Verbose', true);
 
 % I like full brain bask instead of gmMask, but this is
