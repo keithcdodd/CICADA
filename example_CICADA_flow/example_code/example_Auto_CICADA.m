@@ -113,13 +113,6 @@ for i = 1:length(sub_ids)
     funcfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-preproc_bold.nii.gz'];
     funcmask = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz'];
     confoundsfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_desc-confounds_timeseries.tsv'];
-
-    if despike == 1
-        % lightly despike the functional data first!
-        fprintf('Lightly Despiking the Data Before IC Decomposition!\n')
-        [funcfile_despiked] = despike_fMRI(funcfile);
-        funcfile = funcfile_despiked;
-    end
     
     % grab anatomicals
     anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/anat'];
@@ -129,6 +122,14 @@ for i = 1:length(sub_ids)
     wm_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-WM_probseg.nii.gz'];
     csf_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-CSF_probseg.nii.gz'];
 
+	if despike == 1
+        % lightly despike the functional data first!
+        fprintf('Lightly Despiking the Data Before IC Decomposition!\n')
+        robust_z_thresh = 4;
+        [funcfile_despiked] = despike_fMRI(funcfile, gm_prob, robust_z_thresh);
+        funcfile = funcfile_despiked;
+    end
+    
     % default tolerance
     tolerance = 5;
 

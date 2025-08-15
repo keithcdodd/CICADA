@@ -119,13 +119,6 @@ else
         return;
     end
 
-    if despike == 1
-        % lightly despike the functional data first!
-        fprintf('Lightly Despiking the Data...\n')
-        [funcfile_despiked] = despike_fMRI(funcfile);
-        funcfile = funcfile_despiked;
-    end
-
     funcmask_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*brain_mask.nii.gz']);
     funcmask = [funcmask_info.folder, '/', funcmask_info.name];
     confounds_info =  dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_*.tsv']);
@@ -182,6 +175,14 @@ else
         csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
     end
     
+end
+
+if despike == 1
+    % lightly despike the functional data first!
+    fprintf('Lightly Despiking the Data...\n')
+    robust_z_thresh = 4;
+    [funcfile_despiked] = despike_fMRI(funcfile, gm_prob, robust_z_thresh);
+    funcfile = funcfile_despiked;
 end
 
 if has_ses == 1
