@@ -1,7 +1,16 @@
 function [despiked_file, spikeIdxPerVoxel] = despike_fmri(funcFile, gmProbFile, robustZ_thresh)
+% robustZ_thresh is typically 3-5. 3 is usually good, 5 is more
+% conservative.
+
 hp_cutoff = 0.008;
 %% Resample GM probability map to functional resolution using FSL
-[funcPath,~,~] = fileparts(funcFile);
+[funcPath, name, ext] = fileparts(funcFile);
+if strcmpi(ext, '.gz')
+    % strip the .gz and check again
+    [~, name, ext2] = fileparts(name);
+    name = [name]; % name without extension
+end
+
 resampledGM = fullfile(gmProbFile);
 
 % Load GM and functional info
@@ -117,7 +126,7 @@ if ~isempty(altered_voxels_before)
     grid on;
 
     % Save figure as PNG
-    saveas(hFig, fullfile(fileparts(funcFile), 'despike_QC.png'));
+    saveas(hFig, fullfile(fileparts(funcFile), [name, '_despike_QC.png']));
 
     % Close figure to free memory
     close(hFig);
@@ -131,7 +140,7 @@ scaledBack = (Y_out - funcInfo.AdditiveOffset) ./ funcInfo.MultiplicativeScaling
 %funcInfo.Datatype = class(rawFunc);
 %funcInfo.BitsPerPixel = 8 * numel(typecast(cast(0,class(rawFunc)),'uint8'));
 
-outNii = fullfile(fileparts(funcFile), 'despiked_func');
+outNii = fullfile(fileparts(funcFile), [name, '_despiked']);
 niftiwrite(cast(scaledBack, 'int16'), outNii, funcInfo, "Compressed", true);
 
 despiked_file = [outNii, '.nii.gz'];
