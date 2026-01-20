@@ -5,7 +5,7 @@
 
 % NOTE: likely need to edit at least these next two lines
 CICADA_software_dir = '/home/GitHub/CICADA'; % NOTE: edit to your actual path to CICADA
-fslpath = '/usr/local/fsl'; % NOTE: edit to your actual path to fsl (which fsl)
+fslpath = '/usr/local/fsl'; % NOTE: edit to your actual path to fsl directory that your terminal uses which should have the /etc/matlab within it!
 
 
 addpath(genpath(CICADA_software_dir))
@@ -18,7 +18,7 @@ if isempty(regexp(path, '.*fsl.*/etc/matlab', 'once')) || (~strcmp(getenv('FSLOU
     setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
     fsldir = getenv('FSLDIR');
     fsldirmpath = sprintf('%s/etc/matlab',fsldir);
-    path(path, fsldirmpath);
+    addpath(fsldirmpath,'-begin') % safer than path command, add at beginning of path
     clear fsldir fsldirmpath;
 end
 
