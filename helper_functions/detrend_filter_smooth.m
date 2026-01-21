@@ -14,7 +14,6 @@ file_orig_data = niftiread(file);
 file_orig_data_info = niftiinfo(file);
 tr = file_orig_data_info.PixelDimensions(4); % grab tr
 N = file_orig_data_info.ImageSize(4); % number of samples
-T = N * tr; % total time scanned
 fs = 1/tr; % grab sampling rate for potential bandpass
 funcmask_data = niftiread(funcmask);
     
@@ -24,7 +23,7 @@ fwhm_mm = smoothing_kernel; % FWHM
 fwhm_voxels = fwhm_mm / voxel_size;   
 sigma = fwhm_voxels / 2.355; 
 
-if size(funcmask_data) ~= size(file_orig_data(:,:,:,1))
+if ~isequal(size(funcmask_data), size(file_orig_data(:,:,:,1)))
     fprintf('   Funcmask size does not match Data size...\n')
     return
 end
@@ -52,8 +51,9 @@ if (exist('detrend_degree', 'var') == 1) && (isa(detrend_degree, 'double') == 1)
         % still remove the mean to be consistent
         file_orig_data_2D = reshape(file_orig_data, [], size(file_orig_data,4)); % to apply detrend, filtering, etc.
         file_means_2D = mean(file_orig_data_2D,2); % so that you can maintain the mean, if a program (like spm) wants to keep it.
-        file_detrended_2D = file_means_2D ; % mean is gone, back can be added back in later. Not actually detrended, just keeping naming consistent.
+        file_detrended_2D = file_orig_data_2D - file_means_2D; % remove mean, but can be added back in later. Not actually detrended, just keeping naming consistent.
         filtered_signal_2D = file_detrended_2D;
+        detrended = 0;
 
     end
 else
@@ -74,13 +74,11 @@ end
 
 bp = 0;
 if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass) && (length(fpass) == 2)
-    bp = 1; % Mark bandpass filtering down
+    bp = 0; % Will mark to 1 once filtering is actually applied later below
     % OK, do bandpass!
 
-    % bandpass, can use fft and ifft
-    N = T/tr; F = 1/tr;
-    df = 1/T; N_freq = N/2 + 1;
-    f = F*(0:floor(N/2))/N; % to chart what frequencies we are at
+    % bandpass, can use butter
+    nyq = fs/2;  % move this ABOVE so it exists here
 
     % Now set it up to check values
     low_hz = fpass(1);
@@ -91,39 +89,73 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
         low_hz = 0;
     end
 
-    if high_hz > f(end)
-        fprintf(['   High Hz Cut Off For Bandpass Filtering is Above Highest Frequency... setting to highest frequency of ', num2str(f(end)) ,' Hz. \n'])
-        high_hz = f(end);
+    if high_hz > nyq
+        fprintf(['   High Hz Cut Off For Bandpass Filtering is Above Nyquist... setting to Nyquist of ', num2str(nyq) ,' Hz. \n'])
+        high_hz = nyq;
     end
 
-    if low_hz >= high_hz
-        fprintf('   Error: Low Hz Cut Off is Equal to or Greater Than High Hz Cut Off. Not Applying Bandpass Filtering. \n')
+
+    % Determine which components are enabled (per your conventions)
+    doHighPass = (low_hz > 0);      % enabled only if strictly above 0
+    doLowPass  = (high_hz < nyq);   % enabled only if strictly below Nyquist
+
+    
+    % Only treat low>=high as an error if both HP and LP are enabled (true band-pass)
+    if doHighPass && doLowPass && (low_hz >= high_hz)
+        fprintf('   Error: low_hz >= high_hz while requesting a band-pass. Skipping filtering.\n');
 
     else
-        % Now we can actually apply bp filtering
-        fprintf(['  Bandpassing Filtering at ', num2str(low_hz), ' ', num2str(high_hz), ' Hz...\n'])
-        lower_phys_cutoff = round(low_hz / df) + 1; % start at freq 0 at position 1
-        higher_phys_cutoff = round(high_hz / df) + 1;
+        % Now we can actually apply temporal filtering (Butterworth + zero-phase)
+        filtered_signal_2D = file_detrended_2D;  % default: no further filtering
         
-        % create for loop to loop through each thing
-        filtered_signal_2D = zeros(size(file_detrended_2D));
-        for idx1 = 1:size(file_detrended_2D,1)
-            freq_signal = fftshift(fft(file_detrended_2D(idx1,:))); % center point at floor(N/2+1) is 0 Hz
-            low_freq_cutoffs = (floor(N/2)+1 - lower_phys_cutoff): (floor(N/2)+1 + lower_phys_cutoff);
-            high_freq_cutoffs_neg = 1:(floor(N/2)+1 - (higher_phys_cutoff+1));
-            high_freq_cutoffs_pos = (floor(N/2)+1 + (higher_phys_cutoff+1)):(N);
-            freq_signal_filtered = freq_signal;
-            freq_signal_filtered(low_freq_cutoffs) = 0;
-            freq_signal_filtered(high_freq_cutoffs_neg) = 0;
-            freq_signal_filtered(high_freq_cutoffs_pos) = 0;
-            freq_signal_filtered = fftshift(freq_signal_filtered);
-            filtered_signal = ifft(freq_signal_filtered);
-            filtered_signal_2D(idx1, :) = filtered_signal;
-        end                     
+        % If neither high or low pass is enabled, skip filtering entirely
+        if ~doHighPass && ~doLowPass
+            fprintf('   Filter bounds imply no filtering (low<=0 and high>=Nyquist). Skipping.\n');
+            % leave filtered_signal_2D as whatever it currently is (i.e., file_detrended_2D)
+        else
+            fprintf(['  Filtering at ', num2str(low_hz), ' ', num2str(high_hz), ' Hz...\n'])    
+            filt_order = 2;  % common choice; increase to 4 for sharper roll-off (with caution)
+            % for Butter filter!
+        
+            if ~doHighPass && doLowPass
+                % Low-pass only
+                Wn = high_hz / nyq;
+                Wn = min(max(Wn, 1e-6), 1-1e-6); % clamping
+                [b,a] = butter(filt_order, Wn, 'low');
+        
+            elseif doHighPass && ~doLowPass
+                % High-pass only
+                Wn = low_hz / nyq;
+                Wn = min(max(Wn, 1e-6), 1-1e-6); % clamping
+                [b,a] = butter(filt_order, Wn, 'high');
+        
+            else
+                % Band-pass
+                Wn = [low_hz high_hz] / nyq;
+                Wn = min(max(Wn, 1e-6), 1-1e-6); % clamping
+                [b,a] = butter(filt_order, Wn, 'bandpass');
+            end
+        
+            % Mark that filtering truly occurred
+            bp = 1;
+        
+            minN = 3 * (max(length(a), length(b)) - 1) + 1; % safeguarding an error for short timeseries
+            if N <= minN
+                error('Time series too short for filtfilt (N=%d, need > %d).', N, minN);
+            end
+
+            % Apply zero-phase filtering along the TIME dimension
+            % file_detrended_2D is [nVox x nTime] -> transpose to [nTime x nVox] so filtfilt filters along time
+            filtered_signal_2D = filtfilt(b, a, double(file_detrended_2D')).';
+
+        end
+
     end
+
 else
     fprintf('   Not Applying Bandpass filtering!\n')
 end
+
 
 filtered_signal_2D = filtered_signal_2D + file_means_2D; % add mean back in, good for visualization purposes and makes spm happier
 
@@ -135,7 +167,6 @@ file_filtered_data = zeros(size(file_orig_data));
 for idx2 = 1:size(file_orig_data,4)
     curr_file_data = filtered_signal(:,:,:, idx2);
     curr_file_data(funcmask_data == 0) = 0; % mask it
-    curr_file_data(curr_file_data < 0.01) = 0; % and get rid of negative numbers, if they exist
     file_filtered_data(:,:,:, idx2) = curr_file_data;
 end
 
@@ -148,7 +179,6 @@ if smoothing_kernel ~= 0
     for idx2 = 1:size(file_orig_data,4)
         curr_file_data = imgaussfilt3(file_filtered_data(:,:,:, idx2), sigma); % convert kernel from mm to voxel
         curr_file_data(funcmask_data == 0) = 0; % mask it
-        curr_file_data(curr_file_data < 0.01) = 0; % and get rid of negative numbers, if they exist
         file_data(:,:,:, idx2) = curr_file_data;
     end
 
