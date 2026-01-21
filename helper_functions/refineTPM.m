@@ -10,9 +10,9 @@ function [new_GM_probseg_file, new_WM_probseg_file, new_CSF_probseg_file, func_G
 %   GMfile       = path to GM TPM NIfTI
 %   WMfile       = path to WM TPM NIfTI
 %   CSFfile      = path to CSF TPM NIfTI
+%   funcFile     = optional, path to 4D functional NIfTI (enables Stage 2)
 %   outPrefix    = prefix for output files
 %   maxIter      = optional, # iterations for Stage 1 (default 1)
-%   funcFile     = optional, path to 4D functional NIfTI (enables Stage 2)
 %
 % Outputs:
 %   new_*_probseg_file = structurally refined TPMs (GM, WM, CSF) [Stage 1]
@@ -209,6 +209,10 @@ SUSC_f = SUSC_f ./ sumAllF;
 funcOutDir = fileparts(funcFile);
 funcInfo.MultiplicativeScaling = 1;
 funcInfo.AdditiveOffset = 0;
+funcInfo.ImageSize = funcInfo.ImageSize(1:3);
+funcInfo.PixelDimensions = funcInfo.PixelDimensions(1:3);
+funcInfo.Datatype = 'single';
+funcInfo.BitsPerPixel = 16;
 
 func_GM_file   = fullfile(funcOutDir, [outPrefix '_func_GM_probseg.nii.gz']);
 func_WM_file   = fullfile(funcOutDir, [outPrefix '_func_WM_probseg.nii.gz']);
