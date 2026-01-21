@@ -12,7 +12,7 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % for the call. 
 % file_tag: needs to be unique to the type of denoised/cleaned file you are
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
-% compare_rag: similar to file tag, for the file you are comparing against,
+% compare_tag: similar to file tag, for the file you are comparing against,
 % e.g., '8p' being the default
 
 % voxelwise_scale_flag should be a 1 or a 0. If 1, voxelwise scaling is 
@@ -848,8 +848,8 @@ if isfile(network_identifiability_file)
     niftiwrite(single(denoised_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
     
     % compare
-    compare_file_tag = extractAfter(compare_tag, '_vs_');
-    network_identifiability_info.Filename = [output_dir, '/network_identifiability_', compare_file_tag, '.nii.gz'];
+    %compare_file_tag = extractAfter(compare_tag, '_vs_');
+    network_identifiability_info.Filename = [output_dir, '/network_identifiability_', compare_tag, '.nii.gz'];
     niftiwrite(single(compare_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
     
     % orig
