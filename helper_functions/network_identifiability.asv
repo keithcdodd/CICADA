@@ -1,4 +1,4 @@
-function ident_table = network_identifiability(template_file, cleaned_file, compare_file, orig_file, funcmask, NotGM_mask, smooth_kern, network_names, output_dir)
+function ident_table = network_identifiability(template_file, cleaned_file, compare_file, orig_file, funcmask, GM_mask, smooth_kern, network_names, output_dir)
     % Ensure output directory exists
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
@@ -17,7 +17,7 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     % Load volumes
     template_vol = niftiread(resampled_template);
     funcmask_vol = niftiread(funcmask);
-    NotGM_vol = niftiread(NotGM_mask);
+    GM_vol = niftiread(GM_mask);
     cleaned_vol = niftiread(cleaned_file);
     compare_vol = niftiread(compare_file);
     orig_vol = niftiread(orig_file);
@@ -53,11 +53,11 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     compare_vol = compare_vol_smoothed;
     orig_vol = orig_vol_smoothed;
 
-    % mask template_vol by functional mask and remove outside the brain and
-    % parts outside of gray matter
+    % mask template_vol by functional mask, for best results, look at data
+    % within the GM mask
     orig_template_vol = template_vol;
     template_vol(funcmask_vol == 0) = 0;
-    %template_vol(NotGM_vol == 1) = 0;
+    template_vol(GM_vol == 0) = 0;
 
     % Find network IDs
     network_ids = unique(template_vol(template_vol > 0));
@@ -67,9 +67,10 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
 
     % Iterate over networks
     for net_id = network_ids'
-        mask = (template_vol == net_id);
+        mask = (orig_template_vol == net_id & funcmask_vol > 0); % within original network seed, in funcmask
         %other_mask = (template_vol > 0 & template_vol ~= net_id);
-        other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % outside of network seeds, but within funcmask
+        %other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % outside of original network seeds, but within funcmask
+        other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % within the other networks
 
         % Reshape 4D data into 2D: [voxels x time]
         [nx, ny, nz, nt] = size(cleaned_vol);
@@ -81,12 +82,12 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         orig_net_ts = vol_2d(orig_vol, mask);
 
         % Compute first PC
-        [~, score_cleaned, ~] = pca(cleaned_net_ts');
-        [~, score_compare, ~] = pca(compare_net_ts');
-        [~, score_orig, ~] = pca(orig_net_ts');
-        pc_cleaned = score_cleaned(:,1);
-        pc_compare = score_compare(:,1);
-        pc_orig = score_orig(:,1);
+        % [~, score_cleaned, ~] = pca(cleaned_net_ts');
+        % [~, score_compare, ~] = pca(compare_net_ts');
+        % [~, score_orig, ~] = pca(orig_net_ts');
+        % pc_cleaned = score_cleaned(:,1);
+        % pc_compare = score_compare(:,1);
+        % pc_orig = score_orig(:,1);
 
         % mean signal
         pc_cleaned = mean(cleaned_net_ts)';
@@ -132,6 +133,11 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         z_map_4D_cleaned(:,:,:,net_id) = z_map_cleaned;
         z_map_4D_compare(:,:,:,net_id) = z_map_compare;
         z_map_4D_orig(:,:,:,net_id) = z_map_orig;
+
+        % absolute value
+        abs_z_cleaned = abs(z_map_cleaned);
+        abs_z_compare = abs(z_map_compare);
+        abs_z_orig = abs(z_map_orig);
 
         % Compute mean absolute z-values within and outside network
         in_abs_z_cleaned = abs_z_cleaned(mask);
@@ -186,26 +192,42 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     z_map_4D_compare_abs_cut_off = abs(z_map_4D_compare);
     z_map_4D_compare_abs_cut_off(z_map_4D_compare_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
 
-    z_map_4D_compare_abs_cut_off = abs(z_map_4D_cleaned);
-    z_map_4D_cleaned_abs_cut_off(z_map_4D_cleaned_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
+    z_map_4D_orig_abs_cut_off = abs(z_map_4D_orig);
+    z_map_4D_orig_abs_cut_off(z_map_4D_orig_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
+
+    % OK, now, find the max z-value across the 4th dimension, and label
+    % voxel as that network index, if all 0, mark 0:
+    % Get the maximum value and index across the 4th dimension
+    [~, maxIdx_cleaned] = max(z_map_4D_cleaned_abs_cut_off, [], 4);
+    [~, maxIdx_compare] = max(z_map_4D_compare_abs_cut_off, [], 4);
+    [~, maxIdx_orig] = max(z_map_4D_orig_abs_cut_off, [], 4);
+    
+    % Create a logical mask where all values across the 4th dim are zero
+    zeroMask_cleaned = all(z_map_4D_cleaned_abs_cut_off == 0, 4);
+    zeroMask_compare = all(z_map_4D_compare_abs_cut_off == 0, 4);
+    zeroMask_orig = all(z_map_4D_orig_abs_cut_off == 0, 4);
+    
+    % Assign zero to those voxels in the result where all networks were zero
+    maxIdx_cleaned(zeroMask_cleaned) = 0;
+    maxIdx_compare(zeroMask_compare) = 0;
+    maxIdx_orig(zeroMask_orig) = 0;
+    
+    % The result is a 3D image where each voxel has the index of the most dominant network,
+    % or 0 if no network was dominant
+    dominantNetworkMap_cleaned = maxIdx_cleaned;
+    dominantNetworkMap_compare = maxIdx_compare;
+    dominantNetworkMap_orig = maxIdx_orig;
+
+    dominantNetworkMaps = cat(4, dominantNetworkMap_cleaned, dominantNetworkMap_compare, dominantNetworkMap_orig);
 
     % write nifti
     nifti_info = niftiinfo(funcmask);
     nifti_info.Datatype = 'single';
     nifti_info.PixelDimensions = [nifti_info.PixelDimensions, 1];
-    nifti_info.ImageSize = [nifti_info.ImageSize, length(network_ids)];
-
-    nifti_info.Filename = [output_dir, '/networks_cleaned_z.nii.gz'];
-    niftiwrite(single(z_map_4D_cleaned), nifti_info.Filename, nifti_info, 'Compressed', true);
-    
-    nifti_info.Filename = [output_dir, '/networks_compare_z.nii.gz'];
-    niftiwrite(single(z_map_4D_compare), nifti_info.Filename, nifti_info, 'Compressed', true);
-
-    nifti_info.Filename = [output_dir, '/networks_orig_z.nii.gz'];
-    niftiwrite(single(z_map_4D_orig), nifti_info.Filename, nifti_info, 'Compressed', true);
-
-    % Ideally I now collapse these into 3D, of just gray matter regions --
-    % highest z-score network gets network label
+    nifti_info.ImageSize = [nifti_info.ImageSize, 3]; % cleaned, compare, orig
+    nifti_basename = [output_dir, '/network_identifiability'];
+    nifti_info.Filename = [output_dir, '/network_identifiability.nii.gz'];
+    niftiwrite(single(dominantNetworkMaps), nifti_basename, nifti_info, 'Compressed', true);
 
     % Return results
     ident_table = results;

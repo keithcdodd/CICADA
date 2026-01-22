@@ -107,6 +107,8 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
     else
         % Now we can actually apply temporal filtering (Butterworth + zero-phase)
         filtered_signal_2D = file_detrended_2D;  % default: no further filtering
+
+        fprintf('   Note: If error happens next, check if you are missing the Signal Processing Toolbox in Matlab.\n')
         
         % If neither high or low pass is enabled, skip filtering entirely
         if ~doHighPass && ~doLowPass

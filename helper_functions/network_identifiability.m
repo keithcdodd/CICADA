@@ -67,9 +67,10 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
 
     % Iterate over networks
     for net_id = network_ids'
-        mask = (orig_template_vol == net_id & funcmask_vol > 0); % within original network seed, in funcmask
+        mask = (template_vol == net_id & funcmask_vol > 0); % within original network seed & GM, in funcmask
         %other_mask = (template_vol > 0 & template_vol ~= net_id);
-        other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % outside of original network seeds, but within funcmask
+        %other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % outside of original network seeds, but within funcmask
+        other_mask = (template_vol > 0 & funcmask_vol > 0 & mask == 0); % within the other network seeds
 
         % Reshape 4D data into 2D: [voxels x time]
         [nx, ny, nz, nt] = size(cleaned_vol);

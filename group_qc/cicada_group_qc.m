@@ -618,8 +618,10 @@ if cicada == 1
     % record into data notes:
     for ico = 1:length(cicada_outliers)
         if cicada_outliers(ico)
-            data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'CICADA Outlier', 'Group CICADA automatically labeled this as an outlier compared to the other data.'};
+            data_notes{data_notes_iter, :} = {sub_ids{ico}, ses_ids{ico}, task_name, 'CICADA Outlier', 'Group CICADA automatically labeled this as an outlier compared to the other data.'};
             data_notes_iter = data_notes_iter + 1; % increment for table
+            % Print this to output to, to help with tracking
+            fprintf('%s %s %s: Group CICADA automatically labeled this as an outlier compared to the other data and removed it from group analyses.\n', sub_ids{ico}, ses_ids{ico}, task_name)
         end
     end
 
