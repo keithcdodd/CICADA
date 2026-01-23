@@ -57,7 +57,7 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     % within the GM mask
     orig_template_vol = template_vol;
     template_vol(funcmask_vol == 0) = 0;
-    template_vol(GM_vol == 0) = 0;
+    %template_vol(GM_vol == 0) = 0;
 
     % Find network IDs
     network_ids = unique(template_vol(template_vol > 0));
@@ -94,9 +94,9 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         pc_compare = mean(compare_net_ts)';
         pc_orig = mean(orig_net_ts)';
 
-        % Correlate PC with all network/funcmask voxels
-        %all_net_mask = (template_vol > 0);
+        % Correlate with all network/funcmask voxels
         all_net_mask = (funcmask_vol > 0);
+        %all_net_mask = (funcmask_vol > 0);
         cleaned_all_ts = vol_2d(cleaned_vol, all_net_mask);
         compare_all_ts = vol_2d(compare_vol, all_net_mask);
         orig_all_ts = vol_2d(orig_vol, all_net_mask);
@@ -121,13 +121,14 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         z_map_compare(idx) = z_compare;
         z_map_orig(idx) = z_orig;
 
-        % convert NaN to 0, inf to 1
-        z_map_cleaned(isnan(z_map_cleaned)) = 0;
-        z_map_cleaned(isinf(z_map_cleaned)) = 10; % just not inf
-        z_map_compare(isnan(z_map_compare)) = 0;
-        z_map_compare(isinf(z_map_compare)) = 10; % just not inf
-        z_map_orig(isnan(z_map_orig)) = 0;
-        z_map_orig(isinf(z_map_orig)) = 10; % just not inf
+        % old: convert NaN to 0, inf to 10, but do not do anymore to avoid
+        % biasing
+        %z_map_cleaned(isnan(z_map_cleaned)) = 0;
+        z_map_cleaned(isinf(z_map_cleaned)) = NaN; % just not inf
+        %z_map_compare(isnan(z_map_compare)) = 0;
+        z_map_compare(isinf(z_map_compare)) = NaN; % just not inf
+        %z_map_orig(isnan(z_map_orig)) = 0;
+        z_map_orig(isinf(z_map_orig)) = NaN; % just not inf
 
         % Save z-score maps
         z_map_4D_cleaned(:,:,:,net_id) = z_map_cleaned;
@@ -135,9 +136,16 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         z_map_4D_orig(:,:,:,net_id) = z_map_orig;
 
         % absolute value
-        abs_z_cleaned = abs(z_map_cleaned);
-        abs_z_compare = abs(z_map_compare);
-        abs_z_orig = abs(z_map_orig);
+        % used to use absolute value, but may make more sense to not use
+        % absolute value (i.e., punish negative correlations since template
+        % is based on positive correlations for networks)
+        
+        %abs_z_cleaned = abs(z_map_cleaned);
+        %abs_z_compare = abs(z_map_compare);
+        %abs_z_orig = abs(z_map_orig);
+        abs_z_cleaned = z_map_cleaned;
+        abs_z_compare = z_map_compare;
+        abs_z_orig = z_map_orig;
 
         % Compute mean absolute z-values within and outside network
         in_abs_z_cleaned = abs_z_cleaned(mask);
@@ -149,14 +157,14 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         in_abs_z_orig = abs_z_orig(mask);
         out_abs_z_orig = abs_z_orig(other_mask);
         
-        % p-value 0.5 (50% chance) cut off
+        % p-value 0.5 (50% chance) cut off, if we want to use it later
         cut_off = 0.67; %Z=0.67 is p=0.50 with two tails
         abs_z_cleaned_cut_off = abs_z_cleaned(abs_z_cleaned > cut_off);
         abs_z_compare_cut_off = abs_z_compare(abs_z_compare > cut_off);
         abs_z_orig_cut_off = abs_z_orig(abs_z_orig > cut_off);
         
         % Can use a cut off if desired
-        cut_off = -0.01;
+        cut_off = 0;
         mean_in_cleaned = mean(in_abs_z_cleaned(in_abs_z_cleaned > cut_off), 'omitnan');
         mean_out_cleaned = mean(out_abs_z_cleaned(out_abs_z_cleaned > cut_off), 'omitnan');
         ratio_cleaned = mean_in_cleaned / mean_out_cleaned;
@@ -186,14 +194,22 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     writetable(results, fullfile(output_dir, 'network_identifiability_results.csv'));
 
     % Want to make a 3D file that shows each network
-    z_map_4D_cleaned_abs_cut_off = abs(z_map_4D_cleaned);
+    %z_map_4D_cleaned_abs_cut_off = abs(z_map_4D_cleaned);
+    z_map_4D_cleaned_abs_cut_off = z_map_4D_cleaned; % now not using absolute value to follow convention of template being positive correlations
     z_map_4D_cleaned_abs_cut_off(z_map_4D_cleaned_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
 
-    z_map_4D_compare_abs_cut_off = abs(z_map_4D_compare);
+    % z_map_4D_compare_abs_cut_off = abs(z_map_4D_compare);
+    z_map_4D_compare_abs_cut_off = z_map_4D_compare; % now not using absolute value to follow convention of template being positive correlations
     z_map_4D_compare_abs_cut_off(z_map_4D_compare_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
 
-    z_map_4D_orig_abs_cut_off = abs(z_map_4D_orig);
+    % z_map_4D_orig_abs_cut_off = abs(z_map_4D_orig);
+    z_map_4D_orig_abs_cut_off = z_map_4D_orig; % now not using absolute value to follow convention of template being positive correlations
     z_map_4D_orig_abs_cut_off(z_map_4D_orig_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
+
+    % Replace NaN/Inf with 0 so outside-mask voxels don't become index 1 after max()
+    z_map_4D_cleaned_abs_cut_off(~isfinite(z_map_4D_cleaned_abs_cut_off)) = 0;
+    z_map_4D_compare_abs_cut_off(~isfinite(z_map_4D_compare_abs_cut_off)) = 0;
+    z_map_4D_orig_abs_cut_off(~isfinite(z_map_4D_orig_abs_cut_off)) = 0;
 
     % OK, now, find the max z-value across the 4th dimension, and label
     % voxel as that network index, if all 0, mark 0:
