@@ -1,251 +1,470 @@
 function ident_table = network_identifiability(template_file, cleaned_file, compare_file, orig_file, funcmask, GM_mask, smooth_kern, network_names, output_dir)
+%NETWORK_IDENTIFIABILITY
+% Quantifies functional network identifiability and generates visualization
+% maps for comparison of denoising pipelines.
+%
+% For each template-defined network (seed parcel), a representative time
+% series is extracted (mean or PC1) and correlated with all voxels within
+% the functional brain mask. Correlation maps are Fisher z-transformed and
+% assembled into 4D network-specific z-maps.
+%
+% Quantitative identifiability metrics are computed using a joint criterion:
+%   (1) Evidence threshold: strongest network z-value > z_thr
+%   (2) Separability threshold: (strongest – second-strongest) z-value > delta
+%
+% Metrics are reported as voxel fractions within:
+%   • Global gray matter (GM ∩ functional mask)
+%   • Each network’s seed parcel
+%
+% For each region, the following are computed:
+%   • PassThresh: fraction of voxels exceeding the evidence threshold
+%   • PassDeltaGivenPassThresh: fraction exceeding the separability threshold
+%     conditional on passing the evidence threshold
+%   • PassBoth: fraction satisfying both criteria simultaneously
+%
+% Results are written to a human-readable CSV with rows corresponding to
+% global GM and individual networks, and columns corresponding to cleaned,
+% comparison, and original data, as well as their pairwise differences.
+%
+% In addition, thresholded dominant-network label maps are generated for
+% visualization and written as a multi-volume NIfTI file (cleaned, compare,
+% original).
+%
+% Notes:
+% - Quantitative metrics are computed within GM ∩ functional mask.
+% - Visualization maps are thresholded independently for display purposes.
+% - Networks are indexed internally as iNet = 1..K to support arbitrary
+%   template label values.
+
+
+    % ----------------------------
+    % User-tunable discriminability params, but these settings generally
+    % work well
+    % ----------------------------
+    use_pc1 = false;      % false => mean time series (default). true => PC1 from seed voxels.
+    z_thr   = 0.6;       % optional: require winner/correct evidence above this (Fisher-z); set 0 to disable
+    delta   = 0.15;       % margin threshold for "high confidence" (Fisher-z units)
+    % The idea above is we want to balance/reward both when more voxels are
+    % above a threshold for matching a network AND that they can be
+    % differentiated from other networks reasonably (moderate instead of large delta given
+    % networks are not entirely independent in practice)
+
     % Ensure output directory exists
     if ~exist(output_dir, 'dir')
         mkdir(output_dir);
     end
 
-    % get template dir:
+    % get template dir
     [template_dir,~,~] = fileparts(template_file);
 
     % Temporary resampled template path
     resampled_template = fullfile(template_dir, 'resampled_template.nii.gz');
-    
-    % fsl flirt to resample template if needed
+
+    % resample template to functional space
     call_fsl(['flirt -in ', template_file,' -ref ', cleaned_file,' -applyxfm -usesqform -interp nearestneighbour -out ', resampled_template]);
-    
-    
+
     % Load volumes
     template_vol = niftiread(resampled_template);
     funcmask_vol = niftiread(funcmask);
-    GM_vol = niftiread(GM_mask);
-    cleaned_vol = niftiread(cleaned_file);
-    compare_vol = niftiread(compare_file);
-    orig_vol = niftiread(orig_file);
+    GM_vol       = niftiread(GM_mask);
+    cleaned_vol  = niftiread(cleaned_file);
+    compare_vol  = niftiread(compare_file);
+    orig_vol     = niftiread(orig_file);
 
-
-    % Get volume size and check dimensions
-    assert(all(size(cleaned_vol) == size(orig_vol)), 'Cleaned and original dimensions must match');
+    % Dimension checks
+    assert(all(size(cleaned_vol) == size(orig_vol)),   'Cleaned and original dimensions must match');
     assert(all(size(cleaned_vol) == size(compare_vol)), 'Cleaned and compare dimensions must match');
     assert(all(size(cleaned_vol(:,:,:,1)) == size(funcmask_vol(:,:,:,1))), 'Cleaned and mask dimensions must match');
     assert(all(size(template_vol(:,:,:,1)) == size(cleaned_vol(:,:,:,1))), 'Template and fMRI must be in same space');
 
-    % Smoothing cleaned and orig
-    %fprintf('Smoothing functional data with kernel = %.2f mm\n', smooth_kern);
+    % ----------------------------
+    % Smooth cleaned/compare/orig
+    % ----------------------------
     cleaned_vol_smoothed = zeros(size(cleaned_vol), 'like', cleaned_vol);
     compare_vol_smoothed = zeros(size(compare_vol), 'like', compare_vol);
-    orig_vol_smoothed = zeros(size(orig_vol), 'like', orig_vol);
+    orig_vol_smoothed    = zeros(size(orig_vol),   'like', orig_vol);
 
     cleaned_vol_info = niftiinfo(cleaned_file);
-    voxel_size = mean(cleaned_vol_info.PixelDimensions(1:3)); % to do the mm you want
-    
-    % sigma is about FWHMx / 2.355
-    fwhm_mm = smooth_kern; % FWHMx
-    fwhm_voxels = fwhm_mm / voxel_size;   
-    sigma = fwhm_voxels / 2.355;          
+    voxel_size = mean(cleaned_vol_info.PixelDimensions(1:3));
+
+    fwhm_mm     = smooth_kern;
+    fwhm_voxels = fwhm_mm / voxel_size;
+    sigma       = fwhm_voxels / 2.355;
+
+    GM_eval = logical(single(GM_vol > 0) .* single(funcmask_vol > 0));
+
 
     for t = 1:size(cleaned_vol, 4)
         cleaned_vol_smoothed(:,:,:,t) = imgaussfilt3(cleaned_vol(:,:,:,t), sigma);
         compare_vol_smoothed(:,:,:,t) = imgaussfilt3(compare_vol(:,:,:,t), sigma);
-        orig_vol_smoothed(:,:,:,t) = imgaussfilt3(orig_vol(:,:,:,t), sigma);
+        orig_vol_smoothed(:,:,:,t)    = imgaussfilt3(orig_vol(:,:,:,t), sigma);
     end
 
     cleaned_vol = cleaned_vol_smoothed;
     compare_vol = compare_vol_smoothed;
-    orig_vol = orig_vol_smoothed;
+    orig_vol    = orig_vol_smoothed;
 
-    % mask template_vol by functional mask, for best results, look at data
-    % within the GM mask
-    orig_template_vol = template_vol;
-    template_vol(funcmask_vol == 0) = 0;
-    %template_vol(GM_vol == 0) = 0;
+    % ----------------------------
+    % Evaluation mask: GM ∩ funcmask
+    % ----------------------------
+    % Masks
+    vis_mask  = (funcmask_vol > 0);   % for building/visualizing z maps
+    eval_mask = GM_eval;
 
-    % Find network IDs
-    network_ids = unique(template_vol(template_vol > 0));
 
-    % Preallocate results
-    results = [];
+    % Mask template by eval mask so seeds are only considered where you evaluate
+    % template_vol(~eval_mask) = 0;
 
-    % Iterate over networks
-    for net_id = network_ids'
-        mask = (template_vol == net_id & funcmask_vol > 0); % within original network seed & GM, in funcmask
-        %other_mask = (template_vol > 0 & template_vol ~= net_id);
-        %other_mask = (funcmask_vol > 0 & orig_template_vol == 0); % outside of original network seeds, but within funcmask
-        other_mask = (template_vol > 0 & funcmask_vol > 0 & mask == 0); % within the other network seeds
+    % Network IDs (seed labels)
+    network_ids = unique(template_vol(template_vol > 0 & vis_mask));
+    network_ids = network_ids(:)';
+    K = numel(network_ids);
 
-        % Reshape 4D data into 2D: [voxels x time]
-        [nx, ny, nz, nt] = size(cleaned_vol);
-        vol_2d = @(vol, msk) reshape(vol(repmat(msk, 1, 1, 1, nt)), [], nt);
+    % Basic sizes
+    [nx, ny, nz, nt] = size(cleaned_vol);
 
-        % Get signals within current network
-        cleaned_net_ts = vol_2d(cleaned_vol, mask);
-        compare_net_ts = vol_2d(compare_vol, mask);
-        orig_net_ts = vol_2d(orig_vol, mask);
+    % Preallocate 4D z-maps with robust indexing (iNet = 1..K)
+    z_map_4D_cleaned = nan(nx, ny, nz, K, 'single');
+    z_map_4D_compare = nan(nx, ny, nz, K, 'single');
+    z_map_4D_orig    = nan(nx, ny, nz, K, 'single');
 
-        % Compute first PC
-        % [~, score_cleaned, ~] = pca(cleaned_net_ts');
-        % [~, score_compare, ~] = pca(compare_net_ts');
-        % [~, score_orig, ~] = pca(orig_net_ts');
-        % pc_cleaned = score_cleaned(:,1);
-        % pc_compare = score_compare(:,1);
-        % pc_orig = score_orig(:,1);
+    % Helper to reshape 4D data into [voxels x time] given a mask
+    vol_2d = @(vol, msk) reshape(vol(repmat(msk, 1, 1, 1, nt)), [], nt);
 
-        % mean signal
-        pc_cleaned = mean(cleaned_net_ts)';
-        pc_compare = mean(compare_net_ts)';
-        pc_orig = mean(orig_net_ts)';
 
-        % Correlate with all network/funcmask voxels
-        all_net_mask = (funcmask_vol > 0);
-        %all_net_mask = (funcmask_vol > 0);
-        cleaned_all_ts = vol_2d(cleaned_vol, all_net_mask);
-        compare_all_ts = vol_2d(compare_vol, all_net_mask);
-        orig_all_ts = vol_2d(orig_vol, all_net_mask);
+    % ----------------------------
+    % Iterate over networks (seed parcels)
+    % ----------------------------
+    for iNet = 1:K
+        net_id = network_ids(iNet);
 
-        % Correlation
-        corr_cleaned = corr(pc_cleaned, cleaned_all_ts');
-        corr_compare = corr(pc_compare, compare_all_ts');
-        corr_orig = corr(pc_orig, orig_all_ts');
+        % Seed mask for this network (within eval mask)
+        seed_mask_ts = (template_vol == net_id) & vis_mask;   % for seed time series
 
-        % Fisher Z-transform
+        % Extract voxel time series within current seed
+        cleaned_net_ts = vol_2d(cleaned_vol, seed_mask_ts);
+        compare_net_ts = vol_2d(compare_vol, seed_mask_ts);
+        orig_net_ts    = vol_2d(orig_vol, seed_mask_ts);
+
+        % Representative time series (mean or PC1)
+        if use_pc1
+            % PCA expects observations in rows, variables in columns; we want time as observations
+            [~, score_cleaned] = pca(cleaned_net_ts', 'NumComponents', 1);
+            [~, score_compare] = pca(compare_net_ts', 'NumComponents', 1);
+            [~, score_orig]    = pca(orig_net_ts',    'NumComponents', 1);
+
+            pc_cleaned = score_cleaned(:,1);
+            pc_compare = score_compare(:,1);
+            pc_orig    = score_orig(:,1);
+        else
+            pc_cleaned = mean(cleaned_net_ts, 1)';
+            pc_compare = mean(compare_net_ts, 1)';
+            pc_orig    = mean(orig_net_ts, 1)';
+        end
+
+        % Correlate with all visual mask (funcmask)
+        cleaned_all_ts = vol_2d(cleaned_vol, vis_mask);
+        compare_all_ts = vol_2d(compare_vol, vis_mask);
+        orig_all_ts    = vol_2d(orig_vol,    vis_mask);
+
+        corr_cleaned = corr(pc_cleaned, cleaned_all_ts', 'Rows', 'pairwise');
+        corr_compare = corr(pc_compare, compare_all_ts', 'Rows', 'pairwise');
+        corr_orig    = corr(pc_orig,    orig_all_ts', 'Rows', 'pairwise');
+
+        % Fisher Z
         z_cleaned = atanh(corr_cleaned);
         z_compare = atanh(corr_compare);
-        z_orig = atanh(corr_orig);
+        z_orig    = atanh(corr_orig);
 
-        % Reconstruct full-brain z-score maps
+        % Reconstruct full-brain z maps
         z_map_cleaned = nan(nx, ny, nz);
         z_map_compare = nan(nx, ny, nz);
-        z_map_orig = nan(nx, ny, nz);
+        z_map_orig    = nan(nx, ny, nz);
 
-        idx = find(all_net_mask);
+        idx = find(vis_mask);
         z_map_cleaned(idx) = z_cleaned;
         z_map_compare(idx) = z_compare;
-        z_map_orig(idx) = z_orig;
+        z_map_orig(idx)    = z_orig;
 
-        % old: convert NaN to 0, inf to 10, but do not do anymore to avoid
-        % biasing
-        %z_map_cleaned(isnan(z_map_cleaned)) = 0;
-        z_map_cleaned(isinf(z_map_cleaned)) = NaN; % just not inf
-        %z_map_compare(isnan(z_map_compare)) = 0;
-        z_map_compare(isinf(z_map_compare)) = NaN; % just not inf
-        %z_map_orig(isnan(z_map_orig)) = 0;
-        z_map_orig(isinf(z_map_orig)) = NaN; % just not inf
+        % Handle inf
+        z_map_cleaned(isinf(z_map_cleaned)) = NaN;
+        z_map_compare(isinf(z_map_compare)) = NaN;
+        z_map_orig(isinf(z_map_orig))       = NaN;
 
-        % Save z-score maps
-        z_map_4D_cleaned(:,:,:,net_id) = z_map_cleaned;
-        z_map_4D_compare(:,:,:,net_id) = z_map_compare;
-        z_map_4D_orig(:,:,:,net_id) = z_map_orig;
+        % Store in 4D stacks (indexed by iNet, not net_id)
+        z_map_4D_cleaned(:,:,:,iNet) = single(z_map_cleaned);
+        z_map_4D_compare(:,:,:,iNet) = single(z_map_compare);
+        z_map_4D_orig(:,:,:,iNet)    = single(z_map_orig);
 
-        % absolute value
-        % used to use absolute value, but may make more sense to not use
-        % absolute value (i.e., punish negative correlations since template
-        % is based on positive correlations for networks)
-        
-        %abs_z_cleaned = abs(z_map_cleaned);
-        %abs_z_compare = abs(z_map_compare);
-        %abs_z_orig = abs(z_map_orig);
-        abs_z_cleaned = z_map_cleaned;
-        abs_z_compare = z_map_compare;
-        abs_z_orig = z_map_orig;
+        % ----------------------------
+        % Includ per-network discriminability (within this seed parcel):
+        % "Correct-vs-best-other" margin: z_correct - max(z_other_networks)
+        % computed later after all networks are built (needs full z_map_4D_*).
+        % For now, store placeholders; we'll fill after the loop.
+        % ----------------------------
+        mean_margin_seed_cleaned = NaN; frac_highconf_seed_cleaned = NaN;
+        mean_margin_seed_compare = NaN; frac_highconf_seed_compare = NaN;
+        mean_margin_seed_orig    = NaN; frac_highconf_seed_orig    = NaN;
 
-        % Compute mean absolute z-values within and outside network
-        in_abs_z_cleaned = abs_z_cleaned(mask);
-        out_abs_z_cleaned = abs_z_cleaned(other_mask);
-
-        in_abs_z_compare = abs_z_compare(mask);
-        out_abs_z_compare = abs_z_compare(other_mask);
-
-        in_abs_z_orig = abs_z_orig(mask);
-        out_abs_z_orig = abs_z_orig(other_mask);
-        
-        % p-value 0.5 (50% chance) cut off, if we want to use it later
-        cut_off = 0.67; %Z=0.67 is p=0.50 with two tails
-        abs_z_cleaned_cut_off = abs_z_cleaned(abs_z_cleaned > cut_off);
-        abs_z_compare_cut_off = abs_z_compare(abs_z_compare > cut_off);
-        abs_z_orig_cut_off = abs_z_orig(abs_z_orig > cut_off);
-        
-        % Can use a cut off if desired
-        cut_off = 0;
-        mean_in_cleaned = mean(in_abs_z_cleaned(in_abs_z_cleaned > cut_off), 'omitnan');
-        mean_out_cleaned = mean(out_abs_z_cleaned(out_abs_z_cleaned > cut_off), 'omitnan');
-        ratio_cleaned = mean_in_cleaned / mean_out_cleaned;
-
-        mean_in_compare = mean(in_abs_z_compare(in_abs_z_compare > cut_off), 'omitnan');
-        mean_out_compare = mean(out_abs_z_compare(out_abs_z_compare > cut_off), 'omitnan');
-        ratio_compare = mean_in_compare / mean_out_compare;
-
-        mean_in_orig = mean(in_abs_z_orig(in_abs_z_orig > cut_off), 'omitnan');
-        mean_out_orig = mean(out_abs_z_orig(out_abs_z_orig > cut_off), 'omitnan');
-        ratio_orig = mean_in_orig / mean_out_orig;
-
-        % Store results
-        results = [results; table(net_id, network_names{net_id}, ratio_cleaned / ratio_compare, ratio_cleaned / ratio_orig, ...
-                                  mean_in_cleaned, mean_out_cleaned, ratio_cleaned, ...
-                                  mean_in_compare, mean_out_compare, ratio_compare, ...
-                                  mean_in_orig, mean_out_orig, ratio_orig)];
+        % Network name lookup (robust)
+        if nargin >= 8 && ~isempty(network_names) && net_id <= numel(network_names) && ~isempty(network_names{net_id})
+            net_name = network_names{net_id};
+        else
+            net_name = sprintf('Net_%d', net_id);
+        end
     end
 
-    % Rename columns
-    results.Properties.VariableNames = {'NetworkID', 'Network_Names', 'Cleaned_Compare_Ratio', 'Cleaned_Orig_Ratio', ...
-        'MeanIn_Cleaned', 'MeanOut_Cleaned', 'Ratio_Cleaned', ...
-        'MeanIn_Compare', 'MeanOut_Compare', 'Ratio_Compare', ...
-        'MeanIn_Orig', 'MeanOut_Orig', 'Ratio_Orig'};
 
-    % Save table
-    writetable(results, fullfile(output_dir, 'network_identifiability_results.csv'));
-
-    % Want to make a 3D file that shows each network
-    %z_map_4D_cleaned_abs_cut_off = abs(z_map_4D_cleaned);
-    z_map_4D_cleaned_abs_cut_off = z_map_4D_cleaned; % now not using absolute value to follow convention of template being positive correlations
-    z_map_4D_cleaned_abs_cut_off(z_map_4D_cleaned_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
-
-    % z_map_4D_compare_abs_cut_off = abs(z_map_4D_compare);
-    z_map_4D_compare_abs_cut_off = z_map_4D_compare; % now not using absolute value to follow convention of template being positive correlations
-    z_map_4D_compare_abs_cut_off(z_map_4D_compare_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
-
-    % z_map_4D_orig_abs_cut_off = abs(z_map_4D_orig);
-    z_map_4D_orig_abs_cut_off = z_map_4D_orig; % now not using absolute value to follow convention of template being positive correlations
-    z_map_4D_orig_abs_cut_off(z_map_4D_orig_abs_cut_off < 0.67) = 0; % z = 0.67 is 50% (p=0.50)
-
-    % Replace NaN/Inf with 0 so outside-mask voxels don't become index 1 after max()
-    z_map_4D_cleaned_abs_cut_off(~isfinite(z_map_4D_cleaned_abs_cut_off)) = 0;
-    z_map_4D_compare_abs_cut_off(~isfinite(z_map_4D_compare_abs_cut_off)) = 0;
-    z_map_4D_orig_abs_cut_off(~isfinite(z_map_4D_orig_abs_cut_off)) = 0;
-
-    % OK, now, find the max z-value across the 4th dimension, and label
-    % voxel as that network index, if all 0, mark 0:
-    % Get the maximum value and index across the 4th dimension
-    [~, maxIdx_cleaned] = max(z_map_4D_cleaned_abs_cut_off, [], 4);
-    [~, maxIdx_compare] = max(z_map_4D_compare_abs_cut_off, [], 4);
-    [~, maxIdx_orig] = max(z_map_4D_orig_abs_cut_off, [], 4);
+    % testing diagnostics, can delete later
+    % ----------------------------
+    % Diagnostic: threshold vs margin behavior
+    % ----------------------------
+    fprintf('\n--- Network Identifiability Diagnostics ---\n');
+    fprintf('z_thr = %.2f, delta = %.2f\n', z_thr, delta);
     
-    % Create a logical mask where all values across the 4th dim are zero
-    zeroMask_cleaned = all(z_map_4D_cleaned_abs_cut_off == 0, 4);
-    zeroMask_compare = all(z_map_4D_compare_abs_cut_off == 0, 4);
-    zeroMask_orig = all(z_map_4D_orig_abs_cut_off == 0, 4);
+    Zc_tmp = z_map_4D_cleaned; Zc_tmp(~isfinite(Zc_tmp)) = -Inf;
+    Zp_tmp = z_map_4D_compare; Zp_tmp(~isfinite(Zp_tmp)) = -Inf;
+    Zo_tmp = z_map_4D_orig;    Zo_tmp(~isfinite(Zo_tmp)) = -Inf;
     
-    % Assign zero to those voxels in the result where all networks were zero
+    labels = {'Cleaned', 'Compare', 'Orig'};
+    Zall = {Zc_tmp, Zp_tmp, Zo_tmp};
+    
+    for ii = 1:3
+        Z = Zall{ii};
+    
+        % Top1 and top2
+        Zs = sort(Z, 4, 'descend');
+        top1 = Zs(:,:,:,1);
+        top2 = Zs(:,:,:,2);
+    
+        % Apply eval mask
+        t1 = top1(eval_mask);
+        t2 = top2(eval_mask);
+    
+        % Coverage at z_thr
+        frac_above = mean(t1 > z_thr, 'omitnan');
+    
+        % Conditional separability
+        if any(t1 > z_thr)
+            frac_sep = mean((t1(t1 > z_thr) - t2(t1 > z_thr)) > delta, 'omitnan');
+        else
+            frac_sep = NaN;
+        end
+
+        % combined
+        frac_both = mean( (t1 > z_thr) & ((t1 - t2) > delta), 'omitnan' );
+
+    
+        fprintf('%s:\n', labels{ii});
+        fprintf('  P(top1 > z_thr)           = %.4f\n', frac_above);
+        fprintf('  P(margin > delta | pass) = %.4f\n', frac_sep);
+        fprintf('  P(pass both)             = %.4f\n', frac_both);
+    end
+    fprintf('------------------------------------------\n\n');
+
+    % ----------------------------
+    % Quantitative metrics for CSV (readable format)
+    % ----------------------------
+    
+    % Ensure masks are logical
+    vis_mask  = logical(vis_mask);
+    eval_mask = logical(eval_mask);
+    
+    % Compute global metrics (GM expanded mask) for each pipeline
+    [gm_thr_cleaned, gm_dlt_cleaned, gm_both_cleaned] = compute_global_pass_metrics(z_map_4D_cleaned, eval_mask, z_thr, delta);
+    [gm_thr_compare, gm_dlt_compare, gm_both_compare] = compute_global_pass_metrics(z_map_4D_compare, eval_mask, z_thr, delta);
+    [gm_thr_orig,    gm_dlt_orig,    gm_both_orig]    = compute_global_pass_metrics(z_map_4D_orig,    eval_mask, z_thr, delta);
+    
+    % Compute per-network seed metrics for each pipeline
+    [seed_thr_cleaned, seed_dlt_cleaned, seed_both_cleaned] = compute_seed_pass_metrics(z_map_4D_cleaned, template_vol, eval_mask, network_ids, z_thr, delta);
+    [seed_thr_compare, seed_dlt_compare, seed_both_compare] = compute_seed_pass_metrics(z_map_4D_compare, template_vol, eval_mask, network_ids, z_thr, delta);
+    [seed_thr_orig,    seed_dlt_orig,    seed_both_orig]    = compute_seed_pass_metrics(z_map_4D_orig,    template_vol, eval_mask, network_ids, z_thr, delta);
+    
+    % Build row names (GM first, then each network)
+    row_names = {};
+    row_values = [];  % Nx5: [Cleaned, Compare, Orig, C-Comp, C-Orig]
+    
+    % GM rows
+    row_names(end+1,1) = {"GM Overall Score"};
+    row_values(end+1,:) = [gm_both_cleaned, gm_both_compare, gm_both_orig, gm_both_cleaned-gm_both_compare, gm_both_cleaned-gm_both_orig];
+    
+    row_names(end+1,1) = {"GM PassThresh"};
+    row_values(end+1,:) = [gm_thr_cleaned, gm_thr_compare, gm_thr_orig, gm_thr_cleaned-gm_thr_compare, gm_thr_cleaned-gm_thr_orig];
+    
+    row_names(end+1,1) = {"GM PassDeltaGivenPassThresh"};
+    row_values(end+1,:) = [gm_dlt_cleaned, gm_dlt_compare, gm_dlt_orig, gm_dlt_cleaned-gm_dlt_compare, gm_dlt_cleaned-gm_dlt_orig];
+    
+    % Per-network rows
+    for iNet = 1:numel(network_ids)
+        net_id = network_ids(iNet);
+    
+        % Network display name
+        if nargin >= 8 && ~isempty(network_names) && net_id <= numel(network_names) && ~isempty(network_names{net_id})
+            net_name = network_names{net_id};
+        else
+            net_name = sprintf('Net_%d', net_id);
+        end
+    
+        % PassBoth, which is the overall score
+        row_names(end+1,1) = {sprintf('%s Overall Score', net_name)};
+        row_values(end+1,:) = [seed_both_cleaned(iNet), seed_both_compare(iNet), seed_both_orig(iNet), ...
+                               seed_both_cleaned(iNet)-seed_both_compare(iNet), seed_both_cleaned(iNet)-seed_both_orig(iNet)];
+    
+        % PassThresh
+        row_names(end+1,1) = {sprintf('%s PassThresh', net_name)};
+        row_values(end+1,:) = [seed_thr_cleaned(iNet), seed_thr_compare(iNet), seed_thr_orig(iNet), ...
+                               seed_thr_cleaned(iNet)-seed_thr_compare(iNet), seed_thr_cleaned(iNet)-seed_thr_orig(iNet)];
+    
+        % PassDeltaGivenPassThresh
+        row_names(end+1,1) = {sprintf('%s PassDeltaGivenPassThresh', net_name)};
+        row_values(end+1,:) = [seed_dlt_cleaned(iNet), seed_dlt_compare(iNet), seed_dlt_orig(iNet), ...
+                               seed_dlt_cleaned(iNet)-seed_dlt_compare(iNet), seed_dlt_cleaned(iNet)-seed_dlt_orig(iNet)];
+    end
+    
+    % Create final readable table
+    T = table(row_names, ...
+              row_values(:,1), row_values(:,2), row_values(:,3), row_values(:,4), row_values(:,5), ...
+              'VariableNames', {'Metric', 'Cleaned', 'Compare', 'Orig', 'CleanedMinusCompare', 'CleanedMinusOrig'});
+    
+    % Write CSV (replaces old format)
+    writetable(T, fullfile(output_dir, 'network_identifiability_results.csv'));
+    
+    % Return table
+    ident_table = T;
+
+    % ----------------------------
+    % Visualization outputs
+    % Dominant network label maps from thresholded z maps
+    % ----------------------------
+
+    % Threshold for visualization  
+    viz_z = 0.67; % picking something strict for easier visualization
+
+    % Build thresholded 4D arrays for max() labeling (replace NaN/Inf with 0)
+    Zc = z_map_4D_cleaned; Zc(~isfinite(Zc)) = 0; Zc(Zc < viz_z) = 0;
+    Zp = z_map_4D_compare; Zp(~isfinite(Zp)) = 0; Zp(Zp < viz_z) = 0;
+    Zo = z_map_4D_orig;    Zo(~isfinite(Zo)) = 0; Zo(Zo < viz_z) = 0;
+
+    % Argmax across networks gives index 1..K; convert to label values network_ids(index)
+    [~, maxIdx_cleaned] = max(Zc, [], 4);
+    [~, maxIdx_compare] = max(Zp, [], 4);
+    [~, maxIdx_orig]    = max(Zo, [], 4);
+
+    zeroMask_cleaned = all(Zc == 0, 4);
+    zeroMask_compare = all(Zp == 0, 4);
+    zeroMask_orig    = all(Zo == 0, 4);
+
     maxIdx_cleaned(zeroMask_cleaned) = 0;
     maxIdx_compare(zeroMask_compare) = 0;
-    maxIdx_orig(zeroMask_orig) = 0;
-    
-    % The result is a 3D image where each voxel has the index of the most dominant network,
-    % or 0 if no network was dominant
-    dominantNetworkMap_cleaned = maxIdx_cleaned;
-    dominantNetworkMap_compare = maxIdx_compare;
-    dominantNetworkMap_orig = maxIdx_orig;
+    maxIdx_orig(zeroMask_orig)       = 0;
+
+    % Convert iNet indices to actual network label IDs
+    dominantNetworkMap_cleaned = zeros(nx, ny, nz, 'single');
+    dominantNetworkMap_compare = zeros(nx, ny, nz, 'single');
+    dominantNetworkMap_orig    = zeros(nx, ny, nz, 'single');
+
+    dominantNetworkMap_cleaned(maxIdx_cleaned > 0) = network_ids(maxIdx_cleaned(maxIdx_cleaned > 0));
+    dominantNetworkMap_compare(maxIdx_compare > 0) = network_ids(maxIdx_compare(maxIdx_compare > 0));
+    dominantNetworkMap_orig(maxIdx_orig > 0)       = network_ids(maxIdx_orig(maxIdx_orig > 0));
+
+    dominantNetworkMap_cleaned(~vis_mask) = 0;
+    dominantNetworkMap_compare(~vis_mask) = 0;
+    dominantNetworkMap_orig(~vis_mask)    = 0;
 
     dominantNetworkMaps = cat(4, dominantNetworkMap_cleaned, dominantNetworkMap_compare, dominantNetworkMap_orig);
 
-    % write nifti
+    % Write nifti (3 volumes: cleaned, compare, orig)
     nifti_info = niftiinfo(funcmask);
     nifti_info.Datatype = 'single';
     nifti_info.PixelDimensions = [nifti_info.PixelDimensions, 1];
-    nifti_info.ImageSize = [nifti_info.ImageSize, 3]; % cleaned, compare, orig
+    nifti_info.ImageSize = [nifti_info.ImageSize, 3];
     nifti_basename = [output_dir, '/network_identifiability'];
     nifti_info.Filename = [output_dir, '/network_identifiability.nii.gz'];
     niftiwrite(single(dominantNetworkMaps), nifti_basename, nifti_info, 'Compressed', true);
 
-    % Return results
-    ident_table = results;
 end
 
+% =========================================================================
+% Helper functions
+% =========================================================================
+
+function [pass_thresh, pass_delta_given, pass_both] = compute_global_pass_metrics(Z4D, eval_mask, z_thr, delta)
+    K = size(Z4D, 4);
+    if K < 2
+        pass_thresh = NaN; pass_delta_given = NaN; pass_both = NaN;
+        return;
+    end
+
+    % Extract eval voxels into [Nvox x K]
+    Zv = reshape(Z4D(repmat(eval_mask, 1, 1, 1, K)), [], K);
+    Zv(~isfinite(Zv)) = NaN;
+
+    % Rank networks per voxel (NaN -> -Inf for ranking)
+    Zr = Zv;
+    Zr(isnan(Zr)) = -Inf;
+    Zs = sort(Zr, 2, 'descend');
+
+    top1 = Zs(:,1);
+    top2 = Zs(:,2);
+    margin = top1 - top2;
+
+    pass1 = (top1 > z_thr) & isfinite(margin);
+    pass2 = pass1 & (margin > delta);
+
+    pass_thresh = mean(pass1, 'omitnan');
+    pass_both   = mean(pass2, 'omitnan');
+
+    if any(pass1)
+        pass_delta_given = mean(margin(pass1) > delta, 'omitnan');
+    else
+        pass_delta_given = NaN;
+    end
+end
+
+function [pass_thresh, pass_delta_given, pass_both] = compute_seed_pass_metrics(Z4D, template_vol, eval_mask, network_ids, z_thr, delta)
+    K = size(Z4D, 4);
+    N = numel(network_ids);
+
+    pass_thresh = nan(N,1);
+    pass_delta_given = nan(N,1);
+    pass_both = nan(N,1);
+
+    if K < 2
+        return;
+    end
+
+    Ztmp = Z4D;
+    Ztmp(~isfinite(Ztmp)) = -Inf;
+
+    for iNet = 1:N
+        net_id = network_ids(iNet);
+        m = (template_vol == net_id) & eval_mask;
+        if ~any(m(:))
+            continue;
+        end
+
+        zc_vol = Ztmp(:,:,:,iNet);
+        zc = zc_vol(m);
+
+        otherIdx = setdiff(1:K, iNet);
+        z_other_max = -Inf(size(zc));
+        for j = 1:numel(otherIdx)
+            zo_vol = Ztmp(:,:,:,otherIdx(j));
+            z_other_max = max(z_other_max, zo_vol(m));
+        end
+
+        margin = zc - z_other_max;
+
+        pass1 = (zc > z_thr) & isfinite(margin);
+        pass2 = pass1 & (margin > delta);
+
+        pass_thresh(iNet) = mean(pass1, 'omitnan');
+        pass_both(iNet)   = mean(pass2, 'omitnan');
+
+        if any(pass1)
+            pass_delta_given(iNet) = mean(margin(pass1) > delta, 'omitnan');
+        else
+            pass_delta_given(iNet) = NaN;
+        end
+    end
+end
