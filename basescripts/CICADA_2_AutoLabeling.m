@@ -477,7 +477,7 @@ condition_names = {};
 condition_corrs = [];
 condition_corrs_table = table();
 if isfile(task_events_file)
-    fprintf('Examining Task Events. onset, duration, and trial_type MUST be named completely accurately! See User Guide.\n')
+    fprintf('Examining Task Events. \nIt is important to make sure onset, duration, and trial_type are named completely accurately (which they may already be). See User Guide.\n')
     % ideally this is worked to look for the names: "onset", "duration",
     % "trial_type"
 

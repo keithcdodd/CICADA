@@ -215,52 +215,52 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     end
 
 
-    % testing diagnostics, can delete later
-    % ----------------------------
-    % Diagnostic: threshold vs margin behavior
-    % ----------------------------
-    fprintf('\n--- Network Identifiability Diagnostics ---\n');
-    fprintf('z_thr = %.2f, delta = %.2f\n', z_thr, delta);
-    
-    Zc_tmp = z_map_4D_cleaned; Zc_tmp(~isfinite(Zc_tmp)) = -Inf;
-    Zp_tmp = z_map_4D_compare; Zp_tmp(~isfinite(Zp_tmp)) = -Inf;
-    Zo_tmp = z_map_4D_orig;    Zo_tmp(~isfinite(Zo_tmp)) = -Inf;
-    
-    labels = {'Cleaned', 'Compare', 'Orig'};
-    Zall = {Zc_tmp, Zp_tmp, Zo_tmp};
-    
-    for ii = 1:3
-        Z = Zall{ii};
-    
-        % Top1 and top2
-        Zs = sort(Z, 4, 'descend');
-        top1 = Zs(:,:,:,1);
-        top2 = Zs(:,:,:,2);
-    
-        % Apply eval mask
-        t1 = top1(eval_mask);
-        t2 = top2(eval_mask);
-    
-        % Coverage at z_thr
-        frac_above = mean(t1 > z_thr, 'omitnan');
-    
-        % Conditional separability
-        if any(t1 > z_thr)
-            frac_sep = mean((t1(t1 > z_thr) - t2(t1 > z_thr)) > delta, 'omitnan');
-        else
-            frac_sep = NaN;
-        end
-
-        % combined
-        frac_both = mean( (t1 > z_thr) & ((t1 - t2) > delta), 'omitnan' );
-
-    
-        fprintf('%s:\n', labels{ii});
-        fprintf('  P(top1 > z_thr)           = %.4f\n', frac_above);
-        fprintf('  P(margin > delta | pass) = %.4f\n', frac_sep);
-        fprintf('  P(pass both)             = %.4f\n', frac_both);
-    end
-    fprintf('------------------------------------------\n\n');
+    % % testing diagnostics, can comment out 
+    % % ----------------------------
+    % % Diagnostic: threshold vs margin behavior
+    % % ----------------------------
+    % fprintf('\n--- Network Identifiability Diagnostics ---\n');
+    % fprintf('z_thr = %.2f, delta = %.2f\n', z_thr, delta);
+    % 
+    % Zc_tmp = z_map_4D_cleaned; Zc_tmp(~isfinite(Zc_tmp)) = -Inf;
+    % Zp_tmp = z_map_4D_compare; Zp_tmp(~isfinite(Zp_tmp)) = -Inf;
+    % Zo_tmp = z_map_4D_orig;    Zo_tmp(~isfinite(Zo_tmp)) = -Inf;
+    % 
+    % labels = {'Cleaned', 'Compare', 'Orig'};
+    % Zall = {Zc_tmp, Zp_tmp, Zo_tmp};
+    % 
+    % for ii = 1:3
+    %     Z = Zall{ii};
+    % 
+    %     % Top1 and top2
+    %     Zs = sort(Z, 4, 'descend');
+    %     top1 = Zs(:,:,:,1);
+    %     top2 = Zs(:,:,:,2);
+    % 
+    %     % Apply eval mask
+    %     t1 = top1(eval_mask);
+    %     t2 = top2(eval_mask);
+    % 
+    %     % Coverage at z_thr
+    %     frac_above = mean(t1 > z_thr, 'omitnan');
+    % 
+    %     % Conditional separability
+    %     if any(t1 > z_thr)
+    %         frac_sep = mean((t1(t1 > z_thr) - t2(t1 > z_thr)) > delta, 'omitnan');
+    %     else
+    %         frac_sep = NaN;
+    %     end
+    % 
+    %     % combined
+    %     frac_both = mean( (t1 > z_thr) & ((t1 - t2) > delta), 'omitnan' );
+    % 
+    % 
+    %     fprintf('%s:\n', labels{ii});
+    %     fprintf('  P(top1 > z_thr)           = %.4f\n', frac_above);
+    %     fprintf('  P(margin > delta | pass) = %.4f\n', frac_sep);
+    %     fprintf('  P(pass both)             = %.4f\n', frac_both);
+    % end
+    % fprintf('------------------------------------------\n\n');
 
     % ----------------------------
     % Quantitative metrics for CSV (readable format)
