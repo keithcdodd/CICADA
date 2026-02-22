@@ -198,7 +198,7 @@ signal_label = double(idx ~= 1)';
 
 %% Output table
 T_results = table((1:nICs)', signal_label', gNSP_norm(:), mean_gm_overlap_norm', mean_power_overlap_norm(:), mean_smoothness_norm', power_overlap_condition, mean_abs_fd_corr_norm', mean_abs_dvars_corr_norm', ...
-'VariableNames', {'IC', 'Signal Label Guess', 'Group_NSP_norm', 'GM_Overlap_Norm', 'Power_Overlap_Norm', 'Smoothness_Norm', 'Power_Overlap_Condition', 'FD_Correlation_Norm', 'DVARS_Correlation_Norm'});
+'VariableNames', {'IC', 'Signal_Label', 'Group_NSP_norm', 'GM_Overlap_Norm', 'Power_Overlap_Norm', 'Smoothness_Norm', 'Power_Overlap_Condition', 'FD_Correlation_Norm', 'DVARS_Correlation_Norm'});
 T_results = T_results(sorted_idx, :);
 
 
