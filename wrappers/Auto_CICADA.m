@@ -116,7 +116,7 @@ end
 
 if ~exist('mel_fol', 'var') || ~ischar(mel_fol)
     fprintf('Melodic will be in the standard location \n')
-    mel_fol = [cicada_dir, '/sub-', sub_id, '/ses-', ses_id, '/', task_name, '/melodic']; % give it default location
+    mel_fol = [output_dir, '/melodic']; % give it default location
 end
 
 % change mel_fol if redo melodic is a 1

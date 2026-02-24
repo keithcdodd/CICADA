@@ -1,4 +1,6 @@
-function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files)
+function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, ...
+    file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, ...
+    redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, demographics_table)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -14,6 +16,10 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % putting together in group qc. e.g., '_auto_', '_manual_', '_8p_'
 % compare_tag: similar to file tag, for the file you are comparing against,
 % e.g., '8p' being the default
+
+% demographics_table can be empty if you don't want to track demographics
+% information, but otherwise will store demographics information in final
+% group_qc_table.csv
 
 % voxelwise_scale_flag should be a 1 or a 0. If 1, voxelwise scaling is 
 % performed (after detrending, bandpassing, and smoothing). 
@@ -49,6 +55,10 @@ if ~exist('task_event_files', 'var') || isempty(task_event_files)
     task_event_files(:) = {''}; 
 end
 
+if ~exist('demographics_table', 'var') || isempty(demographics_table)
+    demographics_table = table(); % no demographics information
+end
+
 if ~exist('compare_tag', 'var') || isempty(compare_tag)
     compare_tag = '8p'; % just use standard 8p comparison if it is not provided by user
 end
@@ -71,6 +81,26 @@ fprintf(['Comparing to ', compare_tag, '.\n'])
 if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(adjusteds), length(task_event_files))
     fprintf('Your lists (sub_ids, ses_ids, excludes, adjusteds, task_event_files) exist at different lengths... quitting\n')
     return
+end
+
+% check that demographics table, if it exists, is also the same height and
+% sub_ids match!
+if ~isempty(demographics_table)
+    if ~isequal(length(sub_ids), height(demographics_table))
+        fprintf('Your non-empty demographics table is not the same height as your sub_ids? They should match each other!... quitting\n')
+    return
+    end
+
+    % check it has the subject column
+    if ~ismember('subject', demographics_table.Properties.VariableNames)
+        fprintf('Your demographics table is missing the required column called subjects ... quitting\n')
+    return
+    end
+
+    if ~strcmp(char(sub_ids), demographics_table.subject)
+        fprintf('Your demographics table subject column needs to match your sub_ids but currently does not? ... quitting\n')
+    return
+    end
 end
 
 test_class = {''};
@@ -249,6 +279,13 @@ for idx = 1:num_runs
     manually_adjusted = adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
     task_event_file = task_event_files{idx};
 
+    if ~isempty(demographics_table)
+        curr_demographics = demographics_table(string(demographics_table.subject) == string(sub_id), :);
+        curr_demographics.subject = [];
+    else
+        curr_demographics = table();
+    end
+
     fprintf(['\nRunning sub ', sub_id, ' ses ', ses_id, ' task ', task_name, '\n'])
 
     % if bad data, whole run needs to be skipped and not included in qc
@@ -372,19 +409,6 @@ for idx = 1:num_runs
     end
     compare_file = [compare_file_info.folder, '/', compare_file_info.name];
 
-    % if strcmp(compare_file, cleaned_file)
-    %     % then the cleaned file is the 8p file... no use comparing
-    %     % something to itself!
-    %     compare_file = '';
-    % end
-    % 
-    % if strcmp(cleaned_file, orig_file)
-    %     % Then we are just trying to run stats on original files for
-    %     % comparison! Do not need compare or "orig" since "cleaned" is orig
-    %     compare_file = '';
-    %     orig_file = '';
-    % end
-
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     % smoothing kernel is FWHM mm, as this is then properly converted
     % within the detrend_filter_smooth function
@@ -411,18 +435,7 @@ for idx = 1:num_runs
     [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, cleaned_qc_table, ...
         cleaned_qc_corrs_table, cleaned_qc_photo_paths, ...
         compare_qc_table, compare_qc_corrs_table, ...
-        orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps);
-    
-    % if ~isempty(orig_file)
-    %     [~, ~, ~, ~, ~, orig_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, orig_file, samps);
-    % else
-    %     orig_qc_corrs_table = table();
-    % end
-    % if ~isempty(compare_file)
-    %     [~, ~, ~, ~, ~, compare_qc_corrs_table, ~] = cicada_get_qc(cleaned_dir, compare_file, samps);
-    % else
-    %     compare_qc_corrs_table = table();
-    % end
+        orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics);
 
     % make and get tstd
     % Also calculate and grab a tstd and grab per region

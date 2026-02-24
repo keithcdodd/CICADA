@@ -1169,6 +1169,7 @@ writetable(IC_checker_table, 'IC_auto_checker.csv')
 writetable(feature_relative_table, 'feature_auto_vals.csv')
 writetable(feature_table_norm, 'feature_auto_norms.csv')
 writetable(compare_cleaning, 'compare_auto_cleaning.csv', 'WriteRowNames', true)
+writetable(hrf_conditions_table,'hrf_conditions.csv')
 
 % and then make noise components if you want to do aggressive denoising like in CONN (regression)
 mixing_matrix = readmatrix([mel_fol, '/melodic_mix']);

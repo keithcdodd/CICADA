@@ -32,14 +32,20 @@ task_event_file = {''}; % path to the task event file relevant for all data (ass
 % NOTE: if you have different task event files per subject/session, then
 % you will need to edit task_event_files variable below
 
+% Optional demographics table inclusion so that Group CICADA can include
+% demographics information in final group_qc_table.csv. 
+demographics_table = table(); % optional, If no table, just keep demographics table as an empty table() 
+demographics_table.subject = char(sub_ids); % this column is required. Will match your sub_ids.
+demographics_table.age = ['40'; '20'; '33']; % you can include any and as many demographic columns you want.
+demographics_table.sex = ['F'; 'M'; 'F'];
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
-%%%%%%%%%%%%%% Should not need to change anything below, unless you have
+%%%%%%%%%%%%%% Should not need to change anything below this, unless you have
 %%%%%%%%%%%%%% different task event files per subject/session, then edit
-%%%%%%%%%%%%%% task_event_files variable accordingly:%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%% task_event_files variable below accordingly:%%%%%%%%%%%%%%%%%%%%%
+
 % Change formating of variables appropriately
 % Generate ses_ids
 ses_ids = repmat(ses_id, size(sub_ids));
@@ -72,4 +78,4 @@ end
 
 
 % Actually run Group CICADA!
-cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files)
+cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, demographics_table)

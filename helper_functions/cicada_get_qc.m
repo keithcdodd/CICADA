@@ -1,7 +1,7 @@
 function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, ...
     cleaned_qc_table, cleaned_qc_corrs_table, qc_photo_paths, ...
     compare_qc_table, compare_qc_corrs_table, ...
-    orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps)
+    orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 % samps is to make sure group_qc plotting is pulling from each subject the
@@ -59,6 +59,10 @@ else
     cicada_type = 'auto';
     compare_tags = {'8p'}; % auto will compare only to 8p
     adjusted = 0;
+end
+
+if ~exist('curr_demographics', 'var')
+    curr_demographics = table(); % no demographics information
 end
 
 
@@ -329,6 +333,17 @@ if cicada == 1
     
     cleaned_qc_table = cell2table(cleaned_qc_array, 'VariableNames', qc_labels);
 
+    if ~isempty(curr_demographics)
+        T1 = cleaned_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        cleaned_qc_table = T;
+    end
+
     % now make it for compare and orig
     % compare
     compare_qc_array = {compare_file, compare_file_info.name, sub_id, ses_id, task_name, compare_DS, meanRMS, ...
@@ -349,6 +364,17 @@ if cicada == 1
         "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_mean_var_prop"];
     
     compare_qc_table = cell2table(compare_qc_array, 'VariableNames', qc_labels);
+
+    if ~isempty(curr_demographics)
+        T1 = compare_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        compare_qc_table = T;
+    end
     
     % orig
     orig_qc_array = {orig_file, orig_file_info.name, sub_id, ses_id, task_name, orig_DS, meanRMS, ...
@@ -369,6 +395,17 @@ if cicada == 1
         "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_mean_var_prop"];
     
     orig_qc_table = cell2table(orig_qc_array, 'VariableNames', qc_labels);
+
+    if ~isempty(curr_demographics)
+        T1 = orig_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        orig_qc_table = T;
+    end
 
 else
     % if not cicada, the following variables should be blank:
@@ -397,6 +434,17 @@ else
     
     cleaned_qc_table = cell2table(cleaned_qc_array, 'VariableNames', qc_labels);
 
+    if ~isempty(curr_demographics)
+        T1 = cleaned_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        cleaned_qc_table = T;
+    end
+
     % now make it for compare and orig
     % compare
     compare_qc_array = {compare_file, compare_file_info.name, sub_id, ses_id, task_name, compare_DS, meanRMS, ...
@@ -417,6 +465,17 @@ else
         "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_mean_var_prop"];
     
     compare_qc_table = cell2table(compare_qc_array, 'VariableNames', qc_labels);
+
+    if ~isempty(curr_demographics)
+        T1 = compare_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        compare_qc_table = T;
+    end
     
     % orig
     orig_qc_array = {orig_file, orig_file_info.name, sub_id, ses_id, task_name, orig_DS, meanRMS, ...
@@ -437,6 +496,17 @@ else
         "CSF_mean_var", "WMCSF_mean_var", "Outbrain_mean_var", "Edge_mean_var", "Suscept_mean_var", "GM_NotGM_mean_var_prop"];
     
     orig_qc_table = cell2table(orig_qc_array, 'VariableNames', qc_labels);
+
+    if ~isempty(curr_demographics)
+        T1 = orig_qc_table; T2 = curr_demographics;
+        idx = find(strcmp(T1.Properties.VariableNames, 'task'), 1, 'first');
+        T = [T1 T2];
+        T = T(:, [ ...
+            T1.Properties.VariableNames(1:idx), ...
+            T2.Properties.VariableNames, ...
+            T1.Properties.VariableNames(idx+1:end) ]);
+        orig_qc_table = T;
+    end
 end
 
 
