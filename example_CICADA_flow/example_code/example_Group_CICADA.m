@@ -32,12 +32,21 @@ task_event_file = {''}; % path to the task event file relevant for all data (ass
 % NOTE: if you have different task event files per subject/session, then
 % you will need to edit task_event_files variable below
 
-% Optional demographics table inclusion so that Group CICADA can include
-% demographics information in final group_qc_table.csv. 
-demographics_table = table(); % optional, If no table, just keep demographics table as an empty table() 
-demographics_table.subject = char(sub_ids); % this column is required. Will match your sub_ids.
-demographics_table.age = ['40'; '20'; '33']; % you can include any and as many demographic columns you want.
-demographics_table.sex = ['F'; 'M'; 'F'];
+
+% Optional:
+% Subject level data table inclusion so that Group CICADA can include
+% other information in final group_qc_table.csv such as outcome measures
+% and covariates like age, sex, etc. Whatever you might want to include in
+% future analyses! Just to make things easier later :)
+subject_level_data_table = table(); % optional, If no table, just keep subject level data table as an empty table() 
+subject_level_data_table.subject = char(sub_ids); % this column is required if you use this table. Should have at least all your sub_ids you are including above, can have more.
+subject_level_data_table.age = ['40'; '20'; '33']; % you can include any and as many subject level data columns you want.
+subject_level_data_table.sex = ['F'; 'M'; 'F'];
+% alternatively, you could have made a .csv table already and just use
+% readtable() function! This is often much easier especially with larger
+% data sizes. The .csv table just has to at least have the sub_ids, and
+% only one instance of each! Can have more sub_ids within it without issue
+% (e.g., sub_ids you end up not measuring/using for example)
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -78,4 +87,4 @@ end
 
 
 % Actually run Group CICADA!
-cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, demographics_table)
+cicada_group_qc(cicada_dir, group_qc_home, task_name, output_dirname, file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, subject_level_data_table)

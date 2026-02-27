@@ -1,6 +1,6 @@
 function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, ...
     file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, ...
-    redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, demographics_table)
+    redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, subject_level_data_table)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -17,9 +17,10 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % compare_tag: similar to file tag, for the file you are comparing against,
 % e.g., '8p' being the default
 
-% demographics_table can be empty if you don't want to track demographics
-% information, but otherwise will store demographics information in final
-% group_qc_table.csv
+% subject_level_data_table can be empty if you don't want to track subject
+% level data information, but otherwise will store subject level data
+% information in final group_qc_table.csv which could be helpful in future
+% analyses
 
 % voxelwise_scale_flag should be a 1 or a 0. If 1, voxelwise scaling is 
 % performed (after detrending, bandpassing, and smoothing). 
@@ -55,8 +56,8 @@ if ~exist('task_event_files', 'var') || isempty(task_event_files)
     task_event_files(:) = {''}; 
 end
 
-if ~exist('demographics_table', 'var') || isempty(demographics_table)
-    demographics_table = table(); % no demographics information
+if ~exist('subject_level_data_table', 'var') || isempty(subject_level_data_table)
+    subject_level_data_table = table(); % no subject level data information, e.g., age, sex...
 end
 
 if ~exist('compare_tag', 'var') || isempty(compare_tag)
@@ -83,24 +84,30 @@ if ~isequal(length(sub_ids), length(ses_ids), length(excludes), length(adjusteds
     return
 end
 
-% check that demographics table, if it exists, is also the same height and
-% sub_ids match!
-if ~isempty(demographics_table)
-    if ~isequal(length(sub_ids), height(demographics_table))
-        fprintf('Your non-empty demographics table is not the same height as your sub_ids? They should match each other!... quitting\n')
-    return
+% check that subject data table works
+if ~isempty(subject_level_data_table)
+
+    if ~ismember('subject', subject_level_data_table.Properties.VariableNames)
+        fprintf('Your subject level data table is missing the required column called subject ... quitting\n');
+        return
     end
 
-    % check it has the subject column
-    if ~ismember('subject', demographics_table.Properties.VariableNames)
-        fprintf('Your demographics table is missing the required column called subjects ... quitting\n')
-    return
+    % Check: each requested subject exists exactly once
+    for j = 1:length(sub_ids)
+        n = sum(strcmp(sub_ids{j}, subject_level_data_table.subject));
+        if n < 1
+            fprintf('Your subject level data table does not have the required subject id %s... quitting\n', sub_ids{j});
+            return
+        elseif n > 1
+            fprintf('Your subject level data table has more than one of the required subject id %s... quitting\n', sub_ids{j});
+            return
+        end
     end
 
-    if ~strcmp(char(sub_ids), demographics_table.subject)
-        fprintf('Your demographics table subject column needs to match your sub_ids but currently does not? ... quitting\n')
-    return
-    end
+    % Reorder and subset to match sub_ids exactly
+    [~, loc] = ismember(sub_ids, subject_level_data_table.subject);
+    subject_level_data_table = subject_level_data_table(loc, :);
+
 end
 
 test_class = {''};
@@ -279,8 +286,8 @@ for idx = 1:num_runs
     manually_adjusted = adjusteds{idx}; % needs to be '1' for manually adjsuted, '0' for not
     task_event_file = task_event_files{idx};
 
-    if ~isempty(demographics_table)
-        curr_demographics = demographics_table(string(demographics_table.subject) == string(sub_id), :);
+    if ~isempty(subject_level_data_table)
+        curr_demographics = subject_level_data_table(string(subject_level_data_table.subject) == string(sub_id), :);
         curr_demographics.subject = [];
     else
         curr_demographics = table();
