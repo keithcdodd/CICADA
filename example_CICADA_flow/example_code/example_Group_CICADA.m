@@ -46,7 +46,7 @@ subject_level_data_table.sex = ['F'; 'M'; 'F'];
 % readtable() function! This is often much easier especially with larger
 % data sizes. The .csv table just has to at least have the sub_ids, and
 % only one instance of each! Can have more sub_ids within it without issue
-% (e.g., sub_ids you end up not measuring/using for example)
+% (e.g., the subject level data table could still include sub_ids you end up not measuring/using for example)
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
