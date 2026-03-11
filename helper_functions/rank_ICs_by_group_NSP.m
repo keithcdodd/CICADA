@@ -1,4 +1,4 @@
-function T_results = rank_ICs_by_group_NSP(home_dir, IC_mel_data, group_funcmask_file, subj_func_files, subj_notgm_files, TR, FD_cell, DVARS_cell, hrf_general_power, hrf_task_power, hrf_conditions)
+function T_results = rank_ICs_by_group_NSP(output_dir, IC_mel_data, group_funcmask_file, subj_func_files, subj_notgm_files, TR, FD_cell, DVARS_cell, hrf_general_power, hrf_task_power, hrf_conditions)
 % By ranking group ICs by GM overlap and computing correlation between
 % the magnitude of the temporal derivative of each IC timecourse and FD/DVARS,
 % this function helps distinguish signal from noise components for a user
@@ -38,7 +38,6 @@ voxel_size = group_funcmask_info.PixelDimensions;
 %% Initialize metrics
 gm_overlap_all = zeros(nSubjects, nICs);
 fwhm_avg_all = zeros(nSubjects, nICs);
-max_condition_corr_idx = zeros(nSubjects, nICs);
 power_spectra_all = {};  % Cell array: {subject}(T/2+1 × nICs)
 fd_corr_subjectwise = NaN(nSubjects, nICs);
 dvars_corr_subjectwise = NaN(nSubjects, nICs);
@@ -49,6 +48,7 @@ else
 end
 
 %% Loop over subjects
+power_overlap_general_all = zeros(nSubjects, nICs);
 for s = 1:nSubjects
     fprintf('Processing subject %d/%d\n', s, nSubjects);
 
@@ -128,17 +128,19 @@ for s = 1:nSubjects
 
     power_spectra_all{s} = ps;
     % Now do the easier hrf general that definitely exists
-    power_overlap_general = sum(hrf_general_power .* ps', 2); % 1 x nICs
+    power_overlap_general_all(s, :) = sum(hrf_general_power .* ps', 2)';
 
 end
+
+power_overlap_general = mean(power_overlap_general_all, 1); % I want this to output the subject average general hrf overlap per IC (1 x nIC)
 
 % Finish with hrf_task_power overlap
 % idea here is we take the overlap of the condition corr that best matches
 % the given IC across all subjects
 if ~isempty(condition_corrs)
     % need to figure out the mode of index of condition_corrs per IC
-    max_condition_corrs_indices = zeros(size(nICs, nSubjects));
-    mode_max_condition_corrs_indices = zeros(size(nICs));
+    max_condition_corrs_indices = zeros(nICs, nSubjects);
+    mode_max_condition_corrs_indices = zeros(nICs, 1);
     max_conditioncorr_powerspectra = zeros(size(hrf_task_power, 1), nICs);
     for i = 1:nICs
         for s = 1:nSubjects
@@ -149,10 +151,17 @@ if ~isempty(condition_corrs)
         max_conditioncorr_powerspectra(:,i) = hrf_task_power(:, mode_max_condition_corrs_indices(i))'; % powerspectra to use per IC for overlap comparison!
     end
 
-    power_overlap_all_hrfs = sum(max_conditioncorr_powerspectra' .* ps', 2); % I want this to output the subject average task overlap per IC (1 x nIC)
+    power_overlap_task_all = zeros(nSubjects, nICs);
+
+    for s = 1:nSubjects
+        curr_ps = power_spectra_all{s};  % freq x nICs
+        power_overlap_task_all(s, :) = sum(max_conditioncorr_powerspectra .* curr_ps, 1);
+    end
+    
+    power_overlap_all_hrfs = mean(power_overlap_task_all, 1);  % 1 x nICs, mean over subjects
 
     % OK, now take max value between this and power_overlap_general
-    [power_overlap_max, power_overlap_max_idx] = max([power_overlap_all_hrfs(:), power_overlap_general(:)], [], 2); % 1 x nICs, idx is 1 for conditions, 2 for general
+    [power_overlap_max, power_overlap_max_idx] = max([power_overlap_general(:), power_overlap_all_hrfs(:)], [], 2); % 1 x nICs, idx is 1 for general, 2 for tasks
     power_overlap_max = power_overlap_max(:); % make sure it is a column
 else
     power_overlap_all_hrfs = [];
@@ -201,50 +210,48 @@ T_results = table((1:nICs)', signal_label', gNSP_norm(:), mean_gm_overlap_norm',
 'VariableNames', {'IC', 'Signal_Label', 'Group_NSP_norm', 'GM_Overlap_Norm', 'Power_Overlap_Norm', 'Smoothness_Norm', 'Power_Overlap_Condition', 'FD_Correlation_Norm', 'DVARS_Correlation_Norm'});
 T_results = T_results(sorted_idx, :);
 
-
-% %% Plot average power spectra
-% freqs = fs * (0:floor(T/2)) / T;
-% figure;
-% hold on;
-% colors = parula(nICs);
-% for i = 1:nICs
-%     plot(freqs, mean_power_spectra(:, sorted_idx(i)), ...
-%         'Color', colors(sorted_idx(i), :), 'LineWidth', 1.2);
-% end
-% xlabel('Frequency (Hz)');
-% ylabel('Power');
-% title('Average Power Spectrum per IC');
-% legend(arrayfun(@(i) sprintf('IC %d', i), sorted_idx(1:nICs), 'UniformOutput', false), ...
-%     'Location', 'northeastoutside');
-% grid on;
-% hold off;
-
-%% Optional: Save per-IC summary plots (uncomment to use)
-group_ica_eval_dir = [home_dir, '/ica_evals'];
+group_ica_eval_dir = fullfile(output_dir, 'ica_evals');
 if ~isfolder(group_ica_eval_dir)
-    mkdir(group_ica_eval_dir)
+    [ok, msg, msgID] = mkdir(group_ica_eval_dir);
+    if ~ok
+        error('Failed to create folder "%s"\nmsg: %s\nmsgID: %s', ...
+            group_ica_eval_dir, msg, msgID);
+    end
 end
+
 for i = 1:nICs
     ic_idx = sorted_idx(i);
-    figure('Visible','off');
+
+    f = figure('Visible','off', 'Color','w');
+
     subplot(2,1,1);
     plot(freqs, mean_power_spectra(:, ic_idx), 'b', 'LineWidth', 1.5);
     xlabel('Frequency (Hz)');
     ylabel('Power');
     title(sprintf('IC %d - Power Spectrum', ic_idx));
+    box off
 
     subplot(2,1,2);
-    bar([1 2 3], [mean_gm_overlap_norm(ic_idx), mean_abs_fd_corr_norm(ic_idx), mean_abs_dvars_corr_norm(ic_idx)]);
-    text(1:3,[mean_gm_overlap_norm(ic_idx), mean_abs_fd_corr_norm(ic_idx), mean_abs_dvars_corr_norm(ic_idx)],num2str([round(mean_gm_overlap_norm(ic_idx), 2), round(mean_abs_fd_corr_norm(ic_idx), 2), round(mean_abs_dvars_corr_norm(ic_idx), 2)]'),'vert','bottom','horiz','center'); 
+    vals = [mean_gm_overlap_norm(ic_idx), ...
+            mean_abs_fd_corr_norm(ic_idx), ...
+            mean_abs_dvars_corr_norm(ic_idx)];
+
+    bar([1 2 3], vals);
+    text(1:3, vals, compose('%.2f', vals), ...
+        'VerticalAlignment', 'bottom', ...
+        'HorizontalAlignment', 'center');
     box off
-    set(gca, 'XTickLabel', {'GM Overlap Scaled', 'FD Corr', 'DVARS Corr'});
-    %ylim([-1.1 1.1]);
+    set(gca, 'XTick', [1 2 3], ...
+             'XTickLabel', {'GM Overlap Scaled', 'FD Corr', 'DVARS Corr'});
     title(sprintf('IC %d - Overlap and Motion Corrs', ic_idx));
 
-    saveas(gcf, [group_ica_eval_dir, '/GM_', num2str(i), '_IC_', num2str(ic_idx), '_eval.png']);
-    close;
+    out_file = fullfile(group_ica_eval_dir, ...
+        sprintf('GM_%d_IC_%d_eval.png', i, ic_idx));
+
+    save_figure_robust(f, out_file, 300);
+    close(f);
 end
 
-writetable(T_results, [group_ica_eval_dir, '/IC_eval_results.csv'], 'Delimiter',',')
+writetable(T_results, fullfile(group_ica_eval_dir, 'IC_eval_results.csv'), 'Delimiter', ',')
 disp(T_results)
 end

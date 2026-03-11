@@ -1,46 +1,35 @@
 function save_figure_robust(fig, filename, dpi)
-%SAVE_FIGURE_ROBUST Save a figure reliably across platforms and MATLAB versions.
+%SAVE_FIGURE_ROBUST Save figure robustly for MATLAB R2020a+.
 %
-%   save_figure_robust(fig, filename, dpi)
-%
-%   Inputs:
-%     - fig:      Handle to a figure (required)
-%     - filename: Output file path (e.g., 'myplot.png', 'fig.pdf') (required)
-%     - dpi:      Output resolution in dots per inch (default = 300)
-%
-%   Features:
-%     - Automatically selects correct renderer (OpenGL or Painters)
-%     - Handles missing extensions by defaulting to PNG
-%     - Works on headless servers via software OpenGL
-%     - Applies consistent formatting (font size, white background)
+% Strategy:
+% - exportgraphics() first
+% - fallback to print()
+% - no dependence on opengl/renderer switching
+% - keeps figure hidden
 
     if nargin < 3 || isempty(dpi)
         dpi = 300;
     end
 
-    % Ensure figure handle is valid
     if ~ishandle(fig) || ~strcmp(get(fig, 'Type'), 'figure')
         error('First argument must be a valid figure handle.');
     end
 
-   try
-        if usejava('desktop') && feature('opengl','supported')
-            opengl('software');
-        else
-            warning('OpenGL not supported or no desktop environment; skipping OpenGL setup. This is usually not an issue. Check QC plots!');
+    set(fig, 'Visible', 'off', ...
+             'Color', 'w', ...
+             'InvertHardcopy', 'off', ...
+             'PaperPositionMode', 'auto');
+
+    ax = findall(fig, 'Type', 'axes');
+    for k = 1:numel(ax)
+        try
+            set(ax(k), 'Color', 'w', 'XColor', 'k', 'YColor', 'k');
+        catch
         end
-    catch
-        warning('Could not set OpenGL to software mode. This is usually not an issue. Check QC plots.');
     end
 
-    % Standard appearance
-    set(fig, 'Visible', 'off', ...
-             'PaperPositionMode', 'auto', ...
-             'InvertHardcopy', 'off', ...
-             'Color', 'w');  % white background
-    %set(findall(fig, '-property', 'FontSize'), 'FontSize', 12);
+    drawnow;
 
-    % Handle missing extension (default to PNG)
     [filepath, name, ext] = fileparts(filename);
     if isempty(ext)
         ext = '.png';
@@ -48,37 +37,60 @@ function save_figure_robust(fig, filename, dpi)
     end
     ext = lower(ext);
 
-    % Select format and renderer
-    switch ext
-        case '.png'
-            set(fig, 'Renderer', 'opengl');  fmt = '-dpng';
-        case {'.jpg', '.jpeg'}
-            set(fig, 'Renderer', 'opengl');  fmt = '-djpeg';
-        case '.tiff'
-            set(fig, 'Renderer', 'opengl');  fmt = '-dtiff';
-        case '.bmp'
-            set(fig, 'Renderer', 'opengl');  fmt = '-dbmp';
-        case '.pdf'
-            set(fig, 'Renderer', 'painters'); fmt = '-dpdf';
-        case '.eps'
-            set(fig, 'Renderer', 'painters'); fmt = '-depsc';
-        case '.svg'
-            set(fig, 'Renderer', 'painters'); fmt = '-dsvg';  % MATLAB R2020a+
-        otherwise
-            warning('Unknown extension "%s". Defaulting to PNG.', ext);
-            set(fig, 'Renderer', 'opengl');
-            fmt = '-dpng';
-            filename = fullfile(filepath, [name '.png']);
-    end
-
-    % Save the figure
     try
-        print(fig, filename, fmt, ['-r' num2str(dpi)]);
-        fprintf('Figure saved to: %s\n', filename);
-    catch ME
-        error('Failed to save figure: %s', ME.message);
-    end
+        switch ext
+            case '.png'
+                try
+                    exportgraphics(fig, filename, 'Resolution', dpi);
+                catch
+                    print(fig, filename, '-dpng', ['-r' num2str(dpi)]);
+                end
 
-    % Optional: close figure automatically after saving
-    % close(fig);
+            case {'.jpg', '.jpeg'}
+                try
+                    exportgraphics(fig, filename, 'Resolution', dpi);
+                catch
+                    print(fig, filename, '-djpeg', ['-r' num2str(dpi)]);
+                end
+
+            case {'.tif', '.tiff'}
+                try
+                    exportgraphics(fig, filename, 'Resolution', dpi);
+                catch
+                    print(fig, filename, '-dtiff', ['-r' num2str(dpi)]);
+                end
+
+            case '.pdf'
+                try
+                    exportgraphics(fig, filename, 'ContentType', 'vector');
+                catch
+                    print(fig, filename, '-dpdf');
+                end
+
+            case '.eps'
+                print(fig, filename, '-depsc');
+
+            case '.svg'
+                try
+                    exportgraphics(fig, filename, 'ContentType', 'vector');
+                catch ME_svg
+                    error('SVG export failed for "%s": %s', filename, ME_svg.message);
+                end
+
+            case '.bmp'
+                print(fig, filename, '-dbmp', ['-r' num2str(dpi)]);
+
+            otherwise
+                warning('Unknown extension "%s". Defaulting to PNG.', ext);
+                filename = fullfile(filepath, [name '.png']);
+                try
+                    exportgraphics(fig, filename, 'Resolution', dpi);
+                catch
+                    print(fig, filename, '-dpng', ['-r' num2str(dpi)]);
+                end
+        end
+
+    catch ME
+        error('Failed to save figure "%s": %s', filename, ME.message);
+    end
 end

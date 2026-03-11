@@ -150,7 +150,7 @@ end
 
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
-output_dir = [group_qc_home, '/', task_name, '/', output_dirname]; % because they should ALL be the same, and specified to task
+output_dir = fullfile(group_qc_home, task_name, output_dirname); % because they should ALL be the same, and specified to task
 if not(isfolder(output_dir))
     mkdir(output_dir)
 end
@@ -539,6 +539,7 @@ Group_QC.bad_data_prefixes = bad_data_prefixes;
 
 % go to general group folder for this specific set
 cd(output_dir)
+output_dir = pwd; % hard code it is the full thing
 
 % Calculate outliers based on the final qc table. Do it in three ways and
 % add it to the qc table (only if this is CICADA though!):
@@ -1037,7 +1038,6 @@ IC_3D_info.ImageSize = [IC_probs_info.ImageSize(1:end-1), size(networks,4)];
 niftiwrite(cast(networks_IC_probs_mask, 'single'), 'IC_mask_networks', IC_3D_info, 'Compressed', true) % mask of max 99%+ probability for related networks
 niftiwrite(cast(networks_IC_mel_max, 'single'), 'IC_mel_networks_zmax', IC_3D_info, 'Compressed', true) % maximum (positive or negative) z values for ICs in network
 
-
 % OK, and then we can also just sort group IC from most to least gray
 % matter
 % Grab DVARS and FD though so you can easily measure correlations too
@@ -1072,19 +1072,15 @@ for i1 = 1:length(data_files)
 
     %% grab HRF information:
     mat_file = [curr_subj_home, '/ic_auto_selection/DecisionVariables_Auto.mat'];
-    load(mat_file)
+    S = load(mat_file);
 
-    % Only load HRF_task if it exists
-    
-    if isfield(Data, 'HRF_task')
-        hrf_general_power = Data.HRF_general.hrf_power_interp_norm;
-        hrf_task_power = Data.HRF_task.hrf_power_norm;
-        hrf_conditions = Data.Task.hrf_conditions;
+    if isfield(S.Data, 'HRF_task')
+        hrf_general_power = S.Data.HRF_general.hrf_power_interp_norm;
+        hrf_task_power = S.Data.HRF_task.hrf_power_norm;
+        hrf_conditions = S.Data.Task.hrf_conditions;
     else
-        % only general power!
-
-        hrf_general_power = Data.HRF_general.hrf_power_interp_norm;
-        hrf_task_power = []; % just set it to be the same thing for ease (keep in mind, will normally have multiple columns)
+        hrf_general_power = S.Data.HRF_general.hrf_power_interp_norm;
+        hrf_task_power = [];
         hrf_conditions = [];
     end
 end
