@@ -6,8 +6,8 @@ CICADA is similar in function to other ICA fMRI denoisers such as ICA-AROMA and 
 
 CICADA can be broken down into three parts:
 (1) Automatic CICADA: Automatically denoising fMRI images
-(2) Manual CICADA: Save time with manual ICA denoising by only having to examine and adjust a small subset of ICs through CICADA
-(3) Group CICADA: Run group-level quality control analyses and processing
+(2) Manual CICADA (optional) : Save time with manual ICA denoising by only having to examine and adjust a small subset of ICs through CICADA
+(3) Group CICADA: Run group-level quality control analyses and processing to evaluate your Automatic or Manual CICADA results
 
 Some details on installation and use can be seen below. More details can be found in the word document "CICADA_UserGuide". Examples and more details on executing CICADA can also be found in the "example_CICADA_flow" directory.
 
@@ -21,17 +21,17 @@ CICADA can work with any preprocessed data (warped to a common space such as adu
 Automatic CICADA:
 First, CICADA creates regional masks of the functional data, and generates ICs with FSL's MELODIC. Next, relevant calculations are made from the regional masks, timeseries, and powerspectrum. These calculations are used to resort the ICs based on relative neural signal probability. Then, CICADA loops through a subset of these resorted ICs and uses the previous calculations to determine if the ICs should be labeled as signal or noise. Tagging of ICs of various signal-like and noise-like classifications is based on 3-group k-means calculations. CICADA then performs nonaggressive denoising of the noise ICs with FSL's fsl_regfilt, and then performs QC analyses. QC analyses include comparing CICADA denoising to standard 8 parameter denoising (6 motion parameters, white matter, and CSF) in a number of plots all representing common noise sources in fMRI. See included word document for more details.
 
-Manual CICADA:
+Manual CICADA (optional step if you want manual IC classification):
 Following user-adjusted IC labeling, Manual CICADA reruns fsl_regfilt and QC analyses.
 
-Group CICADA:
+Group CICADA (to evaluate effectiveness of your Automatic or Manual CICADA results):
 Runs similar QC analyses as Automatic CICADA, but on the group level. Also helps identify data outliers and prepares the data for easy analysis.
 
 # Example Walkthrough
 Automatic CICADA:
 All relevant functions in CICADA can be called simply by using the included Auto_CICADA.m function. If the data was processed in fMRIPrep, it may be possible/easier to instead use the fmriprep_auto_CICADA.m function (which will, in turn, call the Auto_CICADA.m function). See included word document for more details. Examples of calling these functions can also be found in the example_CICADA_flow folder.
 
-Manual CICADA:
+Manual CICADA (optional):
 First, adjust the Signal Label Column in the "IC_auto_checker.csv" (1 for true signal, 0 for true noise). Then re-save the file as "IC_manual_checker.csv". Now, run with Manual_CICADA.m or fmriprep_manual_CICADA.m. See included word document for more details.
 
 Group CICADA:
