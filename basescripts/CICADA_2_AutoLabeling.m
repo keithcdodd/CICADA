@@ -1,4 +1,4 @@
-function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, compare_tag, tolerance, mel_fol)
+function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, compare_tag, tolerance, mel_fol, support_options)
 % Run this after running CICADA_1 script
 % output_dir must be the same one as for the first script, so that this can
 % find all the relevant files. Again, it is best if this is in the format
@@ -25,6 +25,12 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, co
 % You may need to add to startup.m the calls that fsl suggests in their
 % documentation when you search "running fsl in matlab" online -
 % FslMatlabConfiguration
+
+% Optional support/reliability settings. Existing calls remain valid.
+if ~exist('support_options', 'var') || isempty(support_options)
+    support_options = struct();
+end
+support_options = cicada_support_options(support_options);
 
 % check output_dir exists 
 if ~isfolder(output_dir)
@@ -102,7 +108,19 @@ anatmask = [anatmask_info.folder, '/', anatmask_info.name];
 % Now make a constrained funcmask that will be useful for calculating a
 % group mask later! Uses kmeans clustering into 7 groups, removes lowest
 % group for a more constrained funcmask.
-make_constrained_funcmask(output_dir, funcfile, funcmask, 1, []);
+funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, 1, []);
+
+% Direct-data reliability is intentionally separate from IC-derived evidence.
+try
+    make_funcdata_reliability(task_dir, funcfile, funcmask_constrained, support_options);
+catch ME
+    if support_options.FailOnError
+        rethrow(ME);
+    else
+        warning('CICADA:DirectReliabilityProducts', ...
+            'Could not create direct-data reliability products: %s', ME.message);
+    end
+end
 
 % initialize
 Tables = struct;
@@ -1140,10 +1158,10 @@ niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', tr
 %niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
-% We can use the SignalICOverlap file to calculate approximate regions that provided
-% BOLD signal capture. This could be useful for group GM mask calculations
-% later (e.g., focus on regions that are well captured across all images)
-call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
+% Historical regional signal-IC evidence mask. This is component-derived
+% evidence, not a direct proof of voxelwise BOLD reliability. Preserve the
+% legacy sigma=6 mm smoothing (approximately 14.1 mm FWHM) for reproducibility.
+call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz');
 call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_CICADA_auto_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
 
 % Write out the max noise ICs where we are in gray matter and noise is
@@ -1195,6 +1213,21 @@ cd ../
 save('DecisionVariables_Auto.mat', 'output_dir', 'subject_id', 'session_id', 'task_id', 'ICs', 'Data', 'Tables', 'Results')
 
 movefile('*Auto.*', 'ic_auto_selection')
+
+% Add explicit local cores and modestly smoothed regional evidence after the
+% raw overlap maps have reached their permanent selection-folder paths.
+try
+    cicada_make_component_evidence(task_dir, 'auto', ...
+        fullfile(task_dir, 'ic_auto_selection', 'SignalICOverlap.nii.gz'), ...
+        fullfile(task_dir, 'ic_auto_selection', 'NoiseICOverlap.nii.gz'), support_options);
+catch ME
+    if support_options.FailOnError
+        rethrow(ME);
+    else
+        warning('CICADA:ComponentEvidenceProducts', ...
+            'Could not create component-evidence products: %s', ME.message);
+    end
+end
 
 cd(output_dir)
 % OK, now run the denoising: Start with CICADA

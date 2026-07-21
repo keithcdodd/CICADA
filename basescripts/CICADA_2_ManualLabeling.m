@@ -1,4 +1,4 @@
-function [cleaned_file] = CICADA_2_ManualLabeling(output_dir, IC_manual_checker, mel_fol)
+function [cleaned_file] = CICADA_2_ManualLabeling(output_dir, IC_manual_checker, mel_fol, support_options)
 % 
 % NOTE: NEED TO MAKE IC_manual_checker.csv BEFORE RUNNING THIS FUNCTION:
 % To make IC_manual_checker.csv, open IC_auto_checker.csv in
@@ -21,6 +21,12 @@ function [cleaned_file] = CICADA_2_ManualLabeling(output_dir, IC_manual_checker,
 % IC_manual_checker (optional): IC_manual_checker.csv file - if not given, will look for it in ic_auto_selection
 % folder
 
+% Optional support/reliability settings. Existing calls remain valid.
+if ~exist('support_options', 'var') || isempty(support_options)
+    support_options = struct();
+end
+support_options = cicada_support_options(support_options);
+
 % check output_dir exists 
 if ~isfolder(output_dir)
     fprintf('ERROR: output_dir does not exist!')
@@ -39,6 +45,25 @@ end
 if ~isfolder(mel_fol)
     fprintf(['Cannot find melodic folder at ' mel_fol, '\n'])
     return;
+end
+
+% Generate direct-data reliability products if they are absent or overwrite
+% was requested. This does not change manual IC decisions or denoising.
+funcfile = fullfile(task_dir, 'funcfile.nii.gz');
+funcmask = fullfile(task_dir, 'funcmask.nii.gz');
+funcmask_constrained = fullfile(task_dir, 'funcmask_constrained.nii.gz');
+try
+    if ~isfile(funcmask_constrained)
+        funcmask_constrained = make_constrained_funcmask(task_dir, funcfile, funcmask, 1, []);
+    end
+    make_funcdata_reliability(task_dir, funcfile, funcmask_constrained, support_options);
+catch ME
+    if support_options.FailOnError
+        rethrow(ME);
+    else
+        warning('CICADA:DirectReliabilityProducts', ...
+            'Could not create direct-data reliability products: %s', ME.message);
+    end
 end
 
 if ~exist('IC_manual_checker', 'var')
@@ -212,10 +237,10 @@ niftiwrite(signal_prob_1D, 'SignalICOverlap', signal_prob_info, 'Compressed', tr
 %niftiwrite(cast(signal_noise_ratio_IC_overlap .* gm_bin, 'single'), 'SignaltoNoiseICOverlap_GM', signal_prob_info, 'Compressed', true) % <0 is more noise, >0 is more signal
 niftiwrite(cast(signal_and_noise_overlap, 'single'), 'SignalandNoiseICOverlap', signal_prob_info, 'Compressed', true) % This is likely the most helpful one
 
-% We can use the SignalICOverlap file to calculate approximate regions that provided
-% BOLD signal capture. This could be useful for group GM mask calculations
-% later (e.g., focus on regions that are well captured across all images)
-call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz'); % Smooth with typical 6mm sigma
+% Historical regional signal-IC evidence mask. This is component-derived
+% evidence, not a direct proof of voxelwise BOLD reliability. Preserve the
+% legacy sigma=6 mm smoothing (approximately 14.1 mm FWHM) for reproducibility.
+call_fsl('fslmaths SignalICOverlap.nii.gz -s 6 -mul funcmask.nii.gz SignalICOverlap_prob_smoothed.nii.gz');
 call_fsl('fslmaths SignalICOverlap_prob_smoothed.nii.gz -thrP 50 -bin funcmask_CICADA_manual_signal_constrained.nii.gz'); % threshold and binarize for a nice data-driven mask
 
 % Write out the max noise ICs where we are in gray matter and noise is
@@ -262,6 +287,21 @@ movefile *_Manual.* ic_manual_selection
 
 if ~isfile('./ic_manual_selection/IC_manual_checker.csv')
     movefile(IC_manual_checker, "ic_manual_selection")
+end
+
+% Add explicit local cores and modestly smoothed regional evidence after the
+% raw overlap maps have reached their permanent selection-folder paths.
+try
+    cicada_make_component_evidence(task_dir, 'manual', ...
+        fullfile(task_dir, 'ic_manual_selection', 'SignalICOverlap.nii.gz'), ...
+        fullfile(task_dir, 'ic_manual_selection', 'NoiseICOverlap.nii.gz'), support_options);
+catch ME
+    if support_options.FailOnError
+        rethrow(ME);
+    else
+        warning('CICADA:ComponentEvidenceProducts', ...
+            'Could not create component-evidence products: %s', ME.message);
+    end
 end
 
 % OK, now run the manual CICADA denoising

@@ -1,7 +1,7 @@
 function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, ...
     cleaned_qc_table, cleaned_qc_corrs_table, qc_photo_paths, ...
     compare_qc_table, compare_qc_corrs_table, ...
-    orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics)
+    orig_qc_table, orig_qc_corrs_table, support_products] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics)
 % function to grab the qc information that is needed for group qc and return relevant
 % data
 % samps is to make sure group_qc plotting is pulling from each subject the
@@ -9,6 +9,7 @@ function [cleaned_file, data_mask, data_signal_mask, signalandnoise_overlap, ...
 % plot)
 
 % may need to add to path for base scripts
+support_products = struct();
 
 if not(isfile(cleaned_file))
     fprintf(['Denoised file ', cleaned_file, ' does not exist\n'])
@@ -97,6 +98,11 @@ else
         fprintf(['Could not find a data_signal_mask at ' data_signal_mask_path, '\n'])
         data_signal_mask = ''; % one does not exist, but this should not occur if it is CICADA
     end
+end
+
+% Resolve the expanded support products without changing legacy outputs.
+if cicada == 1
+    support_products = cicada_locate_support_products(task_dir, cicada_type);
 end
 
 % grab the resampled GM mni region mask (to use for
