@@ -442,7 +442,7 @@ for idx = 1:num_runs
     [cleaned_data, data_mask, data_signal_mask, signalandnoise_overlap, cleaned_qc_table, ...
         cleaned_qc_corrs_table, cleaned_qc_photo_paths, ...
         compare_qc_table, compare_qc_corrs_table, ...
-        orig_qc_table, orig_qc_corrs_table] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics);
+        orig_qc_table, orig_qc_corrs_table, support_products] = cicada_get_qc(cleaned_dir, cleaned_file, compare_file, orig_file, samps, curr_demographics);
 
     % make and get tstd
     % Also calculate and grab a tstd and grab per region
@@ -467,6 +467,7 @@ for idx = 1:num_runs
     data_signal_mask_list{m} = data_signal_mask;
     signalandnoise_overlap_list{m} = signalandnoise_overlap;
     tstd_list{m} = tstd;
+    support_products_list{m} = support_products;
     task_event_file_exist_list{m} = ~isempty(task_event_file);
     poorly_improved_list{m} = logical(poorly_improved);
 
@@ -914,6 +915,14 @@ if ~isempty(data_signal_mask_list)
     % across all subects)
     funcmask_signal_overlap_command = ['fslmaths ', output_dir, '/signal_funcmasks.nii.gz -Tmin ', output_dir, '/group_signal_funcmask.nii.gz'];
     [~, ~] = call_fsl(funcmask_signal_overlap_command);
+end
+
+% Merge expanded direct-data and component-evidence products separately.
+% Existing funcmasks.nii.gz, signal_funcmasks.nii.gz, group_funcmask.nii.gz,
+% and group_signal_funcmask.nii.gz remain unchanged for compatibility.
+if cicada == 1 && exist('support_products_list', 'var')
+    Group_QC.support_products_manifest = cicada_group_merge_support_products( ...
+        support_products_list, image_keep, output_dir);
 end
 
 % Potential Future Idea: After group MELODIC, make automatic decisions on signal or
