@@ -19,7 +19,7 @@ task_dir = output_dir;
 if ~ismember(compare_file, valid_tags)
     if ~isfile(compare_file)
         fprintf('Will compare to standard 8 parameter and Auto CICADA \n')
-        compare_file = ''; 
+        compare_file = '8p'; 
     end
 else
     compare_tag = compare_file;
