@@ -8,7 +8,7 @@ function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, 
 % General idea is to remove darkest voxels from CICADA funcfile tmean (anatmasked)
 %
 % Default method to find darkest voxels is with matlab isoutlier.
-% However, one can turn kmeans off (use_outliers = 0;) and then give a percent
+% Alternatively, one can turn the outlier method off (use_outliers = 0;) and then give a percent
 % (e.g. percent=20) to determine what percent cut off to decide are the
 % darkest voxels ("susceptibility like") e.g., percent=20 would remove voxels below 20%
 % quantile of funcfile that is masked by anatmask.
@@ -66,35 +66,93 @@ tmean_funcfile_data = niftiread(tmean_funcfile_anatmask);
 % grab data that is not masked out
 tmean_vals = tmean_funcfile_data(tmean_funcfile_data > 0); % puts it into a list, only grabbing above 0
 
-% do kmeans if percent value does not make sense
-if ~exist('use_kmeans', 'var') && ~exist('percent', 'var')
-    use_outliers = 1; percent = [];
-end
+% Resolve optional inputs.
+%
+% use_outliers = 1:
+%   Default. Remove only unusually low temporal-mean voxels identified
+%   as low-end outliers.
+%
+% use_outliers = 0:
+%   Use an explicit lower temporal-mean percentile cutoff instead.
+%   If percent is omitted, default to 20%.
 
-% only don't do kmeans if explicitely set to 0 as a double
-if isa(use_outliers, 'double') || use_outliers ~= 0
+if nargin < 4 || isempty(use_outliers)
     use_outliers = 1;
 end
 
-% don't do kmeans, but no percent given, go to 20% default
-if (use_outliers == 0) && ~exist('percent', 'var')
-    percent = 20; % default to 20% cut off
+if nargin < 5
+    percent = [];
 end
 
-% basically, do kmeans unless kmeans==0 and percent value makes sense
-if ~exist('percent', 'var') || use_outliers ~= 0 || ~isa(percent, 'double') || percent > 99 || percent < 1
-    fprintf('Determining low data regions. \n')
-    % Use isoutlier to find minimum values within anatmasked funcfile
-    low_signal_voxels = isoutlier(tmean_vals) & (tmean_vals < median(tmean_vals));
-    if sum(low_signal_voxels == 0)
-        voxel_val_cutoff = 0; % if there are no outliers, just keep it positive
+
+% Validate use_outliers.
+if ~((isnumeric(use_outliers) || islogical(use_outliers)) && ...
+        isscalar(use_outliers) && ...
+        any(double(use_outliers) == [0 1]))
+
+    error('CICADA:InvalidConstrainedMaskMode', ...
+        'use_outliers must be 1 (outlier method) or 0 (percentile method).');
+
+end
+
+use_outliers = logical(use_outliers);
+
+
+if isempty(tmean_vals)
+
+    error('CICADA:NoPositiveFunctionalData', ...
+        ['No positive temporal-mean functional voxels remained after ' ...
+         'functional/anatomical masking.']);
+
+end
+
+
+if use_outliers
+
+    fprintf('Determining unusually low functional-data regions.\n')
+
+    % Identify only low-end temporal-mean outliers.
+    low_signal_voxels = ...
+        isoutlier(tmean_vals) & ...
+        (tmean_vals < median(tmean_vals));
+
+    % If low-end outliers exist, exclude through the highest value
+    % belonging to that low-outlier set. Otherwise retain all positive
+    % voxels within the constrained anatomical/functional domain.
+    if any(low_signal_voxels)
+
+        voxel_val_cutoff = ...
+            max(tmean_vals(low_signal_voxels));
+
     else
-        voxel_val_cutoff = max(tmean_vals(low_signal_voxels));
+
+        voxel_val_cutoff = 0;
+
     end
-    
+
 else
-    Q = quantile(tmean_vals, percent/100);
-    voxel_val_cutoff = Q;
+
+    % Explicit percentile mode.
+    if isempty(percent)
+        percent = 20;
+    end
+
+    if ~isnumeric(percent) || ...
+            ~isscalar(percent) || ...
+            ~isfinite(percent) || ...
+            percent < 1 || percent > 99
+
+        error('CICADA:InvalidConstrainedMaskPercent', ...
+            'percent must be a numeric scalar from 1 through 99.');
+
+    end
+
+    fprintf(['Determining low functional-data regions using the ' ...
+        '%gth percentile cutoff.\n'], percent)
+
+    voxel_val_cutoff = ...
+        quantile(tmean_vals, percent / 100);
+
 end
 
 funcmask_constrained_data = single(tmean_funcfile_data > voxel_val_cutoff);
