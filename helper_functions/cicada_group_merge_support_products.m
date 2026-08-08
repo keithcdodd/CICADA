@@ -39,15 +39,18 @@ end
 %% Set up organized output folders
 
 support_root = fullfile(output_dir, 'support_products');
-core_dir = fullfile(support_root, 'core');
-qc_dir = fullfile(support_root, 'qc');
-provenance_dir = fullfile(support_root, 'provenance');
+stage_root = fullfile(output_dir, 'support_products_staging');
 
-% support_products contains generated derivatives only, so rebuild it
-% cleanly on each Group CICADA run.
-if isfolder(support_root)
-    rmdir(support_root, 's');
+% Build the complete new support-products tree in staging first.
+% This avoids deleting a previously successful support_products directory
+% if generation fails partway through.
+if isfolder(stage_root)
+    rmdir(stage_root, 's');
 end
+
+core_dir = fullfile(stage_root, 'core');
+qc_dir = fullfile(stage_root, 'qc');
+provenance_dir = fullfile(stage_root, 'provenance');
 
 mkdir(core_dir);
 mkdir(qc_dir);
@@ -212,7 +215,23 @@ writetable(manifest, ...
 
 %% Write a simple human-readable guide
 
-local_write_output_guide(support_root);
+local_write_output_guide(stage_root);
+
+
+%% Finalize support-products directory
+
+% Only replace the canonical directory after all products, aggregates,
+% provenance, and documentation have been generated successfully.
+if isfolder(support_root)
+    rmdir(support_root, 's');
+end
+
+[status, msg] = movefile(stage_root, support_root);
+
+if ~status
+    error('CICADA:SupportOutputMoveFailure', ...
+        'Could not finalize group support-products directory: %s', msg);
+end
 
 
 %% Console guidance
