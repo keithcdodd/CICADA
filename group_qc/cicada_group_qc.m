@@ -277,7 +277,7 @@ m = 1;
 bd = 1;
 cicada_dir = cicada_home; % just for naming
 num_runs = length(sub_ids);
-bad_data_prefixes = ''; % initialize
+bad_data_prefixes = {}; % initialize
 samps = max([500, round(10000/num_runs)]);
 for idx = 1:num_runs
     sub_id = sub_ids{idx};
@@ -557,11 +557,14 @@ if cicada == 1
 
     % Number of total ICs (if very low -- bad data all round)
     Group_QC.low_number_total_ics = (isoutlier(final_qc_table.number_total_ics, "median")) & (final_qc_table.number_total_ics < mean(final_qc_table.number_kept_ics));
-    % Low GM coverage, regular and dice 'gm_coverage_by_signal', 'signal_overlap_with_gm'
+    % Low GM coverage, regular and jaccard 'gm_coverage_by_signal', 'signal_overlap_with_gm'
     Group_QC.low_gm_coverage_by_signal = (isoutlier(final_qc_table.gm_coverage_by_signal, "median")) & (final_qc_table.gm_coverage_by_signal < mean(final_qc_table.gm_coverage_by_signal));
     Group_QC.low_signal_overlap_with_gm = (isoutlier(final_qc_table.signal_overlap_with_gm, "median")) & (final_qc_table.signal_overlap_with_gm < mean(final_qc_table.signal_overlap_with_gm));
-    Group_QC.low_gm_dice = (isoutlier(final_qc_table.gm_signal_dice, "median")) & (final_qc_table.gm_signal_dice < mean(final_qc_table.gm_signal_dice));
-    
+    Group_QC.low_gm_jaccard = ...
+        (isoutlier(final_qc_table.gm_signal_jaccard, "median")) & ...
+        (final_qc_table.gm_signal_jaccard < ...
+         mean(final_qc_table.gm_signal_jaccard));    
+
     % Fraction Signal Variance Kept (low would suggest there are very few good 
     % number of ICs (too swamped by noise) and it does not explain much of the data):
     Group_QC.low_ics_labeled_signal = (final_qc_table.number_kept_ics < 3); % If number kept ICs is less than 3, it cannot be good. And this is an extremely lenient cut off.
@@ -619,7 +622,7 @@ if cicada == 1
     %Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
     %    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_GM + ...
     %    Group_QC.low_Smoothing + Group_QC.low_power_overlap + ...
-    %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_dice);
+    %    Group_QC.low_gm_coverage_by_signal + Group_QC.low_signal_overlap_with_gm + Group_QC.low_gm_jaccard);
 
     % poorly improved
     Group_QC.poorly_improved = cell2mat(poorly_improved_list)';
@@ -634,17 +637,44 @@ if cicada == 1
     % 2 ICs kept as signal. Also, if the data was poorly improved (Either
     % average GM, Smoothing, or power overlap was not improved (increased), OR either
     % FD, DVARS, or spikiness was not improved (decreased).
-    cicada_outliers = logical(Group_QC.high_retained_motion + Group_QC.low_gm_dice + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
+    cicada_outliers = logical(Group_QC.high_retained_motion + Group_QC.low_gm_jaccard + Group_QC.low_GM_NotGM_mean_var_prop + Group_QC.low_power_overlap + Group_QC.low_boldfreq_highfreq_ratio + Group_QC.low_ics_labeled_signal + Group_QC.poorly_improved);
     Group_QC.cicada_outliers = cicada_outliers;
 
     % record into data notes:
     for ico = 1:length(cicada_outliers)
+    
         if cicada_outliers(ico)
-            data_notes{data_notes_iter, :} = {sub_ids{ico}, ses_ids{ico}, task_name, 'CICADA Outlier', 'Group CICADA automatically labeled this as an outlier compared to the other data.'};
-            data_notes_iter = data_notes_iter + 1; % increment for table
-            % Print this to output to, to help with tracking
-            fprintf('%s %s %s: Group CICADA automatically labeled this as an outlier compared to the other data and removed it from group analyses.\n', sub_ids{ico}, ses_ids{ico}, task_name)
+    
+            % Outlier indices correspond to rows of final_qc_table, not
+            % necessarily the original input arrays because runs may have
+            % been skipped before reaching Group QC.
+            outlier_subject = ...
+                char(string(final_qc_table.subject(ico)));
+    
+            outlier_session = ...
+                char(string(final_qc_table.session(ico)));
+    
+            outlier_task = ...
+                char(string(final_qc_table.task(ico)));
+    
+            data_notes{data_notes_iter, :} = { ...
+                outlier_subject, ...
+                outlier_session, ...
+                outlier_task, ...
+                'CICADA Outlier', ...
+                ['Group CICADA automatically labeled this as an outlier ' ...
+                 'compared to the other data.']};
+    
+            data_notes_iter = data_notes_iter + 1;
+    
+            fprintf([ ...
+                '%s %s %s: Group CICADA automatically labeled this as ' ...
+                'an outlier compared to the other data and removed it ' ...
+                'from group analyses.\n'], ...
+                outlier_subject, outlier_session, outlier_task);
+    
         end
+    
     end
 
     % add to final qc table
@@ -654,7 +684,7 @@ if cicada == 1
     final_qc_table.low_GM = Group_QC.low_GM; % maybe do not need if we have gm coverage by signal and signal overlap with gm
     final_qc_table.low_Smoothing = Group_QC.low_Smoothing;
     final_qc_table.low_power_overlap = Group_QC.low_power_overlap;
-    final_qc_table.low_gm_dice = Group_QC.low_gm_dice;
+    final_qc_table.low_gm_jaccard = Group_QC.low_gm_jaccard;
     final_qc_table.low_gm_coverage_by_signal = Group_QC.low_gm_coverage_by_signal;
     final_qc_table.low_signal_overlap_with_gm = Group_QC.low_signal_overlap_with_gm;
     final_qc_table.low_GM_NotGM_mean_var_prop = Group_QC.low_GM_NotGM_mean_var_prop;
