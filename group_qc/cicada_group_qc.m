@@ -387,9 +387,12 @@ for idx = 1:num_runs
         end
 
     else
-        % this is not a cicada file, so we do not need to worry about
-        % manual CICADA adjustments
+    
+        % This is not a CICADA file, so CICADA-specific improvement criteria
+        % do not apply.
         cleaned_file_info = test_cleaned_file_info;
+        poorly_improved = false;
+    
     end
 
     cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
@@ -478,7 +481,7 @@ for idx = 1:num_runs
     % comparison.
     compare_image_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*' compare_tag, '*qc_plots.jpg']); % specific to file tag of interest to 8p only
     compare_data_info = dir([task_dir, '/qc/sub*ses*task*', file_tag, '*vs*', compare_tag, '*qc_vals.mat']); % specific to file tag of interest to 8p only
-    if ~isempty(compare_file)
+    if ~isempty(compare_image_info)
         curr_compare_image_file = [compare_image_info.folder, '/', compare_image_info.name];
         comparison_tag = extractBetween(compare_image_info.name, [task_name, '_'], '_qc_plots.jpg');
         comparison_tag = comparison_tag{:};
@@ -488,7 +491,7 @@ for idx = 1:num_runs
 
     % now is a good time to grab network identifiability too!
     network_identifiability_file = [task_dir, '/qc/network_identifiability.nii.gz'];
-    if isfile(network_identifiability_file)
+    if cicada == 1 && isfile(network_identifiability_file)
         fprintf('Copying network identifiability image information:\n')
         curr_network_identifiability = niftiread(network_identifiability_file);
         curr_denoised_network_identifiability = curr_network_identifiability(:,:,:,1);
@@ -808,7 +811,8 @@ if ~isempty(group_compare_qc_corrs_table)
 
     
     % Set appropriate titles and destination
-    title_string = ['Group_QC_', comparison_tag];
+    title_string = ...
+    ['Group_QC_', cleaned_file_tag, '_vs_', compare_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
     
     % now we can plot everyone
@@ -830,7 +834,9 @@ if ~isempty(group_compare_qc_corrs_table)
 
    
     % Set appropriate titles and destination
-    title_string_cor = ['Group_QC_', comparison_tag, '_cicada_outliers_removed'];
+    title_string_cor = ...
+    ['Group_QC_', cleaned_file_tag, ...
+     '_vs_', compare_tag, '_cicada_outliers_removed'];
     qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
     
     % now we can plot with cicada_outliers removed for comparison
@@ -892,7 +898,7 @@ end
 fprintf('Finished Group QC Plotting!\n')
 
 % Now write network identifiability nifti files!
-if isfile(network_identifiability_file)
+if cicada == 1 && isfile(network_identifiability_file)
     network_identifiability_info = niftiinfo(network_identifiability_file);
     network_identifiability_info.ImageSize = [network_identifiability_info.ImageSize(1:3), (m-1)];
     network_identifiability_info.Datatype = 'single';
@@ -937,7 +943,7 @@ funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ',
 [~, ~] = call_fsl(funcmask_overlap_command);
 
 % do the same thing, but for the data_signal_mask_list (if it exists)
-if ~isempty(data_signal_mask_list)
+if cicada == 1 && ~isempty(data_signal_mask_list)
     merge_funcmasks_signal_command = ['fslmerge -a ', output_dir, '/signal_funcmasks.nii.gz ', strjoin(data_signal_mask_list(image_keep))];
     [~, ~] = call_fsl(merge_funcmasks_signal_command);
     
