@@ -53,15 +53,34 @@ end
 
 function path = local_pattern_existing(folder, pattern)
 path = '';
+
 if ~isfolder(folder)
     return
 end
+
 hits = dir(fullfile(folder, pattern));
-if numel(hits) == 1
-    path = fullfile(hits.folder, hits.name);
-elseif numel(hits) > 1
-    [~, idx] = sort({hits.name});
-    hits = hits(idx);
+
+if isscalar(hits)
+
     path = fullfile(hits(1).folder, hits(1).name);
+
+elseif numel(hits) > 1
+
+    % Multiple sensitivity/QC derivatives may exist if support-product
+    % settings have changed across runs. Do not silently choose one,
+    % because that could mix different parameterizations across subjects.
+    hit_names = sort({hits.name});
+    match_text = strjoin(hit_names, '\n  ');
+
+    warning('CICADA:AmbiguousSupportProduct', ...
+        ['Multiple support products match pattern "%s" in:\n' ...
+         '  %s\n' ...
+         'Skipping this optional support product rather than choosing ' ...
+         'one silently.\n' ...
+         'Matches:\n' ...
+         '  %s'], ...
+        pattern, folder, match_text);
+
 end
+
 end
