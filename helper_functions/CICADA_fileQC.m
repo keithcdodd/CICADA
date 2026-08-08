@@ -139,43 +139,97 @@ WMCSF_randperm = randperm(size(denoised_WMCSF, 1));
 CSF_randperm = randperm(size(denoised_CSF, 1));
 Suscept_randperm = randperm(size(denoised_Suscept, 1));
 
-% Now get all the relevant correlations:
-% perms should be at least 1000, but can go lower IF region is smaller
+% Now get all the relevant correlations.
+%
+% IMPORTANT: CICADA, comparison, and original data must use the same
+% sampled voxels / voxel pairs so that subsequent paired statistical tests
+% are truly paired. Undefined correlations are removed jointly across all
+% three datasets.
+%
+% perms should generally be at least 1000, but can go lower if a region
+% contains fewer usable voxels/pairs.
 perms = 10000;
 
-% denoised:
-denoised_Edge_Edge_corr = createHistData(denoised_Edge, denoised_Edge, Edge_randperm, Edge_randperm, perms);
-denoised_FD_GM_corr = createHistConf1DData(denoised_GM, confounds_fd, GM_randperm, 10000); % make it same sampling as others
-denoised_DVARS_GM_corr = createHistConf1DData(denoised_GM, confounds_dvars, GM_randperm, 10000);
-denoised_Outbrain_Outbrain_corr = createHistData(denoised_Outbrain, denoised_Outbrain, Outbrain_randperm, Outbrain_randperm, perms);
-denoised_WMCSF_WMCSF_corr = createHistData(denoised_WMCSF, denoised_WMCSF, WMCSF_randperm, WMCSF_randperm, perms);
-denoised_CSF_CSF_corr = createHistData(denoised_CSF, denoised_CSF, CSF_randperm, CSF_randperm, perms);
-denoised_Suscept_Suscept_corr = createHistData(denoised_Suscept, denoised_Suscept, Suscept_randperm, Suscept_randperm, perms);
-denoised_NotGM_NotGM_corr = createHistData(denoised_NotGM, denoised_NotGM, NotGM_randperm, NotGM_randperm, perms);
-denoised_GM_GM_corr = createHistData(denoised_GM, denoised_GM, GM_randperm, GM_randperm, perms);
 
-% compare:
-compare_Edge_Edge_corr = createHistData(compare_Edge, compare_Edge, Edge_randperm, Edge_randperm, perms);
-compare_FD_GM_corr = createHistConf1DData(compare_GM, confounds_fd, GM_randperm, 10000); % make it same sampling as others
-compare_DVARS_GM_corr = createHistConf1DData(compare_GM, confounds_dvars, GM_randperm, 10000);
-compare_Outbrain_Outbrain_corr = createHistData(compare_Outbrain, compare_Outbrain, Outbrain_randperm, Outbrain_randperm, perms);
-compare_WMCSF_WMCSF_corr = createHistData(compare_WMCSF, compare_WMCSF, WMCSF_randperm, WMCSF_randperm, perms);
-compare_CSF_CSF_corr = createHistData(compare_CSF, compare_CSF, CSF_randperm, CSF_randperm, perms);
-compare_Suscept_Suscept_corr = createHistData(compare_Suscept, compare_Suscept, Suscept_randperm, Suscept_randperm, perms);
-compare_NotGM_NotGM_corr = createHistData(compare_NotGM, compare_NotGM, NotGM_randperm, NotGM_randperm, perms);
-compare_GM_GM_corr = createHistData(compare_GM, compare_GM, GM_randperm, GM_randperm, perms);
+% Edge
+[denoised_Edge_Edge_corr, ...
+    compare_Edge_Edge_corr, ...
+    orig_Edge_Edge_corr] = ...
+    createHistDataPaired( ...
+    denoised_Edge, compare_Edge, orig_Edge, ...
+    Edge_randperm, perms);
 
-% orig:
-orig_Edge_Edge_corr = createHistData(orig_Edge, orig_Edge, Edge_randperm, Edge_randperm, perms);
-orig_FD_GM_corr = createHistConf1DData(orig_GM, confounds_fd, GM_randperm, 10000); % make it same sampling as others
-orig_DVARS_GM_corr = createHistConf1DData(orig_GM, confounds_dvars, GM_randperm, 10000);
-orig_Outbrain_Outbrain_corr = createHistData(orig_Outbrain, orig_Outbrain, Outbrain_randperm, Outbrain_randperm, perms);
-orig_WMCSF_WMCSF_corr = createHistData(orig_WMCSF, orig_WMCSF, WMCSF_randperm, WMCSF_randperm, perms);
-orig_CSF_CSF_corr = createHistData(orig_CSF, orig_CSF, CSF_randperm, CSF_randperm, perms);
-orig_Suscept_Suscept_corr = createHistData(orig_Suscept, orig_Suscept, Suscept_randperm, Suscept_randperm, perms);
-orig_NotGM_NotGM_corr = createHistData(orig_NotGM, orig_NotGM, NotGM_randperm, NotGM_randperm, perms);
-orig_GM_GM_corr = createHistData(orig_GM, orig_GM, GM_randperm, GM_randperm, perms);
 
+% FD vs GM
+[denoised_FD_GM_corr, ...
+    compare_FD_GM_corr, ...
+    orig_FD_GM_corr] = ...
+    createHistConf1DDataPaired( ...
+    denoised_GM, compare_GM, orig_GM, ...
+    confounds_fd, GM_randperm, perms);
+
+
+% DVARS vs GM
+[denoised_DVARS_GM_corr, ...
+    compare_DVARS_GM_corr, ...
+    orig_DVARS_GM_corr] = ...
+    createHistConf1DDataPaired( ...
+    denoised_GM, compare_GM, orig_GM, ...
+    confounds_dvars, GM_randperm, perms);
+
+
+% Outbrain
+[denoised_Outbrain_Outbrain_corr, ...
+    compare_Outbrain_Outbrain_corr, ...
+    orig_Outbrain_Outbrain_corr] = ...
+    createHistDataPaired( ...
+    denoised_Outbrain, compare_Outbrain, orig_Outbrain, ...
+    Outbrain_randperm, perms);
+
+
+% WM / CSF
+[denoised_WMCSF_WMCSF_corr, ...
+    compare_WMCSF_WMCSF_corr, ...
+    orig_WMCSF_WMCSF_corr] = ...
+    createHistDataPaired( ...
+    denoised_WMCSF, compare_WMCSF, orig_WMCSF, ...
+    WMCSF_randperm, perms);
+
+
+% CSF
+[denoised_CSF_CSF_corr, ...
+    compare_CSF_CSF_corr, ...
+    orig_CSF_CSF_corr] = ...
+    createHistDataPaired( ...
+    denoised_CSF, compare_CSF, orig_CSF, ...
+    CSF_randperm, perms);
+
+
+% Susceptibility-prone region
+[denoised_Suscept_Suscept_corr, ...
+    compare_Suscept_Suscept_corr, ...
+    orig_Suscept_Suscept_corr] = ...
+    createHistDataPaired( ...
+    denoised_Suscept, compare_Suscept, orig_Suscept, ...
+    Suscept_randperm, perms);
+
+
+% Non-GM
+[denoised_NotGM_NotGM_corr, ...
+    compare_NotGM_NotGM_corr, ...
+    orig_NotGM_NotGM_corr] = ...
+    createHistDataPaired( ...
+    denoised_NotGM, compare_NotGM, orig_NotGM, ...
+    NotGM_randperm, perms);
+
+
+% GM
+[denoised_GM_GM_corr, ...
+    compare_GM_GM_corr, ...
+    orig_GM_GM_corr] = ...
+    createHistDataPaired( ...
+    denoised_GM, compare_GM, orig_GM, ...
+    GM_randperm, perms);
 
 %Edge_GM_corr = createHistData(denoised_GM_Edge, denoised_Edge_GM, GM_Edge_randperm, Edge_GM_randperm, perms);
 %Outbrain_GM_corr = createHistData(denoised_GM_Outbrain, denoised_Outbrain_GM, GM_Outbrain_randperm, Outbrain_GM_randperm, perms);
@@ -229,32 +283,187 @@ region_signal_mean = mean(region(region(:,1) ~= 0, :));
 region_signal_mean = region_signal_mean - mean(region_signal_mean);
 end
 
-function compare_orig_corr = createHistData(compare_GM, orig_region, compare_randperm, orig_randperm, perms)
-% Should center close to 0 (not globally correlated) if it's
-% denoised (e.g., denoised lowered noise)
-perms = min([size(compare_GM,1), size(orig_region, 1), perms]);
-compare_orig_corr = corr(compare_GM(compare_randperm(1:perms), :)', orig_region(orig_randperm(1:perms), :)');
-compare_orig_corr = compare_orig_corr(tril(compare_orig_corr, -1) ~= 0);
-compare_orig_corr = compare_orig_corr(~isnan(compare_orig_corr)); % remove NaN correlations which can occur if a pixel has no variability (this might happen after a detrend, for example)
+function [denoised_corr, compare_corr, orig_corr] = ...
+    createHistDataPaired(denoised_region, compare_region, orig_region, ...
+    region_randperm, perms)
+% Sample the same voxel pairs from denoised, comparison, and original data.
+%
+% This preserves observation-level pairing for downstream paired tests.
+% Rather than forming a very large all-by-all correlation matrix and then
+% independently sampling it for each dataset, randomly sample the desired
+% voxel pairs first and calculate only those correlations.
 
-% reduce sizes to number of perms too:
-compare_orig_corr_randperms = randperm(length(compare_orig_corr));
-compare_orig_corr = compare_orig_corr(compare_orig_corr_randperms(1:perms)); % make it length of perms
+n_denoised = size(denoised_region, 1);
+n_compare = size(compare_region, 1);
+n_orig = size(orig_region, 1);
 
-% Should center above 0 (e.g., denoise did not remove true signal)
-% GM_corr = corr(compare_GM(GM_randperm(1:perms), :)', compare_GM(GM_randperm(1:perms), :)');
-% GM_GM_corr = GM_corr(tril(GM_corr, -1) ~= 0);
+% These datasets are extracted using the same spatial region mask, so
+% paired QC requires identical voxel counts/order.
+if n_denoised ~= n_compare || n_denoised ~= n_orig
+
+    error('CICADA:QCVoxelCountMismatch', ...
+        ['Paired QC requires the denoised, comparison, and original ' ...
+         'datasets to contain the same region voxels. Counts were ' ...
+         '%d, %d, and %d.'], ...
+        n_denoised, n_compare, n_orig);
+
 end
 
-function [GM_conf1D_corr] = createHistConf1DData(GM, conf, GM_randperm, perms)
-% This is for confounds that are calculated in the 1st derivative
-% and absolute value (e.g., dvars, fd)
-% corr conf vs GM diff abs: Should be reduced if denoised
-% consider detrend() for GM, since that is what we do for script 2 to focus
-% more on spikes, less on drift.
-perms = min([size(GM,1), perms]);
-GM_conf1D_corr = corr(conf(2:end), abs(diff(GM(GM_randperm(1:perms), :)')))';
-GM_conf1D_corr = GM_conf1D_corr(~isnan(GM_conf1D_corr)); % in case any voxels have no variance, for example after a detrend
+nvox = min([n_denoised, numel(region_randperm), perms]);
+
+if nvox < 2
+
+    error('CICADA:QCInsufficientVoxels', ...
+        'At least two region voxels are required for voxel-pair QC.');
+
+end
+
+% Use the same randomized voxel subset for all three datasets.
+voxel_idx = region_randperm(1:nvox);
+
+% Number of unique unordered voxel pairs.
+num_pairs = nvox * (nvox - 1) / 2;
+
+% Preserve the previous intent of sampling at most "perms" correlations.
+n_sample = min(perms, num_pairs);
+
+% Uniformly sample unique unordered pairs without first creating the full
+% nvox-by-nvox correlation matrix.
+pair_rank = randperm(num_pairs, n_sample);
+
+% Convert pair ranks 1..nchoosek(nvox,2) into row-based unordered pairs:
+% (2,1), (3,1), (3,2), (4,1), ...
+pair_i = ceil((1 + sqrt(1 + 8 .* pair_rank)) ./ 2);
+pair_j = pair_rank - ((pair_i - 1) .* (pair_i - 2) ./ 2);
+
+voxel_i = voxel_idx(pair_i);
+voxel_j = voxel_idx(pair_j);
+
+% Calculate exactly the same voxel-pair correlations in all three datasets.
+denoised_corr = local_rowwise_corr( ...
+    denoised_region(voxel_i, :), ...
+    denoised_region(voxel_j, :));
+
+compare_corr = local_rowwise_corr( ...
+    compare_region(voxel_i, :), ...
+    compare_region(voxel_j, :));
+
+orig_corr = local_rowwise_corr( ...
+    orig_region(voxel_i, :), ...
+    orig_region(voxel_j, :));
+
+% A pair must be defined in all three datasets to remain in paired QC.
+valid = ...
+    isfinite(denoised_corr) & ...
+    isfinite(compare_corr) & ...
+    isfinite(orig_corr);
+
+denoised_corr = denoised_corr(valid);
+compare_corr = compare_corr(valid);
+orig_corr = orig_corr(valid);
+
+if isempty(denoised_corr)
+
+    error('CICADA:QCNoValidCorrelations', ...
+        ['No jointly valid voxel-pair correlations remained for this ' ...
+         'QC region.']);
+
+end
+
+end
+
+
+function [denoised_corr, compare_corr, orig_corr] = ...
+    createHistConf1DDataPaired(denoised_GM, compare_GM, orig_GM, ...
+    conf, GM_randperm, perms)
+% Correlate FD/DVARS-like 1-D confounds with the same GM voxels in all
+% datasets, preserving voxel-level pairing.
+%
+% Confounds are calculated in the first derivative / absolute-value domain
+% (e.g., FD and DVARS), matching the historical CICADA QC calculation.
+
+n_denoised = size(denoised_GM, 1);
+n_compare = size(compare_GM, 1);
+n_orig = size(orig_GM, 1);
+
+if n_denoised ~= n_compare || n_denoised ~= n_orig
+
+    error('CICADA:QCVoxelCountMismatch', ...
+        ['Paired QC requires the denoised, comparison, and original ' ...
+         'datasets to contain the same GM voxels. Counts were ' ...
+         '%d, %d, and %d.'], ...
+        n_denoised, n_compare, n_orig);
+
+end
+
+nvox = min([n_denoised, numel(GM_randperm), perms]);
+
+if nvox < 1
+
+    error('CICADA:QCInsufficientVoxels', ...
+        'At least one GM voxel is required for confound QC.');
+
+end
+
+voxel_idx = GM_randperm(1:nvox);
+
+% Same confound and same voxels for every denoising method.
+denoised_corr = corr( ...
+    conf(2:end), ...
+    abs(diff(denoised_GM(voxel_idx, :)', 1, 1)))';
+
+compare_corr = corr( ...
+    conf(2:end), ...
+    abs(diff(compare_GM(voxel_idx, :)', 1, 1)))';
+
+orig_corr = corr( ...
+    conf(2:end), ...
+    abs(diff(orig_GM(voxel_idx, :)', 1, 1)))';
+
+% Remove undefined correlations jointly so that observation pairing is
+% retained for signrank and all downstream summaries.
+valid = ...
+    isfinite(denoised_corr) & ...
+    isfinite(compare_corr) & ...
+    isfinite(orig_corr);
+
+denoised_corr = denoised_corr(valid);
+compare_corr = compare_corr(valid);
+orig_corr = orig_corr(valid);
+
+if isempty(denoised_corr)
+
+    error('CICADA:QCNoValidCorrelations', ...
+        ['No jointly valid GM-confound correlations remained for this ' ...
+         'QC metric.']);
+
+end
+
+end
+
+
+function r = local_rowwise_corr(data_a, data_b)
+% Pearson correlation between corresponding rows of two matrices.
+%
+% This avoids constructing a full voxel-by-voxel correlation matrix.
+
+data_a = double(data_a);
+data_b = double(data_b);
+
+data_a = data_a - mean(data_a, 2);
+data_b = data_b - mean(data_b, 2);
+
+numerator = sum(data_a .* data_b, 2);
+
+denominator = sqrt( ...
+    sum(data_a .^ 2, 2) .* ...
+    sum(data_b .^ 2, 2));
+
+r = numerator ./ denominator;
+
+% Constant/invalid time series have undefined correlation.
+r(denominator == 0) = NaN;
+
 end
 
 
