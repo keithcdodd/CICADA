@@ -33,7 +33,8 @@ if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_fil
     compare_file_record = 'Standard 8 parameter compare';
 else
     % double check that you have the compare file, if it exists
-    valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'}; % standard parameter regression
+    valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', ...
+    '24p', '28p', '30p', '32p', '36p'};
     compare_tag = compare_file;
     compare_file = find_compare_file(output_dir, compare_file, valid_tags); % if it is a tag instead of file, this will fix it if it exists!
 

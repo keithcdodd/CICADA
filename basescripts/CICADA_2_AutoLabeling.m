@@ -67,7 +67,8 @@ if ~ischar(compare_tag)
 end
 
 % Validate compare_tag against allowed values
-valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', ...
+    '24p', '28p', '30p', '32p', '36p'};
 if ~ismember(compare_tag, valid_tags)
     warning('Compare tag is not one of the valid options. Using 8p regression for comparison.')
     compare_tag = '8p';
@@ -105,9 +106,10 @@ funcmask = [funcmask_info.folder, '/', funcmask_info.name];
 anatmask_info = dir([output_dir, '/region_masks/anatmask_resam.nii.gz']); % already resampled to funcmask
 anatmask = [anatmask_info.folder, '/', anatmask_info.name];
 
-% Now make a constrained funcmask that will be useful for calculating a
-% group mask later! Uses kmeans clustering into 7 groups, removes lowest
-% group for a more constrained funcmask.
+% Make a constrained functional mask for downstream QC, group masking,
+% and direct-data reliability. The default method removes unusually low
+% temporal-mean functional-data outliers while preserving the broader
+% funcmask used for subject-level MELODIC/IC classification.
 funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, 1, []);
 
 % Direct-data reliability is intentionally separate from IC-derived evidence.
@@ -164,9 +166,9 @@ if ~strcmp(task_events_file, '')
         end
         
     else
-        fprintf(['Cannont find ', task_events_file, '. Running without task condition information.\n'])
-        task_events_file = ''; %#ok<NASGU> 
-    return 
+        fprintf(['Cannot find ', task_events_file, ...
+            '. Running without task condition information.\n'])
+        task_events_file = '';
     end
 end
 
