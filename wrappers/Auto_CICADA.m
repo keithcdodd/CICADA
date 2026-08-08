@@ -7,9 +7,9 @@ function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, me
 % can skip variables with [] input
 % compare_file allows you to compare the denoising to any file you want,
 % just needs the full path. Alternatively, you can set compare_file to the
-% characters of either '6p', '8p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', or
-% '36p' to do any of those standard regressions for comparison (e.g., 8
-% parameter regression)
+% characters of either '6p', '8p', '9p', '12p', '16p', '18p',
+% '24p', '28p', '30p', '32p', or '36p' to use one of CICADA's
+% standard confound regressions for comparison.
 
 % need to make sure CICADA folder and subfolders are added to path!
 Auto_CICADA_dir = fileparts(mfilename('fullpath')); % this gives current script path
@@ -19,8 +19,8 @@ basescript_dir=pwd;
 cd(Auto_CICADA_dir);
 addpath(basescript_dir); % add the basescripts to path if not already done 
 
-% now, run the start up script to connect Matlab to FSL
-% note: if this does not work, then you must go into the associated file and modify it as needed:
+% Run the shared portable CICADA/FSL startup. It respects an existing
+% valid FSLDIR and documents an optional manual FSL-path override.
 if ~isfile([Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m'])
 	fprintf(['Cannot find ', Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m !!!\n'])
 	return

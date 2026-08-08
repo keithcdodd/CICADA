@@ -63,7 +63,8 @@ if ~exist('compare_file', 'var') || ~ischar(compare_file)
     compare_file=''; % easy to capture empty character array
 end
 
-valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '32p', '36p'};
+valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', ...
+    '24p', '28p', '30p', '32p', '36p'};
 compare_file = find_compare_file(output_dir, compare_file, valid_tags); % if it is a tag instead of file, this will fix it
 
 if ~isfile(compare_file)
