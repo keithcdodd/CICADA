@@ -5,35 +5,30 @@ function Manual_CICADA(output_dir, compare_file, mel_fol, IC_manual_checker)
 % IC classifications
 
 
-% need to make sure CICADA folder and subfolders are added to path!
-Manual_CICADA_dir = fileparts(mfilename('fullpath')); % this gives current script path
-cd([Manual_CICADA_dir, '/..'])
-cicada_script_path = pwd;
-cd(Manual_CICADA_dir);
-addpath(genpath(cicada_script_path)); % add the basescripts to path if not already done 
+% Configure CICADA and FSL using the shared portable startup.
+%
+% Do not maintain a separate FSL configuration here. Using the same startup
+% as Auto_CICADA ensures that Manual CICADA respects an existing valid
+% FSLDIR and uses the same CICADA/FSL path logic across workflows.
 
+Manual_CICADA_dir = fileparts(mfilename('fullpath'));
 
-% Make sure fsl is set up correctly as well!
-if (~contains(path, 'fsl/etc/matlab')) || (~strcmp(getenv('FSLOUTPUTTYPE'), 'NIFTI_GZ'))
-    % FSL was not set up correctly, try to do that here
-    fprintf('FSL with Matlab is not set up properly? Trying to do that for you now...\n')
-    setenv( 'FSLDIR', '/usr/local/fsl' );
-    setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
-    fsldir = getenv('FSLDIR');
-    fsldirmpath = sprintf('%s/etc/matlab',fsldir);
-    path(path, fsldirmpath);
-    clear fsldir fsldirmpath;
+startup_file = fullfile( ...
+    Manual_CICADA_dir, ...
+    '..', ...
+    'startup_fsl_CICADA_path.m');
+
+if ~isfile(startup_file)
+
+    error('CICADA:StartupMissing', ...
+        'Cannot find CICADA startup file:\n%s', ...
+        startup_file);
+
 end
 
-% system path must also have fsl in it, otherwise will not work
-curr_system_path = getenv('PATH');
-fsldir = getenv('FSLDIR');
-if ~contains(curr_system_path, fsldir)
-    fprintf('Matlab System Path does not have fsl. Trying to add that for you now...\n') 
-    new_system_path = [curr_system_path, ':', fsldir, '/bin'];
-    setenv('PATH', new_system_path)
-end
-clear fsldir curr_system_path
+run(startup_file);
+
+clear startup_file
 
 
 % Now, check for required variables 
