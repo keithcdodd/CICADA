@@ -20,7 +20,7 @@ if ~isfile(denoised_file)
     return;
 end
 
-if ~isfile(denoised_file)
+if ~isfile(compare_file)
     fprintf(['Cannot find compare file at ', compare_file, '\n'])
     return;
 end
