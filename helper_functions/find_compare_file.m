@@ -1,40 +1,79 @@
 function compare_file = find_compare_file(output_dir, compare_file, valid_tags)
-% will look for compare_file, will handle if it is instead a valid
-% compare_tag and find the corresponding file if it exists already! Otherwise just return it as a valid tag 
-% valid tags like {'8p', '9p'} etc.
-% point is to look for a compare file given the compare_tag, and if not
-% there, try to make it. 
-% compare_file needs to be a char array
-% if it already is a full filepath that exists, that's great!
-% only use for manual or group
+% FIND_COMPARE_FILE Resolve a comparison file or comparison tag.
+%
+% compare_file may be:
+%   1. A full path to an existing comparison file, or
+%   2. A valid comparison tag such as '8p', '12p', etc.
+%
+% If a valid tag is supplied and the corresponding cleaned file already
+% exists, return its full path.
+%
+% If a valid tag is supplied but the file does NOT yet exist, preserve and
+% return the tag so that a caller such as Manual_CICADA can recreate it.
+%
+% Invalid/missing specifications fall back to the standard '8p' comparison.
 
-if ~ischar(compare_file)
-    fprintf('Compare file is not a char array. Making it the default...\n')
-    compare_file = '';
+cleaned_dir = fullfile(output_dir, 'cleaned');
+
+if nargin < 3 || isempty(valid_tags)
+    valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', ...
+        '24p', '28p', '30p', '32p', '36p'};
 end
 
-cleaned_dir = [output_dir, '/cleaned'];
-task_dir = output_dir;
+if nargin < 2 || isempty(compare_file) || ~ischar(compare_file)
 
+    fprintf('No valid compare file/tag supplied. Using standard 8p.\n')
+    compare_file = '8p';
+
+end
+
+
+% If a full existing filepath was supplied, use it directly.
+if isfile(compare_file)
+    return
+end
+
+
+% Otherwise it must be a supported comparison tag.
 if ~ismember(compare_file, valid_tags)
-    if ~isfile(compare_file)
-        fprintf('Will compare to standard 8 parameter and Auto CICADA \n')
-        compare_file = '8p'; 
-    end
+
+    fprintf(['Compare specification is not an existing file or valid tag. ' ...
+        'Using standard 8p.\n'])
+
+    compare_file = '8p';
+
+end
+
+compare_tag = compare_file;
+
+
+% See whether this tagged comparison already exists.
+compare_file_info = ...
+    dir(fullfile(cleaned_dir, ['*_', compare_tag, '_*.nii.gz']));
+
+if isscalar(compare_file_info)
+
+    compare_file = fullfile( ...
+        compare_file_info(1).folder, ...
+        compare_file_info(1).name);
+
+elseif numel(compare_file_info) > 1
+
+    error('CICADA:AmbiguousCompareFile', ...
+        ['Multiple cleaned comparison files were found for tag "%s" in:\n%s\n' ...
+         'Please provide the intended full filepath explicitly.'], ...
+        compare_tag, cleaned_dir);
+
 else
-    compare_tag = compare_file;
-    fprintf(['Will try to compare to standard ', compare_tag, ', if it exists! \n'])
 
-    % Auto CICADA should have made the necessary files to compute if
-    % the file does not exist:
-    compare_file_info = dir([cleaned_dir, '/*', compare_file, '*']); % help see if file exists as it should
+    % IMPORTANT: preserve the valid tag. A downstream caller may be able
+    % to recreate the comparison from the saved regression design matrix.
+    fprintf(['Comparison file for %s does not currently exist. ' ...
+        'Returning the valid tag so it can be recreated if needed.\n'], ...
+        compare_tag);
 
-    if isempty(compare_file_info)
-        % that means the file does not currently exist
-        compare_file = '';
-    else
-        compare_file = [compare_file_info.folder, '/', compare_file_info.name]; % Update it to match to the tagged type of comparison denoiser
-    end
+    compare_file = compare_tag;
+
 end
 
 end
