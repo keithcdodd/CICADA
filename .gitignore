@@ -2,3 +2,10 @@
 *.asv
 .DS_Store
 .DS_Store
+
+# Human-subject validation outputs: NEVER COMMIT
+validation/results/
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]

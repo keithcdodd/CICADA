@@ -552,7 +552,7 @@ cd ${output_dir}
 
 echo "    Melodic is Complete! Now Calculating Smoothness and Probabilities"
 #########################################################################################
-## Calculate smoothness retention before and after 6mm gaussian smoothing of IC
+## Calculate Smoothing_Retention before and after Gaussian smoothing of each IC
 # Get explained variance
 cd ${output_dir}
 if [ -d "ROIcalcs" ]
@@ -572,8 +572,45 @@ fslmaths "${ROIcalcfol}/highprob_tmp_prob.nii.gz" -bin "${ROIcalcfol}/highprob_t
 # calculate a nonthresholded version of the z stats, absolute valued
 fslmaths ${mel_fol}/ICthresh_zstat.nii.gz -abs "${ROIcalcfol}/fullvolICA_tmp_nothresh.nii.gz"
 
-# calculate a smoothed 6mm gauss version of nonthresholded too
-fslmaths ${mel_fol}/ICthresh_zstat.nii.gz -s 6 -abs "${ROIcalcfol}/fullvolICA_tmp_smoothed_nothresh.nii.gz"
+# Calculate a smoothed version for the Smoothing_Retention feature.
+#
+# IMPORTANT: FSL `fslmaths -s` expects Gaussian sigma in mm, not FWHM.
+#
+# Revised default (validated 2026):
+#   FWHM = 11 mm
+#   sigma = 11 / 2.354820045 = 4.671269902 mm
+#
+# Historical CICADA behavior:
+#   sigma = 6 mm (FWHM ~= 14.12892 mm)
+#
+# To reproduce historical CICADA behavior, set:
+#   CICADA_SMOOTHING_RETENTION_MODE=historical
+#
+# This smoothing is used only for the Smoothing_Retention classifier feature.
+# It is distinct from preprocessing smoothing and from other CICADA smoothing
+# operations used for masks or support products.
+CICADA_SMOOTHING_RETENTION_MODE="${CICADA_SMOOTHING_RETENTION_MODE:-revised}"
+
+case "${CICADA_SMOOTHING_RETENTION_MODE}" in
+    revised)
+        CICADA_SMOOTHING_RETENTION_FWHM_MM="11"
+        CICADA_SMOOTHING_RETENTION_SIGMA_MM="4.671269902"
+        ;;
+    historical)
+        CICADA_SMOOTHING_RETENTION_FWHM_MM="14.12892027"
+        CICADA_SMOOTHING_RETENTION_SIGMA_MM="6"
+        ;;
+    *)
+        echo "ERROR: CICADA_SMOOTHING_RETENTION_MODE must be 'revised' or 'historical'."
+        echo "Received: ${CICADA_SMOOTHING_RETENTION_MODE}"
+        exit 2
+        ;;
+esac
+
+echo "    Smoothing_Retention kernel: mode=${CICADA_SMOOTHING_RETENTION_MODE}, FWHM=${CICADA_SMOOTHING_RETENTION_FWHM_MM} mm, sigma=${CICADA_SMOOTHING_RETENTION_SIGMA_MM} mm"
+
+# Smooth the signed thresholded z-stat IC maps, then take absolute value.
+fslmaths ${mel_fol}/ICthresh_zstat.nii.gz -s "${CICADA_SMOOTHING_RETENTION_SIGMA_MM}" -abs "${ROIcalcfol}/fullvolICA_tmp_smoothed_nothresh.nii.gz"
 
 # Calculate what you need form these to compare before and after smoothing to get a smoothing retention
 fslstats -t "${ROIcalcfol}/fullvolICA_tmp_nothresh.nii.gz" -M -V > ${ROIcalcfol}/curr_tmp_calc.txt
