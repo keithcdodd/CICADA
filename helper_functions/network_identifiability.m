@@ -85,19 +85,27 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
     orig_vol_smoothed    = zeros(size(orig_vol),   'like', orig_vol);
 
     cleaned_vol_info = niftiinfo(cleaned_file);
-    voxel_size = mean(cleaned_vol_info.PixelDimensions(1:3));
-
-    fwhm_mm     = smooth_kern;
-    fwhm_voxels = fwhm_mm / voxel_size;
-    sigma       = fwhm_voxels / 2.355;
+    [sigma_vox, sigma_mm, voxel_sizes_mm] = ...
+        cicada_fwhm_mm_to_sigma_vox(smooth_kern, ...
+        cleaned_vol_info.PixelDimensions(1:3));
+    fprintf(['Network-identifiability smoothing geometry: requested ', ...
+        'FWHM = %.12g mm; voxel sizes = [%.12g %.12g %.12g] mm; ', ...
+        'sigma = %.12g mm = [%.12g %.12g %.12g] voxels.\n'], ...
+        smooth_kern, voxel_sizes_mm, sigma_mm, sigma_vox);
 
     GM_eval = logical(single(GM_vol > 0) .* single(funcmask_vol > 0));
 
 
     for t = 1:size(cleaned_vol, 4)
-        cleaned_vol_smoothed(:,:,:,t) = imgaussfilt3(cleaned_vol(:,:,:,t), sigma);
-        compare_vol_smoothed(:,:,:,t) = imgaussfilt3(compare_vol(:,:,:,t), sigma);
-        orig_vol_smoothed(:,:,:,t)    = imgaussfilt3(orig_vol(:,:,:,t), sigma);
+        if smooth_kern == 0
+            cleaned_vol_smoothed(:,:,:,t) = cleaned_vol(:,:,:,t);
+            compare_vol_smoothed(:,:,:,t) = compare_vol(:,:,:,t);
+            orig_vol_smoothed(:,:,:,t)    = orig_vol(:,:,:,t);
+        else
+            cleaned_vol_smoothed(:,:,:,t) = imgaussfilt3(cleaned_vol(:,:,:,t), sigma_vox);
+            compare_vol_smoothed(:,:,:,t) = imgaussfilt3(compare_vol(:,:,:,t), sigma_vox);
+            orig_vol_smoothed(:,:,:,t)    = imgaussfilt3(orig_vol(:,:,:,t), sigma_vox);
+        end
     end
 
     cleaned_vol = cleaned_vol_smoothed;
