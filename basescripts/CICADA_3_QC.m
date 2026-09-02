@@ -19,13 +19,13 @@ current_path = mfilename('fullpath');
 [qc_func_dir, ~, ~] = fileparts([current_path '.m']);
 template_dir = [qc_func_dir, '/../templates'];
 
-cleaned_file_info = dir(cleaned_file);
-cleaned_dir = cleaned_file_info.folder;
-
 if ~isfile(cleaned_file)
     fprintf(['Cannot find cleaned file at ', cleaned_file, '\n'])
     return;
 end
+
+cleaned_file_info = dir(cleaned_file);
+cleaned_dir = cleaned_file_info.folder;
 
 cd(cleaned_dir)
 cd('../')
@@ -39,29 +39,32 @@ cd('../')
 cd(cleaned_dir)
 
 
-% Grab files, check if they exist 
-orig_file_info = dir('*orig*.nii.gz'); % needs to be in cleaned_dir too
-orig_file = [orig_file_info.folder, '/', orig_file_info.name];
+% Grab files, check if they exist
+orig_file_info = dir(fullfile(cleaned_dir, '*orig*.nii.gz')); % needs to be in cleaned_dir too
 
-% catch if there is no compare_file, and if so, do standard 8p (and auto
-% later if cicada is manual version)
+if isempty(orig_file_info)
+    fprintf(['ERROR, cannot find orig file matching *orig*.nii.gz in ', cleaned_dir, '\n'])
+    return;
+elseif numel(orig_file_info) > 1
+    fprintf(['ERROR, found multiple orig files matching *orig*.nii.gz in ', cleaned_dir, '\n'])
+    return;
+end
+
+orig_file = fullfile(orig_file_info(1).folder, orig_file_info(1).name);
+
+% If no comparison was supplied, use the standard 8p tag. Let
+% find_compare_file perform the actual lookup so an empty wildcard result
+% is never dereferenced here.
 if ~exist('compare_file', 'var') || isempty(compare_file) || ~ischar(compare_file) || strcmp(compare_file, 'x')
     fprintf('Will compare to standard 8 parameter \n')
-    compare_file_info = dir([cleaned_dir, '/*8p*']);
-    compare_file = [compare_file_info.folder, '/', compare_file_info.name]; % Give it default 8p to compare against
+    compare_file = '8p';
 end
 
 valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'};
-compare_file = find_compare_file(output_dir, compare_file, valid_tags); % outputs empty char array if corresponding file does not exist
+compare_file = find_compare_file(output_dir, compare_file, valid_tags);
 
 if ~isfile(compare_file)
     fprintf(['ERROR, cannot find compare file: ', compare_file, '\n'])
-    return;
-elseif ~isfile(orig_file)
-    fprintf('ERROR, cannot find orig file: funcfile.nii.gz \n')
-    return;
-elseif ~isfile(cleaned_file)
-    fprintf(['ERROR, cannot find Cleaned file: ', cleaned_file_info.name, '\n'])
     return;
 end
 

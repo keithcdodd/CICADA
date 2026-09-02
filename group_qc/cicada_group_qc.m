@@ -375,7 +375,7 @@ for idx = 1:num_runs
             % grab compare cleaning file now, will help find outliers
             compare_clean = readtable([task_dir, '/ic_manual_selection/compare_manual_cleaning.csv'], "ReadRowNames",true);
             % need increased GM, Smoothing Retention, best power overlap,
-            % and decreased FD, DVARS, & Spikiness
+            % and decreased FD and DVARS
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
                 (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | ((compare_clean{"FD_Corr", "Percent_Change"} > 0) & ...
                 (compare_clean{"DVARS_Corr", "Percent_Change"} > 0));
@@ -386,7 +386,7 @@ for idx = 1:num_runs
             % grab compare cleaning file now, will help find outliers
             compare_clean = readtable([task_dir, '/ic_auto_selection/compare_auto_cleaning.csv'], "ReadRowNames",true);
             % need increased GM, Smoothing Retention, best power overlap,
-            % and decreased FD, DVARS, & Spikiness
+            % and decreased FD and DVARS
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
                 (compare_clean{"best_power_overlap_norm", "Percent_Change"} < 0) | ((compare_clean{"FD_Corr", "Percent_Change"} > 0) & ...
                 (compare_clean{"DVARS_Corr", "Percent_Change"} > 0));

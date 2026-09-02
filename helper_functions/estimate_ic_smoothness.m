@@ -26,9 +26,10 @@ function fwhm_avg = estimate_ic_smoothness(ic_1d, func_mask_3d_nii, voxel_dim_3D
     funcmask_info.ImageSize = [nx, ny, nz];
     funcmask_info.DataType = 'single';
 
-    % Temporary filenames
-    ic_file_prefix = 'temp_ic';
+    % Unique temporary IC file; clean it up even if a later step errors.
+    ic_file_prefix = tempname;
     ic_file = [ic_file_prefix, '.nii.gz'];
+    ic_cleanup = onCleanup(@() delete_if_exists(ic_file)); %#ok<NASGU>
     mask_file = func_mask_3d_nii;
 
     % Save IC map (do NOT include extension in the filename)
@@ -56,6 +57,10 @@ function fwhm_avg = estimate_ic_smoothness(ic_1d, func_mask_3d_nii, voxel_dim_3D
         fwhm_avg = NaN;
     end
 
-    % Clean up
-    if exist(ic_file, 'file'), delete(ic_file); end
+end
+
+function delete_if_exists(file_path)
+    if exist(file_path, 'file')
+        delete(file_path);
+    end
 end
