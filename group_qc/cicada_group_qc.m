@@ -26,11 +26,12 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % performed (after detrending, bandpassing, and smoothing). 
 % Otherwise, voxelwise scaling is not performed 
 
-% smoothing_kernel: gaussian smoothing kernel FWHMx size. Default is same
-% as current size of functional (can do default by giving value of -1). QC
-% plots are most accurate if no smoothing (or minimal smoothing) is
-% applied. Smoothing will otherwise recorrelate nearby voxels and noise
-% profiles in QC plots will also bleed more together.
+% smoothing_kernel: Gaussian smoothing-kernel FWHM in millimeters. The
+% default is 1.5 times the mean spatial voxel size (request the default by
+% giving a negative value). QC plots are most accurate if no smoothing (or
+% minimal smoothing) is applied. Smoothing will otherwise recorrelate
+% nearby voxels and noise profiles in QC plots will also bleed more
+% together.
 
 % fpass is Hz for bandpassing. If used, 0.008 to 0.15 is recommended.
 % Default is no bandpassing []. Lower and higher frequencies should already
@@ -136,8 +137,14 @@ end
 
 % if no smoothing kernel exists, make it default value
 default_smoothing = 0;
-if ~exist('smoothing_kernel', 'var') || ~isnumeric(smoothing_kernel) || smoothing_kernel < 0
-    fprintf('Default smoothing gaussian kernel (FWHMx = 1.5x voxel size) will be applied\n')
+smoothing_kernel_is_valid = ...
+    exist('smoothing_kernel', 'var') == 1 && ...
+    isnumeric(smoothing_kernel) && isreal(smoothing_kernel) && ...
+    isscalar(smoothing_kernel) && ...
+    ~isnan(smoothing_kernel) && ~isinf(smoothing_kernel) && ...
+    smoothing_kernel >= 0;
+if ~smoothing_kernel_is_valid
+    fprintf('Default smoothing gaussian kernel (FWHM = 1.5x mean spatial voxel size) will be applied\n')
     default_smoothing = 1; % flag to make it the default later on in the function
 end
 
@@ -240,11 +247,11 @@ end
 % grab tr, which can be relevant for melodic 
 first_image_nifi_info = niftiinfo([first_image_info.folder, '/', first_image_info.name]);
 tr = first_image_nifi_info.PixelDimensions(4); % for use later with melodic
-voxel_size = round(mean(first_image_nifi_info.PixelDimensions(1:3)));
+voxel_size = mean(first_image_nifi_info.PixelDimensions(1:3));
 
 if default_smoothing == 1
-   smoothing_kernel = 1.5 * voxel_size; % default smoothing is 1.5 times the voxel size
-   fprintf(['Will smooth at FWHM of 1.5x voxel size: ', num2str(smoothing_kernel) ,' mm.\n'])
+   smoothing_kernel = 1.5 * voxel_size; % default is 1.5 times the mean spatial voxel size
+   fprintf(['Will smooth at FWHM of 1.5x mean spatial voxel size: ', num2str(smoothing_kernel) ,' mm.\n'])
 end
 
 if contains(first_image_info.name, 'CICADA')
@@ -1139,4 +1146,3 @@ T_results = rank_ICs_by_group_NSP(output_dir, IC_mel, group_funcmask_file, subj_
 writetable(T_results, 'group_ic_auto_selection.csv', 'Delimiter', ',')
 
 save('group_qc.mat', 'Group_QC', 'T_results')
-

@@ -3,12 +3,9 @@ function seed_based_conn(func_path, seed_path, smooth_kern, output_path, brain_m
     func_info = niftiinfo(func_path);
     func_data = niftiread(func_info);  % 4D: X x Y x Z x T
 
-    voxel_size = mean(func_info.PixelDimensions(1:3)); % to do the mm smoothing you want
-    
-    % sigma is about FWHMx / 2.355
-    fwhm_mm = smooth_kern; % FWHMx
-    fwhm_voxels = fwhm_mm / voxel_size;   
-    sigma = fwhm_voxels / 2.355; 
+    [sigma_vox, sigma_mm, voxel_sizes_mm] = ...
+        cicada_fwhm_mm_to_sigma_vox(smooth_kern, ...
+        func_info.PixelDimensions(1:3));
 
     seed_prob_info = niftiinfo(seed_path);
     seed_prob_data = niftiread(seed_prob_info);  % Probability map, 0-100
@@ -42,11 +39,18 @@ function seed_based_conn(func_path, seed_path, smooth_kern, output_path, brain_m
     end
 
     % Smoothing
-    fprintf('Smoothing functional data with kernel = %.2f mm\n', smooth_kern);
+    fprintf(['Smoothing functional data: requested FWHM = %.12g mm; ', ...
+        'voxel sizes = [%.12g %.12g %.12g] mm; sigma = ', ...
+        '%.12g mm = [%.12g %.12g %.12g] voxels.\n'], ...
+        smooth_kern, voxel_sizes_mm, sigma_mm, sigma_vox);
     func_smoothed = zeros(size(func_data), 'like', func_data);
 
     for t = 1:size(func_data, 4)
-        func_smoothed(:,:,:,t) = imgaussfilt3(func_data(:,:,:,t), sigma);
+        if smooth_kern == 0
+            func_smoothed(:,:,:,t) = func_data(:,:,:,t);
+        else
+            func_smoothed(:,:,:,t) = imgaussfilt3(func_data(:,:,:,t), sigma_vox);
+        end
     end
 
     % mean timeseries
