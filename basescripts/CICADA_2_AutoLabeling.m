@@ -478,7 +478,7 @@ Spikiness = max(abs(Data.TimeSeries))'; % a normalized response with larger valu
 Data.Spikiness = Spikiness;
 Spikiness_table = table();
 Spikiness_table{:, 'Spikiness'} = Spikiness;
-Results.Spikiness = Spikiness; % not currently used as a marker. Generally unnecessary given other factors considered. Might still be nice to have.
+Results.Spikiness = Spikiness; % retained for review; High_Spikiness is used below as a noise marker only when the absolute Spikiness value also exceeds 5.
 
 % Calculate and create Correlations table
 Corr_genprops_table = table();

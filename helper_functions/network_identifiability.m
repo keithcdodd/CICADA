@@ -54,11 +54,10 @@ function ident_table = network_identifiability(template_file, cleaned_file, comp
         mkdir(output_dir);
     end
 
-    % get template dir
-    [template_dir,~,~] = fileparts(template_file);
-
-    % Temporary resampled template path
-    resampled_template = fullfile(template_dir, 'resampled_template.nii.gz');
+    % Temporary resampled template path. Use a unique system-temporary
+    % filename so concurrent CICADA runs cannot overwrite one another.
+    resampled_template = [tempname, '.nii.gz'];
+    template_cleanup = onCleanup(@() delete_if_exists(resampled_template)); %#ok<NASGU>
 
     % resample template to functional space
     call_fsl(['flirt -in ', template_file,' -ref ', cleaned_file,' -applyxfm -usesqform -interp nearestneighbour -out ', resampled_template]);
@@ -395,6 +394,12 @@ end
 % =========================================================================
 % Helper functions
 % =========================================================================
+
+function delete_if_exists(file_path)
+    if exist(file_path, 'file')
+        delete(file_path);
+    end
+end
 
 function [pass_thresh, pass_delta_given, pass_both] = compute_global_pass_metrics(Z4D, eval_mask, z_thr, delta)
     K = size(Z4D, 4);
