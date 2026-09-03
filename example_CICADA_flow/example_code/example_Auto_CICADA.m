@@ -48,11 +48,11 @@ ses_id = '01';
 task_name = 'rest';
 fmriprep_dir = [base_dir, '/bids_data/derivatives/fmriprep'];
 
-% Set despike to 1 if you want to lightly despike the fMRI data before running ICA
-% Note: the idea is to very lightly denoise the fMRI data to potentially
-% assist with IC decomposition. This is largely untested, but theoretically
-% may help with particularly noisy data and should have low threshold to
-% hurt the analysis. This was not used as part of the original paper.
+% Set despike to 1 to conservatively despike the fMRI data before ICA.
+% CICADA uses sparse, GM-only AFNI-inspired localedit despiking to reduce
+% extreme voxel-time outliers that may interfere with ICA decomposition.
+% The tested CICADA default uses cut2 = 6. Despiking remains optional and
+% was not used as part of the original CICADA publication.
 despike = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -122,16 +122,8 @@ for i = 1:length(sub_ids)
     wm_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-WM_probseg.nii.gz'];
     csf_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-CSF_probseg.nii.gz'];
 
-	if despike == 1
-        % lightly despike the functional data first!
-        fprintf('Lightly Despiking the Data Before IC Decomposition!\n')
-        robust_z_thresh = 4;
-        [funcfile_despiked] = despike_fMRI(funcfile, gm_prob, robust_z_thresh);
-        funcfile = funcfile_despiked;
-    end
-    
     % default tolerance
     tolerance = 5;
 
-    Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
+    Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike)
 end

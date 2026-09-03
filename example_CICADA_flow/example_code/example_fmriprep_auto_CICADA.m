@@ -32,11 +32,11 @@ compare_files = {'8p'};
 % (similar to compare_files)
 task_events_files = {};
 
-% Set despike to 1 if you want to lightly despike the fMRI data before running ICA
-% Note: the idea is to very lightly denoise the fMRI data to potentially
-% assist with IC decomposition. This is largely untested, but theoretically
-% may help with particularly noisy data and should have low threshold to
-% hurt the analysis. This was not used as part of the original paper.
+% Set despike to 1 to conservatively despike the fMRI data before ICA.
+% CICADA uses sparse, GM-only AFNI-inspired localedit despiking to reduce
+% extreme voxel-time outliers that may interfere with ICA decomposition.
+% The tested CICADA default uses cut2 = 6. Despiking remains optional and
+% was not used as part of the original CICADA publication.
 despike = 0;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

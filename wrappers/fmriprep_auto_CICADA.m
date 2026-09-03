@@ -1,6 +1,6 @@
 function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike)
 % A wrapper script to make it easier to work with fmriprep datasets and run
-% CICADA on them. 
+% CICADA on them.
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
 % cicada_dir: home directory for cicada folder e.g., /path/cicada
 % sub_id: e.g., '101'
@@ -22,7 +22,7 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_nam
 if isfolder([fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id])
     has_ses = 1; % this is the expected structure, with multiple sessions
 else
-    has_ses = 0; 
+    has_ses = 0;
     ses_id = ''; % then give empty ses_id
     anat_ses_id = '';
 end
@@ -35,8 +35,6 @@ end
 if ~exist('despike', 'var') || (despike ~= 0 && despike ~=1)
     despike = 0; % default is to not despike
 end
-
-
 
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file = '';
@@ -61,7 +59,7 @@ end
 % if task_events_file does not exist, make it empty array [], 'x' would
 % work too given how I wrote the scripts.
 if ~exist('task_events_file', 'var') || ~ischar(task_events_file) || isempty(task_events_file)
-    task_events_file=[]; 
+    task_events_file=[];
     task_events_file_record = 'None Provided';
 elseif ~isfile(task_events_file)
     fprintf(['Task events file not found at ', task_events_file, '\n'])
@@ -139,17 +137,17 @@ else
         % it is possible anat file is actually not in a session folder, but
         % one level up. Try that
         fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/anat'];
-        
+
         % if this is not a folder, we are out of luck
         if ~isfolder(fmriprep_anat_dir)
             fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
             return;
         end
-        
+
         cd(fmriprep_anat_dir)
         anatfile_info = dir(['s*', sub_id, '*space-MNI*preproc_T1w.nii.gz']);
         anatfile = [anatfile_info.folder, '/', anatfile_info.name];
-        
+
         if ~isfile(anatfile)
             fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
             return;
@@ -175,15 +173,7 @@ else
         csf_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*label-CSF_probseg.nii.gz']);
         csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
     end
-    
-end
 
-if despike == 1
-    % lightly despike the functional data first!
-    fprintf('Lightly Despiking the Data...\n')
-    robust_z_thresh = 4;
-    [funcfile_despiked] = despike_fMRI(funcfile, gm_prob, robust_z_thresh);
-    funcfile = funcfile_despiked;
 end
 
 if has_ses == 1
@@ -207,11 +197,12 @@ fprintf(['anat folder location: ', fmriprep_anat_dir, '\n'])
 fprintf(['task_events_file: ', task_events_file_record, '\n'])
 fprintf(['compare_file: ', compare_file_record, '\n'])
 fprintf(['melodic folder: ', mel_fol, '\n\n'])
+fprintf(['despike: ', num2str(despike), '\n'])
 
 
 % For melodic folder, we can just check if the melodic folder exists, does
 % it have one of the final inputs?
 
-Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
+Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike)
 
 end

@@ -1,6 +1,6 @@
-function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance)
+function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike)
 % Make this into a function that does name=value, and specify what inputs
-% are required. 
+% are required.
 % Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
 % Strongly suggested inputs: subject specific anatfile, anatmask, gm_prob,
 % wm_prob, and csf_prob, as well as task_events_file (if task data).
@@ -10,6 +10,8 @@ function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, me
 % characters of either '6p', '8p', '9p', '12p', '16p', '18p',
 % '24p', '28p', '30p', '32p', or '36p' to use one of CICADA's
 % standard confound regressions for comparison.
+% despike 1 will do some light despiking of the data before diving into
+% CICADA, despike 0 (or left blank) will not
 
 % need to make sure CICADA folder and subfolders are added to path!
 Auto_CICADA_dir = fileparts(mfilename('fullpath')); % this gives current script path
@@ -17,7 +19,7 @@ basescript_path = [Auto_CICADA_dir, '/../basescripts'];
 cd(basescript_path);
 basescript_dir=pwd;
 cd(Auto_CICADA_dir);
-addpath(basescript_dir); % add the basescripts to path if not already done 
+addpath(basescript_dir); % add the basescripts to path if not already done
 
 % Run the shared portable CICADA/FSL startup. It respects an existing
 % valid FSLDIR and documents an optional manual FSL-path override.
@@ -28,10 +30,14 @@ end
 
 run([Auto_CICADA_dir, '/../startup_fsl_CICADA_path.m']) % sets up FSL and Matlab, if not done already
 
-% Now, check for required variables 
+% Now, check for required variables
 if ~exist('output_dir', 'var') || ~ischar(output_dir)
     fprintf('ERROR: Missing an output_dir specification or is not a character array!\n')
     return;
+end
+
+if ~exist('despike', 'var') || ~ismember(despike, [0 1])
+    despike = 0;
 end
 
 % now create a diary log in output dir and record everything per output:
@@ -70,7 +76,7 @@ if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_fil
 elseif ~isfile(compare_file)
     % it is a char array, but not a valid file
     % check to see if it is a valid tag instead!
-    valid_tags = {'6p', '8p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'}; % for compare file if you want to use an inbuilt one!
+    valid_tags = {'6p', '8p', '9p', '12p', '16p', '18p', '24p', '28p', '30p', '32p', '36p'}; % for compare file if you want to use an inbuilt one!
     if ~ismember(compare_file, valid_tags)
         fprintf('Not a valid tag or file... Will compare to 8p regression.\n')
         compare_file = '';
@@ -91,7 +97,7 @@ if ~isfile(compare_file)
 end
 
 if ~exist('task_events_file', 'var')
-    task_events_file='x'; 
+    task_events_file='x';
 end
 
 if ~exist('anatfile', 'var') || ~ischar(anatfile)
@@ -125,7 +131,48 @@ if redo_mel == 1
     mel_fol = 'x'; % initilaize it the same was as the basescript would
 end
 
-% Keep a diary log of output
+% if applicable, despike first
+if despike == 1
+
+    fprintf('Lightly Despiking the Data...\n')
+
+    % If no GM probability map was supplied, use the same default MNI GM
+    % probability map that CICADA_1 would normally select for gm_prob='x'.
+    if strcmp(gm_prob, 'x')
+        gm_prob = [Auto_CICADA_dir, ...
+            '/../templates/mni_icbm152_nlin_asym_09c/', ...
+            'mni_icbm152_gm_tal_nlin_asym_09c.nii.gz'];
+
+        fprintf('Using CICADA default MNI GM probability map for despiking.\n')
+    end
+
+    if ~isfile(gm_prob)
+        fprintf(['ERROR: Cannot find GM probability map for despiking: ', ...
+            gm_prob, '\n'])
+        return
+    end
+
+    cut2 = 6; % CICADA-tested localedit spikiness threshold -> cut2 = 6.
+          % Lower values edit more voxel-time samples; higher values edit fewer.
+
+    [funcfile, ~, despike_qc] = despike_fMRI( ...
+        funcfile, gm_prob, cut2, output_dir);
+
+    fprintf(['Despiking complete: cut2=%.6g; %d voxel-time samples edited ', ...
+        '(%.6f%% of GM voxel-time).\n'], ...
+        despike_qc.cut2, ...
+        despike_qc.n_altered_samples, ...
+        100 * despike_qc.fraction_gm_voxel_time_samples);
+
+    if redo_mel == 0 && ischar(mel_fol) && isfolder(mel_fol)
+        warning(['Despiking is enabled while an existing MELODIC folder may ', ...
+            'be reused. Confirm that the existing MELODIC decomposition was ', ...
+            'generated from the same despiked functional data. Otherwise ', ...
+            'rerun MELODIC.']);
+    end
+end
+
+% Keep a diary log of output from here to start CICADA
 
 fprintf('\n\n')
 %%%%%%%%%%%%%% ACTUALLY DO THE THINGS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,6 +183,17 @@ CICADA_1_command = [basescript_dir, '/CICADA_1_MasksandICAs.sh', ' -o ', output_
 
 fprintf(['Running: ', CICADA_1_command, '\n'])
 [status, cmdout_CICADA_1] = system(CICADA_1_command, '-echo');
+if status ~= 0
+    fprintf(2, ['ERROR: CICADA_1 failed with status ', ...
+        num2str(status), '. Stopping this CICADA run.\n'])
+
+    if ~isempty(strtrim(cmdout_CICADA_1))
+        fprintf(2, '\nCICADA_1 command output:\n%s\n', cmdout_CICADA_1);
+    end
+    diary off
+    return
+end
+
 fprintf('Done with CICADA_1\n\n')
 
 fprintf('Running: CICADA_2_AutoLabeling \n')
@@ -159,7 +217,7 @@ end
 
 fprintf('Done with CICADA_3\n\n')
 % close figures from CICADA_3_QC
-close all 
+close all
 
 diary off
 
