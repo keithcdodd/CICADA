@@ -9,3 +9,6 @@ validation/results/
 # Python bytecode/cache
 __pycache__/
 *.py[cod]
+example_CICADA_flow/.DS_Store
+example_CICADA_flow/.DS_Store
+templates/.DS_Store
