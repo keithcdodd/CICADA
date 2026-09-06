@@ -501,6 +501,20 @@ qc.volume_qc_file = volumeQcFile;
 
 fprintf('Volume-level despiking QC: %s\n', volumeQcFile);
 
+%% Save output NIfTI, preserving original storage representation
+
+scaledBack = (Y_out - offset) ./ scale;
+outputData = cast(scaledBack, storedClass);
+
+outNii = fullfile(outputDir, ...
+    [name, '_despiked_localGM_c2-', cutTag]);
+
+niftiwrite(outputData, outNii, funcInfo, "Compressed", true);
+
+despiked_file = [outNii, '.nii.gz'];
+
+fprintf('Output: %s\n', despiked_file);
+
 %% Enhanced QC plot
 
 if nAlteredVoxels > 0
@@ -625,8 +639,7 @@ if nAlteredVoxels > 0
     qcPng = fullfile(outputDir, ...
         [name, '_localGM_c2-', cutTag, '_QC.png']);
 
-    exportgraphics(hFig, qcPng, ...
-        'Resolution',180);
+    save_figure_robust(hFig, qcPng, 180);
 
     close(hFig);
 
@@ -639,20 +652,6 @@ else
     qc.qc_plot_file = '';
 
 end
-
-%% Save output NIfTI, preserving original storage representation
-
-scaledBack = (Y_out - offset) ./ scale;
-outputData = cast(scaledBack, storedClass);
-
-outNii = fullfile(outputDir, ...
-    [name, '_despiked_localGM_c2-', cutTag]);
-
-niftiwrite(outputData, outNii, funcInfo, "Compressed", true);
-
-despiked_file = [outNii, '.nii.gz'];
-
-fprintf('Output: %s\n', despiked_file);
 
 end
 
