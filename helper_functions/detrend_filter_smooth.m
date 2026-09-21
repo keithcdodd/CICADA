@@ -5,8 +5,6 @@ function [cleaned_file] = detrend_filter_smooth(file, funcmask, output_dir, smoo
 % bandpass, e.g. [0.008,0.15]
 % One could do low pass filtering, for example, with [0,0.15].
 
-
-
 % Set up: read file and convert the requested physical smoothing kernel to
 % a per-axis voxel-space sigma.
 [~, file_name, ~] = fileparts(file);
@@ -97,7 +95,7 @@ if (exist('fpass', 'var') == 1) && (isa(fpass, 'double') == 1) && ~isempty(fpass
     end
 
 
-    % Determine which components are enabled (per your conventions)
+    % Determine which components are enabled
     doHighPass = (low_hz > 0);      % enabled only if strictly above 0
     doLowPass  = (high_hz < nyq);   % enabled only if strictly below Nyquist
 
@@ -180,10 +178,16 @@ if smoothing_kernel ~= 0
     fprintf(['  Smoothing at ', num2str(smoothing_kernel), ' mm FWHM...\n'])
     file_data = zeros(size(file_orig_data));
     smoothing_tag = cicada_smoothing_fwhm_tag(smoothing_kernel);
+    mask_bin = double(funcmask_data ~= 0);
+    mask_smooth = imgaussfilt3(mask_bin, sigma_vox);
     % gaussian smooth and remask
     for idx2 = 1:size(file_orig_data,4)
-        curr_file_data = imgaussfilt3(file_filtered_data(:,:,:, idx2), sigma_vox);
-        curr_file_data(funcmask_data == 0) = 0; % mask it
+        curr_smoothed = imgaussfilt3(file_filtered_data(:,:,:,idx2), sigma_vox);
+
+        curr_file_data = zeros(size(curr_smoothed), 'like', curr_smoothed);
+        valid = (mask_bin ~= 0) & (mask_smooth > 0);
+        
+        curr_file_data(valid) = curr_smoothed(valid) ./ mask_smooth(valid);
         file_data(:,:,:, idx2) = curr_file_data;
     end
 
