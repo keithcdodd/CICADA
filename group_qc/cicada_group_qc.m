@@ -1,6 +1,7 @@
 function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, ...
     file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, ...
-    redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, subject_level_data_table)
+    redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, ...
+    subject_level_data_table, temporal_cleanup_mode)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -33,12 +34,15 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % nearby voxels and noise profiles in QC plots will also bleed more
 % together.
 
-% fpass is Hz for bandpassing. If used, 0.008 to 0.15 is recommended.
-% Default is no bandpassing []. Lower and higher frequencies should already
-% be diminished by ICA denoising. 
-
-% detrended degree is the degree of polynomial to detrend at. Detrending to
-% the second polynomial is the default if this is input incorrectly. 
+% fpass is Hz for optional temporal filtering. For resting-state work,
+% [0.008 0.15] is a supported example rather than a universal default.
+% Default is no filtering []. Task analyses require an analysis-specific
+% filtering choice that preserves frequencies represented in the task model.
+%
+% detrended_degree is the polynomial detrending degree. Degree 2 remains the
+% CICADA default if this input is missing/invalid, including when temporal
+% filtering is requested. Temporal operation order is detrend first, then
+% optional Butterworth filtering.
 
 % redo_melodic: whether or not to rerun the group melodic if it was already
 % run. 0 to not rerun, 1 to rerun regardless
@@ -49,6 +53,21 @@ function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, 
 % adjusteds (either 0 or 1 for manually IC adjusted) e.g., {'0', '1', '0'}
 % task_event_files should contain paths to the task_event_file(s)
 % (optional), also as a cell array
+
+% temporal_cleanup_mode controls how CICADA subject-level ICA cleanup is
+% coordinated with Group CICADA temporal preparation:
+%
+%   'matched'            default/current candidate:
+%                        apply identical temporal transform to original
+%                        BOLD and complete melodic_mix before nonaggressive
+%                        ICA regression.
+%
+%   'legacy_sequential'  historical reproduction:
+%                        use the existing subject-level cleaned image and
+%                        apply Group temporal processing afterward.
+%
+% This option affects CICADA cleaned data only. Comparison and original
+% files retain their existing Group temporal-preparation pathway.
 
 % if no task_event_file_list is given (e.g., it is all resting state) then
 % create an empty cell array of chars the same length as sub_id_list
@@ -149,8 +168,14 @@ if ~smoothing_kernel_is_valid
 end
 
 
-% if no detrended degree exists, make it 2
-if ~exist('detrended_degree', 'var') || ~isnumeric(detrended_degree)
+% Conservative 2F policy: retain the historical degree-2 default.
+% Harden malformed values so they cannot silently reach DETREND.
+detrended_degree_is_valid = ...
+    exist('detrended_degree', 'var') == 1 && ...
+    isa(detrended_degree, 'double') && isreal(detrended_degree) && ...
+    isscalar(detrended_degree) && isfinite(detrended_degree);
+
+if ~detrended_degree_is_valid
     fprintf('Default 2nd degree detrending will be applied\n')
     detrended_degree = 2;
 end
@@ -162,9 +187,73 @@ if not(isfolder(output_dir))
     mkdir(output_dir)
 end
 
-if (~exist('fpass', 'var') == 1) || (~isa(fpass, 'double') == 1) || isempty(fpass)
-    fpass = []; % if bandpass frequencies are not readable, assume default of no bandpassing
+% Preserve the historical double-pair filter input contract, while making
+% malformed requests explicit before subject processing.
+fpass_is_valid = ...
+    exist('fpass', 'var') == 1 && ...
+    isa(fpass, 'double') && isreal(fpass) && ...
+    numel(fpass) == 2 && all(isfinite(fpass(:)));
+
+if ~fpass_is_valid
+    if exist('fpass', 'var') == 1 && ~isempty(fpass)
+        fprintf(['Temporal filter input is not a finite double [low high] ', ...
+            'pair; no temporal filtering will be applied.\n']);
+    end
+    fpass = [];
+else
+    fpass = reshape(fpass, 1, 2);
 end
+
+%% Group CICADA temporal-cleanup strategy
+
+if ~exist('temporal_cleanup_mode', 'var') || ...
+        isempty(temporal_cleanup_mode)
+
+    temporal_cleanup_mode = 'matched';
+
+end
+
+if isstring(temporal_cleanup_mode) && ...
+        isscalar(temporal_cleanup_mode)
+
+    temporal_cleanup_mode = ...
+        char(temporal_cleanup_mode);
+
+end
+
+if ~ischar(temporal_cleanup_mode)
+
+    error([ ...
+        'temporal_cleanup_mode must be ''matched'' or ', ...
+        '''legacy_sequential''.']);
+
+end
+
+temporal_cleanup_mode = ...
+    lower(strtrim(temporal_cleanup_mode));
+
+% Convenience alias
+if strcmp(temporal_cleanup_mode, 'legacy')
+    temporal_cleanup_mode = 'legacy_sequential';
+end
+
+valid_temporal_cleanup_modes = { ...
+    'matched', ...
+    'legacy_sequential'};
+
+if ~ismember( ...
+        temporal_cleanup_mode, ...
+        valid_temporal_cleanup_modes)
+
+    error([ ...
+        'temporal_cleanup_mode must be ''matched'' or ', ...
+        '''legacy_sequential''.']);
+
+end
+
+fprintf( ...
+    'Group CICADA temporal cleanup mode: %s\n', ...
+    temporal_cleanup_mode);
 
 % Make separate photo folders, so it is easier to just scroll through them
 % all in the future. There is only 8p compare if auto, but 8p and auto if
@@ -278,6 +367,19 @@ gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a fil
 % initialize struct to store all information:
 Group_QC = struct;
 
+Group_QC.temporal_cleanup_mode = ...
+    temporal_cleanup_mode;
+
+% 2F temporal-processing provenance. Per-run TR/Nyquist/effective-cutoff
+% details are also available from cicada_temporal_transform.temporal_info.
+Group_QC.temporal_operation_order = 'detrend_then_filter';
+Group_QC.temporal_detrend_degree = detrended_degree;
+Group_QC.temporal_requested_fpass_hz = fpass;
+Group_QC.temporal_filter_family = 'Butterworth';
+Group_QC.temporal_filter_prototype_order = 2;
+Group_QC.temporal_filter_representation = 'transfer_function_ba';
+Group_QC.temporal_zero_phase_method = 'filtfilt';
+
 % because not all instances might work, we should keep our own counter
 % within the for loop 
 m = 1;
@@ -374,6 +476,15 @@ for idx = 1:num_runs
 
             % grab compare cleaning file now, will help find outliers
             compare_clean = readtable([task_dir, '/ic_manual_selection/compare_manual_cleaning.csv'], "ReadRowNames",true);
+
+            % grab the IC decisions:
+            IC_selection_file = fullfile( ...
+                task_dir, ...
+                'ic_manual_selection', ...
+                'manual_noise_dist_ICs.csv');
+
+            IC_selection_text = strtrim(fileread(IC_selection_file));
+
             % need increased GM, Smoothing Retention, best power overlap,
             % and decreased FD and DVARS
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
@@ -385,6 +496,15 @@ for idx = 1:num_runs
 
             % grab compare cleaning file now, will help find outliers
             compare_clean = readtable([task_dir, '/ic_auto_selection/compare_auto_cleaning.csv'], "ReadRowNames",true);
+
+            % grab the IC decisions:
+            IC_selection_file = fullfile( ...
+                task_dir, ...
+                'ic_auto_selection', ...
+                'auto_noise_dist_ICs.csv');
+
+            IC_selection_text = strtrim(fileread(IC_selection_file));
+
             % need increased GM, Smoothing Retention, best power overlap,
             % and decreased FD and DVARS
             poorly_improved = (compare_clean{"GM", "Percent_Change"} < 0) | (compare_clean{"Smoothing_Retention", "Percent_Change"} < 0) | ...
@@ -429,13 +549,74 @@ for idx = 1:num_runs
     % Now, apply detrending and smoothing to cleaned file, orig, and compare and copy/write it to data_dir
     % smoothing kernel is FWHM mm, as this is then properly converted
     % within the detrend_filter_smooth function
-    fprintf('Detrending & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
-    cleaned_file = detrend_filter_smooth(cleaned_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
+    %% Prepare CICADA cleaned data for Group analysis
+    fprintf('Detrending, Filtering, & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
+    temporal_transform_requested = ...
+        ~isempty(fpass) || ...
+        (isnumeric(detrended_degree) && ...
+         ~isempty(detrended_degree) && ...
+         detrended_degree > 0);
+
+    if cicada == 1 && ...
+            strcmp(temporal_cleanup_mode, 'matched') && ...
+            temporal_transform_requested
+
+        fprintf([ ...
+            'Preparing CICADA cleaned data with MATCHED temporal/ICA ', ...
+            'processing...\n']);
+
+        cleaned_file = ...
+            cicada_matched_temporal_cleanup( ...
+                orig_file, ...
+                cleaned_file, ...
+                task_dir, ...
+                funcmask, ...
+                data_dir, ...
+                smoothing_kernel, ...
+                fpass, ...
+                detrended_degree, ...
+                IC_selection_text);
+
+    else
+
+        if cicada == 1 && ...
+                strcmp(temporal_cleanup_mode, 'legacy_sequential')
+
+            fprintf([ ...
+                'Preparing CICADA cleaned data with LEGACY SEQUENTIAL ', ...
+                'temporal processing...\n']);
+
+        elseif cicada == 1 && ...
+                strcmp(temporal_cleanup_mode, 'matched') && ...
+                ~temporal_transform_requested
+
+            fprintf([ ...
+                'No detrending or temporal filtering requested; ', ...
+                'reusing subject-level ICA cleanup before spatial ', ...
+                'Group preparation.\n']);
+
+        else
+
+            fprintf([ ...
+                'Preparing cleaned data with standard Group temporal ', ...
+                'processing...\n']);
+
+        end
+
+        cleaned_file = ...
+            detrend_filter_smooth( ...
+                cleaned_file, ...
+                funcmask, ...
+                data_dir, ...
+                smoothing_kernel, ...
+                fpass, ...
+                detrended_degree);
     
-    fprintf('Detrending & Smoothing Compare Data and Copying to Group Data Folder...\n')
+    end
+    fprintf('Detrending, Filtering, & Smoothing Compare Data and Copying to Group Data Folder...\n')
     compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
 
-    fprintf('Detrending & Smoothing Orig Data and Copying to Group Data Folder...\n')
+    fprintf('Detrending, Filtering, & Smoothing Orig Data and Copying to Group Data Folder...\n')
     orig_file = detrend_filter_smooth(orig_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
 
     if voxelwise_scale_flag == 1

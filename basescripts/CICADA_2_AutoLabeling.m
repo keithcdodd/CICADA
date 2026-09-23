@@ -1051,7 +1051,7 @@ Results.signal_ICs = signal_ICs;
 Results.noise_indices = noise_indices;
 Results.noise_ICs = noise_ICs;
 
-% If we did manual IC checker through this script, we would, the past, update
+% If we did manual IC checker through this script, we would, in the past, update
 % IC_checker_table and then run just the part below. But we now have a
 % separate script for this. While redundent, this is still good to have as
 % a reference if ever needed.
