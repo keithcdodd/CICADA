@@ -4,6 +4,24 @@ function qc_corrs_table = grab_corr_sampling(sub_id, ses_id, task_name, Edge_Edg
 % computationally)
 initial_samps = samps;
 
+% Make Group QC sampling reproducible by subject/session/task.
+% Preserve the caller's random-number-generator state.
+original_rng = rng;
+rng_cleanup = onCleanup(@() rng(original_rng));
+
+% Generate a stable seed from subject/session/task identifiers.
+seed_key = char(string(sub_id) + "|" + ...
+                string(ses_id) + "|" + string(task_name));
+
+qc_seed = 5381;
+
+for k = 1:numel(seed_key)
+    qc_seed = mod(33 * qc_seed + double(seed_key(k)), 2^32);
+end
+
+rng(qc_seed, 'twister');
+fprintf('Group QC sampling seed: %.0f\n', qc_seed);
+
 % first create randperm of everything
 NotGM_NotGM_randperm = randperm(size(NotGM_NotGM_corr, 1)); 
 GM_GM_randperm = randperm(size(GM_GM_corr, 1));

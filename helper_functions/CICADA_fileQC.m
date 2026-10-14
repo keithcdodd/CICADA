@@ -109,6 +109,22 @@ fprintf('Calculating Denoised Data\n')
 % one could make use of if they desired
 fprintf('Calculating Relevant Correlations\n')
 
+% Make QC sampling reproducible across reruns.
+% Preserve the caller's random-number-generator state.
+original_rng = rng;
+rng_cleanup = onCleanup(@() rng(original_rng));
+
+% Derive a stable seed from the subject's cleaned directory.
+seed_key = char(string(cleaned_dir));
+qc_seed = 5381;
+
+for k = 1:numel(seed_key)
+    qc_seed = mod(33 * qc_seed + double(seed_key(k)), 2^32);
+end
+
+rng(qc_seed, 'twister');
+fprintf('CICADA QC sampling seed: %.0f\n', qc_seed);
+
 % create permutations for regions, subtract a little bit because sometimes
 % something funky happens and the sizes do not fully align with Edge
 % Voxels. Very close (probably related to thresholding values and minor 
