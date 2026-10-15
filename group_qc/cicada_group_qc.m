@@ -1274,13 +1274,22 @@ niftiwrite(cast(networks_IC_mel_max, 'single'), 'IC_mel_networks_zmax', IC_3D_in
 % OK, and then we can also just sort group IC from most to least gray
 % matter
 % Grab DVARS and FD though so you can easily measure correlations too
+% Keep QC metadata aligned with retained MELODIC images.
+kept_qc_table = group_qc_table(logical(image_keep(:)), :);
+
+assert(height(kept_qc_table) == numel(data_files), ...
+    'Retained subject metadata and image counts do not match.');
+
 subj_func_files = data_files;
 DVARS_all = {};
 FD_all = {};
 notGM_all = {};
 for i1 = 1:length(data_files)
-    curr_subj_home = [cicada_home, '/', group_qc_table.subject{i1}, '/', group_qc_table.session{i1}, '/', group_qc_table.task{i1}];
-
+    curr_subj_home = fullfile(cicada_home, ...
+        kept_qc_table.subject{i1}, ...
+        kept_qc_table.session{i1}, ...
+        kept_qc_table.task{i1});
+    
     % grab notGM mask
     curr_notGM_mask = [curr_subj_home, '/region_masks/NotGM_mask.nii.gz'];
     notGM_all{end+1} = curr_notGM_mask;

@@ -9,6 +9,7 @@
 
 # immediately exit upon common error
 set -euo pipefail
+launch_dir="$(pwd -P)"
 echo
 
 usage(){
@@ -24,6 +25,7 @@ Usage: `basename $0` -o /cicada_dir/sub_id/ses_id/task_id -F funcfile.nii.gz -f 
   [ -w input : (preferred) wm_prob: white matter probability file, will default to MNI 2009c asym ]
   [ -c input : (preferred) csf_prob: CSF probability file, will default to MNI ]
   [ -m input : (optional) mel_fol: melodic folder to use (instead of redoing melodic) ]
+  [ -u input : (optional) user-provided subependymal NIfTI map; default is CICADA's calculated map ]
   [ -h : help: print this help section here ]
 
   Run the first part of CICADA (make masks, run MELODIC, and do relevant calculations to prepare for IC selection).
@@ -35,7 +37,7 @@ EOF
   exit 1
 }
 
-if [ $# -lt 8 -o $# -gt 21 ]; then
+if [ $# -lt 8 -o $# -gt 23 ]; then
   echo "Number of inputs ($#) are incorrect"
   echo
 	usage
@@ -56,6 +58,7 @@ wm_prob="x"
 gm_prob="x"
 brain_network_template="x"
 mel_fol="x"
+subepe_user_map=""
 cd "$(dirname $0)"
 script_dir="$(pwd)"
 cd "${script_dir}/../templates"
@@ -63,7 +66,7 @@ template_dir="$(pwd)"
 mni_dir="${template_dir}/mni_icbm152_nlin_asym_09c"
 cd "${script_dir}"
 
-while getopts "o:F:f:C:A:a:g:w:c:m:h" opt; do
+while getopts "o:F:f:C:A:a:g:w:c:m:u:h" opt; do
     case "${opt}" in
       o)
     		output_dir=${OPTARG}
@@ -94,6 +97,9 @@ while getopts "o:F:f:C:A:a:g:w:c:m:h" opt; do
         ;;
       m)
         mel_fol=${OPTARG}
+        ;;
+      u)
+        subepe_user_map=${OPTARG}
         ;;
       h)
         usage
@@ -144,6 +150,48 @@ fi
 if [ "${csf_prob}" = "x" ]; then
   echo "Using MNI csf_prob"
   csf_prob="${mni_dir}/mni_icbm152_csf_tal_nlin_asym_09c.nii.gz"
+fi
+
+# Resolve input paths relative to the directory where CICADA was launched.
+# Absolute paths are left unchanged.
+resolve_input_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s\n' "${launch_dir}/$1" ;;
+    esac
+}
+
+output_dir="$(resolve_input_path "${output_dir}")"
+funcfile="$(resolve_input_path "${funcfile}")"
+funcmask="$(resolve_input_path "${funcmask}")"
+confoundsfile="$(resolve_input_path "${confoundsfile}")"
+
+anatfile="$(resolve_input_path "${anatfile}")"
+anatmask="$(resolve_input_path "${anatmask}")"
+gm_prob="$(resolve_input_path "${gm_prob}")"
+wm_prob="$(resolve_input_path "${wm_prob}")"
+csf_prob="$(resolve_input_path "${csf_prob}")"
+
+# The MELODIC folder is optional; "x" means use CICADA's default.
+if [ "${mel_fol}" != "x" ]; then
+    mel_fol="$(resolve_input_path "${mel_fol}")"
+fi
+
+
+# Validate the optional user-supplied subependymal map path.
+if [ -n "${subepe_user_map}" ]; then
+	case "${subepe_user_map}" in
+    /*) ;;
+    *) subepe_user_map="${launch_dir}/${subepe_user_map}" ;;
+	esac
+
+    if [ ! -f "${subepe_user_map}" ]; then
+        echo "ERROR: Cannot find user subependymal map at ${subepe_user_map}"
+        exit 1
+    fi
+    echo "User subependymal map requested: ${subepe_user_map}"
+else
+    echo "Using CICADA's calculated subependymal map."
 fi
 if [ "${brain_network_template}" == "x" ]; then
   # assume template is same location as CICADA script directory
@@ -282,6 +330,18 @@ cp "${csf_prob}" "${output_anatfol}/CSF_probseg.nii.gz"
 cp "${anatfile}" "${output_anatfol}/anatfile.nii.gz"
 cp "${anatmask}" "${output_anatfol}/anatmask.nii.gz"
 
+# Preserve the user-provided subependymal anatomical probability map.
+if [ -n "${subepe_user_map}" ]; then
+    subepe_input_copy="${output_anatfol}/Subepe_probseg.nii.gz"
+
+    if [ ! "${subepe_user_map}" -ef "${subepe_input_copy}" ]; then
+        cp "${subepe_user_map}" "${subepe_input_copy}"
+    fi
+
+    subepe_user_map="${subepe_input_copy}"
+fi
+
+
 # point to anatomical aspects from subject space
 GMprob="${output_anatfol}/GM_probseg.nii.gz"
 WMprob="${output_anatfol}/WM_probseg.nii.gz"
@@ -314,7 +374,7 @@ funcmask="${output_dir}/funcmask_orig.nii.gz" # func brain mask, but will relabe
 funcfile_nomask="${output_dir}/${funcfilename}_unmasked.nii.gz" # functional file unmasked version
 
 # create an eroded anatmask which could be helpful later for looking more towards the center of the brain
-# four erodes is likely good for standard 2mm space
+# five erodes for standard 2mm MNI adult space -- may need to be altered  for different voxel size or brain size/template
 fslmaths "${anatmask}" -ero -ero -ero -ero -ero "${output_anatfol}/anatmask_eroded.nii.gz"
 anatmask_eroded="${output_anatfol}/anatmask_eroded.nii.gz"
 
@@ -402,6 +462,34 @@ fslmaths "${output_regionmask_dir}/Subepe_tmp_prob.nii.gz" -div "${range_vals[1]
 fslmaths "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz" -thr 1 -bin "${output_regionmask_dir}/Subepe_almost_tmp_mask.nii.gz" # binarize anything above 1
 fslmaths "${output_regionmask_dir}/Subepe_almost_tmp_prob.nii.gz" -uthr 1 -add "${output_regionmask_dir}/Subepe_almost_tmp_mask.nii.gz" "${output_regionmask_dir}/Subepe_prob.nii.gz"
 fslmaths "${output_regionmask_dir}/Subepe_prob.nii.gz" -thrP 50 -bin "${output_regionmask_dir}/Subepe_mask.nii.gz" # need to be giving for Subepe
+
+# Preserve CICADA's calculated subependymal map and mask.
+# These remain available when an optional user map is selected.
+cp "${output_regionmask_dir}/Subepe_prob.nii.gz" \
+   "${output_regionmask_dir}/Subepe_calculated_prob.nii.gz"
+
+cp "${output_regionmask_dir}/Subepe_mask.nii.gz" \
+   "${output_regionmask_dir}/Subepe_calculated_mask.nii.gz"
+   
+# If a user-provided subependymal probability map is supplied,
+# resample it into functional space and use it instead.
+# Otherwise, retain CICADA's calculated map and mask.
+if [ -n "${subepe_user_map}" ]; then
+    echo "    Using user-provided subependymal probability map"
+
+    flirt -ref "${funcmask}" \
+          -in "${subepe_user_map}" \
+          -out "${output_regionmask_dir}/Subepe_user_tmp_resam.nii.gz" \
+          -usesqform -applyxfm
+
+    fslmaths "${output_regionmask_dir}/Subepe_user_tmp_resam.nii.gz" \
+             -mul "${funcmask}" \
+             "${output_regionmask_dir}/Subepe_prob.nii.gz"
+
+    fslmaths "${output_regionmask_dir}/Subepe_prob.nii.gz" \
+             -thrP 50 -bin \
+             "${output_regionmask_dir}/Subepe_mask.nii.gz"
+fi
 
 # Calculate WMorCSF, GMorCSF, and GMorWM regions, can be helpful
 fslmaths "${output_regionmask_dir}/WM_prob.nii.gz" -add "${output_regionmask_dir}/CSF_prob.nii.gz" -thr 0 "${output_regionmask_dir}/WMorCSF_prob.nii.gz"

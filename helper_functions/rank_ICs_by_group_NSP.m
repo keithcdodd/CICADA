@@ -201,9 +201,14 @@ mean_smoothness_norm = normalize(mean_smoothness, 'range');
 mean_abs_fd_corr_norm = normalize(mean_abs_fd_corr, 'range');
 mean_abs_dvars_corr_norm = normalize(mean_abs_dvars_corr, 'range');
 
-% kmeans cluster signal and not
-[idx, ~] = kmeans(gNSP_norm(:), 3, 'Start', [0; median(gNSP_norm(:)); 1]);
-signal_label = double(idx ~= 1)';
+% Cluster ICs by group NSP.
+[idx, cluster_centroids] = kmeans(gNSP_norm(:), 3, ...
+    'Start', [0; median(gNSP_norm(:)); 1]);
+
+% Cluster labels are arbitrary: identify the lowest-scoring cluster.
+[~, noise_cluster_id] = min(cluster_centroids);
+
+signal_label = double(idx ~= noise_cluster_id)';
 
 %% Output table
 T_results = table((1:nICs)', signal_label', gNSP_norm(:), mean_gm_overlap_norm', mean_power_overlap_norm(:), mean_smoothness_norm', power_overlap_condition, mean_abs_fd_corr_norm', mean_abs_dvars_corr_norm', ...
