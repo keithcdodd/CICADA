@@ -470,7 +470,7 @@ cp "${output_regionmask_dir}/Subepe_prob.nii.gz" \
 
 cp "${output_regionmask_dir}/Subepe_mask.nii.gz" \
    "${output_regionmask_dir}/Subepe_calculated_mask.nii.gz"
-   
+
 # If a user-provided subependymal probability map is supplied,
 # resample it into functional space and use it instead.
 # Otherwise, retain CICADA's calculated map and mask.
@@ -657,7 +657,10 @@ awk '{print $1}' ${mel_fol}/melodic_ICstats > ${ROIcalcfol}/IC_exp_variance.txt
 fslmaths "${mel_fol}/ICprobabilities.nii.gz" -thr 0.95 "${ROIcalcfol}/highprob_tmp_prob.nii.gz"
 fslmaths "${ROIcalcfol}/highprob_tmp_prob.nii.gz" -bin "${ROIcalcfol}/highprob_tmp_mask.nii.gz"
 
-# calculate a nonthresholded version of the z stats, absolute valued
+# Smoothing_Retention uses MELODIC mixture-model-thresholded Z-stat maps (see mmthresh value of melodic), but without further thresholding).
+# The original signed map is smoothed before taking absolute values.
+# This measures retention of absolute magnitude, including losses from
+# spatial cancellation of nearby positive and negative IC loadings.
 fslmaths ${mel_fol}/ICthresh_zstat.nii.gz -abs "${ROIcalcfol}/fullvolICA_tmp_nothresh.nii.gz"
 
 # Calculate a smoothed version for the Smoothing_Retention feature.
@@ -730,6 +733,10 @@ network_template="${template_dir}/network_template_${task_name}.nii.gz"
 echo "    Brain Network Template Calculated. Now finally do all the relevant calculations!"
 #calcfile="${ROIcalcfol}/highprob_tmp_prob.nii.gz"
 #calcfile="${mel_fol}/ICprobabilities.nii.gz"
+
+# Anatomical overlap uses absolute unthresholded MELODIC IC loadings.
+# Unlike Smoothing_Retention, these measurements include the full
+# spatial loading distribution rather than only suprathreshold regions.
 calcfile="${mel_fol}/melodic_IC_abs.nii.gz"
 
 # All voxels
