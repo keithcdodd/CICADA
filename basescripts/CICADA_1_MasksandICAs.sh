@@ -114,22 +114,22 @@ done
 if [ "${output_dir}" = "x" ]; then
   echo "No output directory specified"
   usage
-  exit
+  exit 2
 fi
 if [ "${funcfile}" = "x" ]; then
   echo "Missing an unmasked functional file"
   usage
-  exit
+  exit 2
 fi
 if [ "${funcmask}" = "x" ]; then
   echo "Missing a functional mask file"
   usage
-  exit
+  exit 2
 fi
 if [ "${confoundsfile}" = "x" ]; then
   echo "Missing a confounds file. Should be .tsv or .csv, confounds are in columns with headers."
   usage
-  exit
+  exit 2
 fi
 if [ "${anatfile}" = "x" ]; then
   echo "Using MNI anatfile"
@@ -225,57 +225,57 @@ echo
 # Now check that these options all exist/work!
 if [ ! -d "${template_dir}" ]; then
   echo "Cannot find template directory at ${template_dir}"
-  exit
+  exit 1
 fi
 
 if [ ! -d "${mni_dir}" ]; then
   echo "Cannot find mni directory at ${mni_dir}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${funcfile} ]; then
   echo "Cannot find functional file at ${funcfile}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${funcmask} ]; then
   echo "Cannot find functional mask at ${funcmask}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${confoundsfile} ]; then
   echo "Cannot find confoundsfile at ${confoundsfile}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${anatfile} ]; then
   echo "Cannot find anatfile at ${anatfile}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${anatmask} ]; then
   echo "Cannot find anatmask at ${anatmask}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${gm_prob} ]; then
   echo "Cannot find grey matter probability file at ${gm_prob}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${wm_prob} ]; then
   echo "Cannot find white matter probability file at ${wm_prob}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${csf_prob} ]; then
   echo "Cannot find CSF probability file at ${csf_prob}"
-  exit
+  exit 1
 fi
 
 if [ ! -f ${brain_network_template} ]; then
   echo "Cannot find brain network template at ${brain_network_template}"
-  exit
+  exit 1
 fi
 
 # if output dir does not exist, make it (do not delete the whole thing because it may contain a melodic folder or log file that you want)
