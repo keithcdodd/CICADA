@@ -100,6 +100,47 @@ Results = struct;
 % SignalLabel column (which should be updated):
 auto_table = Results_Auto.IC_checker_table;
 
+
+%% Validate manual IC checker against original AutoCICADA selection
+
+% Require the two fields used for manual classification.
+required_fields = {'PotentialICs', 'SignalLabel'};
+
+assert(all(ismember(required_fields, ...
+    manual_table.Properties.VariableNames)), ...
+    'Manual checker must contain PotentialICs and SignalLabel.');
+
+% Compare component identifiers.
+manual_ids = manual_table.PotentialICs;
+auto_ids = auto_table.PotentialICs;
+
+assert(isnumeric(manual_ids) && isnumeric(auto_ids), ...
+    'IC identifiers must be numeric.');
+
+assert(all(isfinite(manual_ids(:))) && ...
+    all(manual_ids(:) == fix(manual_ids(:))), ...
+    'Manual checker contains invalid IC identifiers.');
+
+assert(numel(unique(manual_ids)) == numel(manual_ids), ...
+    'Manual checker contains duplicate IC identifiers.');
+
+assert(numel(unique(auto_ids)) == numel(auto_ids), ...
+    'Auto checker contains duplicate IC identifiers.');
+
+assert(isequal(sort(double(manual_ids(:))), ...
+    sort(double(auto_ids(:)))), ...
+    'Manual checker IC identifiers do not match AutoCICADA.');
+
+% Every manual decision must explicitly be signal (1) or noise (0).
+manual_labels = manual_table.SignalLabel;
+
+assert((isnumeric(manual_labels) || islogical(manual_labels)) ...
+    && all(isfinite(double(manual_labels(:)))) ...
+    && all(ismember(manual_labels(:), [0 1])), ...
+    'Manual SignalLabel must contain only 0 or 1.');
+
+fprintf('Manual IC checker matches AutoCICADA identifiers, as needed.\n');
+
 % do some extra work to make sure we have the same columns as auto table
 % First, make sure the sort of the manual table is the same as the auto
 % table:
@@ -328,8 +369,103 @@ if ~isempty(dir('sub*ses*task*9p*.nii.gz'))
     movefile('sub*ses*task*9p*.nii.gz', cleaned_dir)
 end
 
-% get cleaned_filename
-cleaned_file_info = dir([cleaned_dir, '/*CICADA*manual*.nii.gz']);
-cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
+
+%% Locate final ManualCICADA cleaned image
+
+cleaned_file_info = cicada_find_files( ...
+    fullfile(cleaned_dir, '*CICADA*manual*.nii.gz'));
+
+assert(isscalar(cleaned_file_info), ...
+    'Expected one ManualCICADA cleaned NIfTI, found %d.', ...
+    numel(cleaned_file_info));
+
+cleaned_file = fullfile( ...
+    cleaned_file_info(1).folder, cleaned_file_info(1).name);
+
+%% Save cleaned-image processing provenance
+
+provenance = struct();
+
+provenance.ProvenanceSchemaVersion = '1.0';
+
+provenance.Pipeline = struct( ...
+    'Name', 'CICADA', ...
+    'Stage', 'ManualCICADA', ...
+    'Repository', 'https://github.com/keithcdodd/CICADA', ...
+    'Git', cicada_git_provenance(mfilename('fullpath')));
+
+provenance.GeneratedAtLocal = char(datetime( ...
+    "now", "Format", "yyyyMMdd'T'HHmmss"));
+
+provenance.RepetitionTime = Data.tr;
+
+% Original imaging inputs and selection records.
+provenance.Sources = struct( ...
+    'InputBOLD', fullfile(task_dir, 'funcfile.nii.gz'), ...
+    'FunctionalMask', fullfile(task_dir, 'funcmask.nii.gz'), ...
+    'MELODICMixingMatrix', fullfile(mel_fol, 'melodic_mix'), ...
+    'AutoDecisionVariables', fullfile(task_dir, ...
+        'ic_auto_selection', 'DecisionVariables_Auto.mat'), ...
+    'ManualChecker', fullfile(task_dir, ...
+        'ic_manual_selection', 'IC_manual_checker.csv'));
+
+% Link to AutoCICADA provenance when available.
+auto_json = fullfile(cleaned_dir, ...
+    [prefix, '_CICADA_auto_nonagg_bold.json']);
+
+if isfile(auto_json)
+    provenance.Sources.AutoCICADAProvenanceJSON = auto_json;
+end
+
+% Preserve automatic and final manual IC selections.
+provenance.ICSelection = struct( ...
+    'Method', 'manual', ...
+    'AutoSignalICs', reshape(Results_Auto.signal_ICs, 1, []), ...
+    'AutoNoiseICs', reshape(Results_Auto.noise_ICs, 1, []), ...
+    'SignalICs', reshape(Results.signal_ICs, 1, []), ...
+    'NoiseICs', reshape(Results.noise_ICs, 1, []), ...
+    'ChangedICs', reshape( ...
+        Results.IC_selection_changes.PotentialICs, 1, []), ...
+    'ChangedCount', height(Results.IC_selection_changes));
+
+% Actual denoising operation.
+provenance.Denoising = struct( ...
+    'Tool', 'FSL fsl_regfilt', ...
+    'Mode', 'nonaggressive', ...
+    'Command', fsl_regfilt_command);
+
+% Inherited task-HRF model, if available.
+if isfield(Data, 'Task') && ...
+        isfield(Data.Task, 'HRFModel')
+    provenance.TaskHRF = Data.Task.HRFModel;
+    provenance.TaskHRFSource = 'AutoCICADA';
+end
+
+% Upstream fMRIPrep metadata, only when available.
+preproc_json = fullfile(task_dir, 'funcfile_preproc_bold.json');
+
+if isfile(preproc_json)
+    provenance.SourcePreprocBOLDJSON = preproc_json;
+    provenance.SourcePreprocBOLDMetadata = ...
+        jsondecode(fileread(preproc_json));
+end
+
+% Write sidecar alongside final cleaned NIfTI.
+provenance_json_file = regexprep( ...
+    cleaned_file, '\.nii\.gz$', '.json');
+
+assert(~strcmp(provenance_json_file, cleaned_file), ...
+    'Unexpected cleaned-image extension.');
+
+[fid, msg] = fopen(provenance_json_file, 'w');
+
+assert(fid ~= -1, ...
+    'Cannot create ManualCICADA provenance JSON: %s', msg);
+
+fprintf(fid, '%s\n', jsonencode(provenance));
+fclose(fid);
+
+fprintf('Saved ManualCICADA provenance: %s\n', ...
+    provenance_json_file);
 
 end

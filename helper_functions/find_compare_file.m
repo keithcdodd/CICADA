@@ -46,10 +46,11 @@ end
 
 compare_tag = compare_file;
 
-
 % See whether this tagged comparison already exists.
-compare_file_info = ...
-    dir(fullfile(cleaned_dir, ['*_', compare_tag, '_*.nii.gz']));
+% Exclude macOS hidden AppleDouble files.
+compare_file_info = cicada_find_files( ...
+    fullfile(cleaned_dir, ['*_', compare_tag, '_*.nii.gz']));
+
 
 if isscalar(compare_file_info)
 

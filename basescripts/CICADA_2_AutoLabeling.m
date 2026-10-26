@@ -30,7 +30,28 @@ function [cleaned_file] = CICADA_2_AutoLabeling(output_dir, task_events_file, co
 if ~exist('support_options', 'var') || isempty(support_options)
     support_options = struct();
 end
+
+
+% Separate task-timing options from support/reliability options.
+task_timing_options = struct();
+
+timing_fields = { ...
+    'TaskSamplingReference', ...
+    'PreprocBoldJSON', ...
+    'LegacyFMRIPrepSTC', ...
+    'AcquisitionSliceTiming'};
+
+for k = 1:numel(timing_fields)
+    field = timing_fields{k};
+
+    if isfield(support_options, field)
+        task_timing_options.(field) = support_options.(field);
+        support_options = rmfield(support_options, field);
+    end
+end
+
 support_options = cicada_support_options(support_options);
+
 
 % check output_dir exists 
 if ~isfolder(output_dir)
@@ -127,6 +148,7 @@ end
 % initialize
 Tables = struct;
 Data = struct;
+Results = struct;
 Data.tr = funcfile_data_info.PixelDimensions(4);
 Data.numvolumes = funcfile_data_info.ImageSize(4);
 repetitiontime = Data.tr;
@@ -135,7 +157,8 @@ numvolumes = Data.numvolumes;
 T = repetitiontime .* numvolumes;
 TR = repetitiontime;
 
-hrf_conditions_table = table([]);
+hrf_conditions_table = table([]); % will end up normalized
+hrf_conditions_raw_table = table(); % will be pre-normalization
 
 
 % model a double gamma hrf
@@ -157,14 +180,6 @@ Data.HRF_general.hrf_padded = hrf_padded;
 if ~strcmp(task_events_file, '')
     if isfile(task_events_file)
         task_events_table = readtable(task_events_file, 'FileType', 'delimitedtext');
-        % remove 'baseline' if it exists (do not want to model a baseline)
-        % NOTE: column needs to be called trial_type, otherwise an error will occur here!
-        % Also, if you have baselines, they need to be called baseline
-        baseline_exists = find(strcmp(task_events_table.trial_type, 'baseline'));
-        if ~isempty(baseline_exists)
-            task_events_table(baseline_exists, :) = [];
-        end
-        
     else
         fprintf(['Cannot find ', task_events_file, ...
             '. Running without task condition information.\n'])
@@ -501,67 +516,132 @@ if isfile(task_events_file)
     % ideally this is worked to look for the names: "onset", "duration",
     % "trial_type"
 
-    condition_names = unique(task_events_table.trial_type)';
-    block = zeros(numvolumes, length(condition_names));
-    
-    for j = 1:length(condition_names)
-        curr_condition_name = condition_names{j};
-        curr_condition_rows = find(strcmp(task_events_table.trial_type, curr_condition_name));
-        onsets = task_events_table.onset;
-        durations = task_events_table.duration;
-        for k = 1:length(curr_condition_rows)
-            % ceiling is used incase it is some weird task that does not
-            % fit TR lengths, round up to model a delayed HRF
-            % start index add 1 because if start at timepiont 0, index is 1
-            % in matlab
-            start_ind = ceil(onsets(curr_condition_rows(k))./TR)+1;
-            % don't add one for stop index, because in relation to start
-            % index
-            % (duration / TR) -> round up for number of blocks, but
-            % start_ind counts as a block, so subtract 1. This works for
-            % everything but 0 (impulse) since rounding up still gives 0. 
-            stop_ind = start_ind + ceil(durations(curr_condition_rows(k))./TR) - 1;
+    % Identify modeled conditions, excluding baseline.
+    event_labels = strtrim(string(task_events_table.trial_type));
+    modeled = ~strcmpi(event_labels, "baseline");
 
-            % To fix the 0 duration issue (impulse) just set stop_ind to
-            % start_ind
-            if stop_ind < start_ind
-                stop_ind = start_ind;
+    condition_names_orig = cellstr( ...
+        unique(event_labels(modeled)))';
+
+    if isempty(condition_names_orig)
+        error('No modeled task conditions found.');
+    end
+
+    % Preserve a TR-grid event representation for QC only.
+    % Positive-duration events are represented by fractional
+    % overlap with each TR bin. Impulses are marked in their bin.
+    bin_start = (0:numvolumes-1)' * TR;
+    bin_end = bin_start + TR;
+    block = zeros(numvolumes, numel(condition_names_orig));
+
+    for j = 1:numel(condition_names_orig)
+        rows = find(event_labels == string(condition_names_orig{j}));
+
+        for k = rows(:)'
+            onset_k = double(task_events_table.onset(k));
+            duration_k = double(task_events_table.duration(k));
+
+            if duration_k == 0
+                idx = floor(onset_k/TR) + 1;
+
+                if idx >= 1 && idx <= numvolumes
+                    block(idx,j) = 1;
+                end
+            else
+                coverage = max(0, ...
+                    min(bin_end, onset_k + duration_k) ...
+                    - max(bin_start, onset_k));
+
+                block(:,j) = min(1, ...
+                    block(:,j) + coverage/TR);
             end
-            block(start_ind:stop_ind, j) = 1;
         end
     end
 
-    events_table = array2table(block, 'VariableNames', condition_names);
+    events_table = array2table(block, ...
+        'VariableNames', condition_names_orig);
 
-    % The above should give us blocks for all conditions, now convolve with hrf
-    % to get a guestimated hrf response for each condition:
-    hrf_conditions = zeros(size(block));
-    for j = 1:length(condition_names)
-        convolution = conv(Data.HRF_general.hrf_padded, block(:,j)); % convolve with non-normalized but padded so it doesn't just decrease
-        hrf_conditions(:, j) = convolution(1:size(block,1));
+
+    % Automatically locate metadata preserved by CICADA_1.
+    % Explicit user-provided timing settings take precedence.
+    has_reference = isfield(task_timing_options, ...
+        'TaskSamplingReference') && ...
+        ~isempty(task_timing_options.TaskSamplingReference);
+
+    has_json = isfield(task_timing_options, ...
+        'PreprocBoldJSON') && ...
+        ~isempty(task_timing_options.PreprocBoldJSON);
+
+    if ~has_reference && ~has_json
+        json_file = fullfile(pwd, 'funcfile_preproc_bold.json');
+
+        if isfile(json_file)
+            task_timing_options.PreprocBoldJSON = json_file;
+            fprintf('Using fMRIPrep timing metadata: %s\n', json_file);
+        end
     end
-   
-    condition_names_orig = condition_names; % save original
-    hrf_conditions(:,length(condition_names_orig)+1) = sum(hrf_conditions,2); 
-    hrf_conditions = normalize(hrf_conditions); % normalize to remove mean so we don't have power at 0Hz overtaking
-    condition_names = [condition_names, 'Combined']; 
-    condition_corrs = zeros(length(ICs), length(condition_names));
+
+    % Resolve the task-HRF sampling times from preprocessing provenance.
+    [sample_times, timing_info] = cicada_resolve_task_timing( ...
+        TR, numvolumes, task_timing_options);
+
+
+    % New continuous-time convolution, independent of TR bins.
+    hrf_conditions_raw = cicada_task_hrf_design( ...
+        task_events_table, TR, numvolumes, ...
+        condition_names_orig, p, sample_times);
+
+    hrf_conditions_raw_table = array2table( ...
+        hrf_conditions_raw, ...
+        'VariableNames', condition_names_orig);
+
+    % Combined is derived before standardizing.
+    hrf_conditions_full = [hrf_conditions_raw, ...
+        sum(hrf_conditions_raw, 2)];
+
+    if any(~isfinite(hrf_conditions_full(:))) || ...
+            any(std(hrf_conditions_full, 0, 1) <= eps)
+        error('Invalid or constant task-HRF regressors.');
+    end
+
+    % Keep normalized regressors for existing IC classification.
+    hrf_conditions = normalize(hrf_conditions_full);
+    condition_names = [condition_names_orig, {'Combined'}];
+
+    condition_corrs = zeros(length(ICs), ...
+        length(condition_names));
 
     for m = 1:length(condition_names)
-        condition_corrs(:,m) = corr(hrf_conditions(:,m), ts).^2;
+        condition_corrs(:,m) = ...
+            corr(hrf_conditions(:,m), ts).^2;
     end
 
-    % make hrf_conditions into a table
-    hrf_conditions_table = array2table(hrf_conditions, 'VariableNames', condition_names);
-    Tables.hrf_conditions_table = hrf_conditions_table;
+    hrf_conditions_table = array2table( ...
+        hrf_conditions, 'VariableNames', condition_names);
 
-    % make condition_corrs table
-    condition_corrs_table = array2table(condition_corrs, 'VariableNames', condition_names);
+    condition_corrs_table = array2table( ...
+        condition_corrs, 'VariableNames', condition_names);
+
+    Tables.hrf_conditions_table = hrf_conditions_table;
     Tables.condition_corrs_table = condition_corrs_table;
 
-    % Save into Data struct as appropriate
+    % Preserve events, QC bins, both designs, and provenance.
+    Data.Task.Events = task_events_table;
     Data.Task.EventBlocks = events_table;
+    Data.Task.hrf_conditions_raw = hrf_conditions_raw_table;
     Data.Task.hrf_conditions = hrf_conditions_table;
+
+    Data.Task.HRFModel = struct( ...
+        'name', 'double_gamma_continuous_v1', ...
+        'parameters', p, ...
+        'sample_times_seconds', sample_times, ...
+        'timing_source', timing_info.Method, ...
+        'timing_confidence', timing_info.Confidence, ...
+        'timing_details', timing_info, ...
+        'normalization', 'unit_continuous_HRF_area', ...
+        'events_file', task_events_file);
+
+
 end
 
 
@@ -572,7 +652,7 @@ end
 if ~isempty(condition_corrs)
     % repeat IC matrix to match size
     ICs_reps = repmat(ICs, 1, size(condition_corrs,2)); %#ok<NASGU> 
-    
+
     % both calculate relative correlation strength for hrfs AND calculate
     % power spectra
     % initialize things first, then go into for loop
@@ -619,7 +699,7 @@ if ~isempty(condition_corrs)
     HRF_table_overlap{:, 'besttask_power_overlap'} = power_overlap_all_hrfs;
     HRF_table_difference{:, 'besttask_power_difference'} = power_difference_all_hrfs;
 
-    
+
     save('Task_Condition_Info.mat', 'ts', 'numvolumes','hrf_conditions_table', 'condition_corr_most_correlated_index', ...
         'condition_corrs', 'condition_names', 'hrfstask_fullpowerspectrum', ...
         'hrfstask_powerspectrum', 'max_conditioncorr_powerspectra', 'power_overlap_all_hrfs', 'power_difference_all_hrfs', 'frequencies', 'hrf_conditions')
@@ -670,11 +750,12 @@ writematrix([intercept, Data.Confounds.Thirtysixparam], '36p_regressors_intercep
 % Calculate the highest normalized HRF matching (whether to a general HRF
 % frequency range, or HRFs in response to tasks)
 % get a normalized range of HRF_table first
-HRF_table_overlap_norm = normalize(Tables.HRF_table_overlap, "range");
+HRF_table_overlap_norm = normalize(HRF_table_overlap, "range");
 HRF_table_overlap{:, 'best_power_overlap_norm'} = max(HRF_table_overlap_norm{:,:}, [], 2); % if there is no task, it will just be the same as general but normalized
 HRF_table_overlap_norm{:, 'best_power_overlap_norm'} = HRF_table_overlap.best_power_overlap_norm;
 
-HRF_table_difference_norm = normalize(Tables.HRF_table_difference, "range");
+
+HRF_table_difference_norm = normalize(HRF_table_difference, "range");
 HRF_table_difference{:, 'best_power_difference_norm'} = min(HRF_table_difference_norm{:,:}, [], 2); % if there is no task, it will just be the same as general but normalized
 HRF_table_difference_norm{:, 'best_power_difference_norm'} = HRF_table_difference.best_power_difference_norm;
 
@@ -805,8 +886,6 @@ Tables.bad_classification_table = bad_classification_table;
 Tables.networks_classification_table = networks_classification_table;
 Tables.condition_corrs_classification_table = condition_corrs_classification_table;
 
-% intialize Results Struct
-Results = struct();
 % high noise
 Highnoise_indices = sum(table2array(bad_classification_table), 2) > 0;
 Highnoise_ICs = ICs(Highnoise_indices);
@@ -924,7 +1003,7 @@ while (stop_num > 0) && (g < g_end)
         % mark as noise
         signal_decision(g) = 0; %#ok<AGROW>
     end
-    
+
    % if stop num went above tolerance, set it back to tolerance
    if stop_num > tolerance
        stop_num = tolerance;
@@ -1115,7 +1194,7 @@ signal_prob = all_prob(:,:,:,signal_ICs);
 noise_prob_info.ImageSize = size(noise_prob);
 noise_prob_info.DisplayIntensityRange = [0.9 1];
 noise_prob_info.Datatype = 'single';
-   
+
 signal_prob_info = noise_prob_info;
 signal_prob_info.ImageSize = size(signal_prob);
 signal_prob_info.PixelDimensions = signal_prob_info.PixelDimensions(1:length(size(signal_prob))); % fixed in case only one signal IC is selected
@@ -1190,6 +1269,10 @@ writetable(feature_relative_table, 'feature_auto_vals.csv')
 writetable(feature_table_norm, 'feature_auto_norms.csv')
 writetable(compare_cleaning, 'compare_auto_cleaning.csv', 'WriteRowNames', true)
 writetable(hrf_conditions_table,'hrf_conditions.csv')
+if width(hrf_conditions_raw_table) > 0
+    writetable(hrf_conditions_raw_table, ...
+        'hrf_conditions_raw.csv');
+end
 
 % and then make noise components if you want to do aggressive denoising like in CONN (regression)
 mixing_matrix = readmatrix([mel_fol, '/melodic_mix']);
@@ -1214,7 +1297,13 @@ cd ../
 % save a matrix of relevant variables if you want to examine later!
 save('DecisionVariables_Auto.mat', 'output_dir', 'subject_id', 'session_id', 'task_id', 'ICs', 'Data', 'Tables', 'Results')
 
-movefile('*Auto.*', 'ic_auto_selection')
+delete('._*') % delete hidden files that might be an issue ahead of time
+% Move Auto files, excluding hidden macOS metadata files
+auto_files = cicada_find_files('*Auto.*');
+
+for k = 1:numel(auto_files)
+    movefile(auto_files(k).name, 'ic_auto_selection');
+end
 
 % Add explicit local cores and modestly smoothed regional evidence after the
 % raw overlap maps have reached their permanent selection-folder paths.
@@ -1271,13 +1360,13 @@ if ~strcmp(compare_tag, '8p')
         '--out_res=', output_dir, '/', prefix, '_8p_', suffix];
     fprintf(['Running: ', eightparam_regress_command, '\n'])
     [~, ~] = call_fsl(eightparam_regress_command);
-    
-    
+
+
     % Because fsl_glm is dumb, it resets the TR to 1... need to run fslmerge
     % with tr option to reset the tr correctly...
     reset_tr_8p_command = ['fslmerge -tr ', output_dir, '/', prefix, '_8p_', suffix, ' ', output_dir, '/', prefix, '_8p_', suffix, ' ', num2str(TR)];
     [~, ~] = call_fsl(reset_tr_8p_command);
-   
+
     % add Tmean back onto 8 & 9 parameter 
     tmean_add_8p_command = ['fslmaths ', output_dir, '/', prefix, '_8p_', suffix, ' -add ', task_dir, '/tmean_funcfile.nii.gz ', output_dir, '/', prefix, '_8p_', suffix];
     [~, ~] = call_fsl(tmean_add_8p_command);
@@ -1305,8 +1394,86 @@ end
 % movefile('sub*ses*task*8p*.nii.gz', cleaned_dir)
 % movefile('sub*ses*task*9p*.nii.gz', cleaned_dir)
 
-% get cleaned_filename
-cleaned_file_info = dir([cleaned_dir, '/*CICADA*auto*.nii.gz']);
-cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
+% Find cleaned NIfTI, excluding hidden files
+cleaned_file_info = cicada_find_files( ...
+    fullfile(cleaned_dir, '*CICADA*auto*.nii.gz'));
+
+% Ensure exactly one cleaned file was found
+if numel(cleaned_file_info) ~= 1
+    error('Expected one cleaned CICADA NIfTI, found %d.', ...
+        numel(cleaned_file_info));
+end
+
+cleaned_file = fullfile( ...
+    cleaned_file_info(1).folder, cleaned_file_info(1).name);
+
+
+%% Save cleaned-image processing provenance
+
+provenance = struct();
+
+% Provenance schema and exact CICADA source revision.
+provenance.ProvenanceSchemaVersion = '1.0';
+provenance.Pipeline = struct( ...
+    'Name', 'CICADA', ...
+    'Stage', 'AutoCICADA', ...
+    'Repository', 'https://github.com/keithcdodd/CICADA', ...
+    'Git', cicada_git_provenance(mfilename('fullpath')));
+
+provenance.GeneratedAtLocal = char(datetime( ...
+    "now", "Format", "yyyyMMdd'T'HHmmss"));
+provenance.RepetitionTime = Data.tr;
+
+% Inputs used for this acquisition.
+provenance.Sources = struct( ...
+    'InputBOLD', fullfile(task_dir, 'funcfile.nii.gz'), ...
+    'FunctionalMask', fullfile(task_dir, 'funcmask.nii.gz'), ...
+    'MELODICMixingMatrix', fullfile(mel_fol, 'melodic_mix'));
+
+% Final automatic IC selection.
+provenance.ICSelection = struct( ...
+    'Method', 'automatic', ...
+    'Tolerance', tolerance, ...
+    'SignalICs', reshape(Results.signal_ICs, 1, []), ...
+    'NoiseICs', reshape(Results.noise_ICs, 1, []));
+
+% Actual nonaggressive ICA regression.
+provenance.Denoising = struct( ...
+    'Tool', 'FSL fsl_regfilt', ...
+    'Mode', 'nonaggressive', ...
+    'Command', fsl_regfilt_command);
+
+% Task-HRF model when task events were modeled.
+if isfield(Data, 'Task') && ...
+        isfield(Data.Task, 'HRFModel')
+    provenance.TaskHRF = Data.Task.HRFModel;
+end
+
+% Include actual upstream preprocessing metadata when available.
+preproc_json = fullfile(task_dir, 'funcfile_preproc_bold.json');
+
+if isfile(preproc_json)
+    provenance.SourcePreprocBOLDJSON = preproc_json;
+    provenance.SourcePreprocBOLDMetadata = ...
+        jsondecode(fileread(preproc_json));
+end
+
+% Write JSON next to the final cleaned NIfTI.
+provenance_json_file = regexprep( ...
+    cleaned_file, '\.nii\.gz$', '.json');
+
+assert(~strcmp(provenance_json_file, cleaned_file), ...
+    'Unexpected cleaned-image extension.');
+
+[fid, msg] = fopen(provenance_json_file, 'w');
+assert(fid ~= -1, ...
+    'Cannot create provenance JSON: %s', msg);
+
+fprintf(fid, '%s\n', jsonencode(provenance));
+fclose(fid);
+
+fprintf('Saved CICADA provenance: %s\n', ...
+    provenance_json_file);
+
 
 end

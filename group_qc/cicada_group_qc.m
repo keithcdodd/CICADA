@@ -277,7 +277,7 @@ orig_only = 0; % to change in following if else statement
 if size(compare_image_info,1) == 0
     % check if it exists as a compare only instead
     compare_image_compareonly_info = dir([first_task_dir, '/qc/sub*ses*task*vs*', file_tag, '*qc_plots.jpg']); 
-    
+
     if size(compare_image_compareonly_info,1) == 0
         % check if it exists as orig only
         if matches(file_tag, 'orig')
@@ -326,7 +326,8 @@ if ~isempty(dir([first_cleaned_dir, '/funcmask*']))
     movefile([first_cleaned_dir, '/funcmask*'], [first_cleaned_dir, '/..'])
 end
 
-first_image_info = dir([first_cleaned_dir, '/*', file_tag, '*.nii.gz']); % specific to file tag of interest, should be only ONE file
+first_image_info = cicada_find_files( ...
+    fullfile(first_cleaned_dir, ['*', file_tag, '*.nii.gz']));
 
 if size(first_image_info,1) ~= 1
     fprintf(['File tag ', file_tag, ', is either not specific enough to only grab one file, or grabs no files. \n'])
@@ -366,6 +367,29 @@ gm_mni_thresh_info.Datatype = 'uint8'; % in case I want to write it out as a fil
 
 % initialize struct to store all information:
 Group_QC = struct;
+
+
+%% GroupCICADA processing provenance
+
+Group_QC.Provenance = struct();
+
+Group_QC.Provenance.ProvenanceSchemaVersion = '1.0';
+
+Group_QC.Provenance.Pipeline = struct( ...
+    'Name', 'CICADA', ...
+    'Stage', 'GroupCICADA', ...
+    'Repository', 'https://github.com/keithcdodd/CICADA', ...
+    'Git', cicada_git_provenance(mfilename('fullpath')));
+
+Group_QC.Provenance.StartedAtLocal = char(datetime( ...
+    "now", "Format", "yyyyMMdd'T'HHmmss"));
+
+Group_QC.Provenance.Configuration = struct( ...
+    'TaskName', task_name, ...
+    'InputFileTag', file_tag, ...
+    'ComparisonTag', compare_tag, ...
+    'SmoothingFWHMmm', smoothing_kernel, ...
+    'VoxelwiseScalingEnabled', logical(voxelwise_scale_flag));
 
 Group_QC.temporal_cleanup_mode = ...
     temporal_cleanup_mode;
@@ -450,9 +474,10 @@ for idx = 1:num_runs
     % instance
 
     % first grab general file tag and see if it contains CICADA in it:
-    test_cleaned_file_info = dir([cleaned_dir, '/*', file_tag, '*.nii.gz']);
+    test_cleaned_file_info = cicada_find_files( ...
+        fullfile(cleaned_dir, ['*', file_tag, '*.nii.gz']));
 
-    
+
     % make sure only one file is grabbed
     if size(test_cleaned_file_info,1) ~= 1
         fprintf('Either your file_tag is not specific enough (grabs more than one file) OR no files match with file_tag\n')
@@ -464,7 +489,8 @@ for idx = 1:num_runs
         % check if manually adjusted is the preferred usage
         if ~strcmp(manually_adjusted, '0')
             % this was manually adjusted, grab manual version
-            cleaned_file_info = dir([cleaned_dir, '*CICADA*manual*.nii.gz']);
+            cleaned_file_info = cicada_find_files( ...
+                fullfile(cleaned_dir, '*CICADA*manual*.nii.gz'));
             data_notes{data_notes_iter, :} = {sub_id, ses_id, task_name, 'Manually Adjusted', 'Manual IC classification performed by User, with manual denoising used instead of automated because of better denoising performance.'};
             data_notes_iter = data_notes_iter + 1; % increment for table
 
@@ -514,12 +540,12 @@ for idx = 1:num_runs
         end
 
     else
-    
+
         % This is not a CICADA file, so CICADA-specific improvement criteria
         % do not apply.
         cleaned_file_info = test_cleaned_file_info;
         poorly_improved = false;
-    
+
     end
 
     cleaned_file = [cleaned_file_info.folder, '/', cleaned_file_info.name];
@@ -530,7 +556,8 @@ for idx = 1:num_runs
     cleaned_file_tag = cleaned_file_tag{:};
 
     % Also grab the orig file and compare file
-    orig_file_info = dir([cleaned_dir, '/*_orig_*.nii.gz']);
+    orig_file_info = cicada_find_files( ...
+        fullfile(cleaned_dir, '*_orig_*.nii.gz'));
    % make sure only one file is grabbed
     if size(orig_file_info,1) ~= 1
         fprintf('Are there no _orig_ files (or more than one) in cleaned dir?\n')
@@ -565,7 +592,7 @@ for idx = 1:num_runs
             'Preparing CICADA cleaned data with MATCHED temporal/ICA ', ...
             'processing...\n']);
 
-        cleaned_file = ...
+        [cleaned_file, cleaned_temporal_info] = ...
             cicada_matched_temporal_cleanup( ...
                 orig_file, ...
                 cleaned_file, ...
@@ -603,7 +630,7 @@ for idx = 1:num_runs
 
         end
 
-        cleaned_file = ...
+        [cleaned_file, cleaned_temporal_info] = ...
             detrend_filter_smooth( ...
                 cleaned_file, ...
                 funcmask, ...
@@ -611,7 +638,7 @@ for idx = 1:num_runs
                 smoothing_kernel, ...
                 fpass, ...
                 detrended_degree);
-    
+
     end
     fprintf('Detrending, Filtering, & Smoothing Compare Data and Copying to Group Data Folder...\n')
     compare_file = detrend_filter_smooth(compare_file, funcmask, data_dir, smoothing_kernel, fpass, detrended_degree);
@@ -625,8 +652,83 @@ for idx = 1:num_runs
         compare_file = voxelwise_scale(compare_file); % voxelwise scale each voxel to mean 100
         orig_file = voxelwise_scale(orig_file); % voxelwise scale each voxel to mean 100
     end
-    
-    
+
+
+    %% Record effective processing path for this acquisition
+
+    if cicada == 1
+        if strcmp(temporal_cleanup_mode, 'matched') && ...
+                temporal_transform_requested
+
+            processing_path = 'matched_temporal_ica';
+
+        elseif strcmp(temporal_cleanup_mode, 'legacy_sequential')
+
+            processing_path = 'legacy_sequential';
+
+        else
+
+            processing_path = 'subject_ica_reused_no_temporal_transform';
+
+        end
+    else
+        processing_path = 'non_cicada_standard';
+    end
+
+    % Record the actual IC selection file, when applicable.
+    if contains(test_cleaned_file_info.name, '_CICADA_')
+        selection_source = IC_selection_file;
+    else
+        selection_source = '';
+    end
+
+
+    %% Spatial-processing provenance
+
+    % Matched cleanup uses original BOLD geometry.
+    % Other paths use the subject-level cleaned BOLD geometry.
+    if strcmp(processing_path, 'matched_temporal_ica')
+        spatial_source = fullfile( ...
+            orig_file_info.folder, orig_file_info.name);
+    else
+        spatial_source = fullfile( ...
+            cleaned_file_info.folder, cleaned_file_info.name);
+    end
+
+    spatial_header = niftiinfo(spatial_source);
+    voxel_sizes_mm = spatial_header.PixelDimensions(1:3);
+
+    [sigma_vox, sigma_mm, ~] = ...
+        cicada_fwhm_mm_to_sigma_vox( ...
+            smoothing_kernel, voxel_sizes_mm);
+
+    spatial_info = struct( ...
+        'SourceGeometryFile', spatial_source, ...
+        'VoxelSizesMM', voxel_sizes_mm, ...
+        'GaussianFWHMmm', smoothing_kernel, ...
+        'GaussianSigmaMM', sigma_mm, ...
+        'GaussianSigmaVoxels', sigma_vox, ...
+        'FunctionalMaskApplied', true, ...
+        'MaskNormalizedSmoothing', smoothing_kernel ~= 0, ...
+        'SmoothingImplementation', 'MATLAB imgaussfilt3');
+
+    % Index m corresponds to successfully processed QC acquisitions.
+    Group_QC.Provenance.Runs(m) = struct( ...
+        'Subject', sub_id, ...
+        'Session', ses_id, ...
+        'Task', task_name, ...
+        'SubjectLevelCleanedBOLD', fullfile( ...
+            cleaned_file_info.folder, cleaned_file_info.name), ...
+        'OriginalComparisonBOLD', fullfile( ...
+            orig_file_info.folder, orig_file_info.name), ...
+        'GroupPreparedCleanedBOLD', cleaned_file, ...
+        'ICSelectionFile', selection_source, ...
+        'EffectiveProcessingPath', processing_path, ...
+        'TemporalTransformRequested', ...
+            logical(temporal_transform_requested), ...
+        'TemporalProcessing', cleaned_temporal_info, ...
+        'SpatialProcessing', spatial_info);
+
     % OK, now FINALLY loop through cleaned_dir files, and run qc for all of them!
     % then finally individually grab relevant qc
     fprintf('Now calculating QC\n')
@@ -640,13 +742,13 @@ for idx = 1:num_runs
     naming_id = ['sub-', sub_id, '_ses-', ses_id, '_task-', task_name];
     call_fsl(['fslmaths ', cleaned_file, ' -Tstd -mul ', funcmask, ' ', output_dir, '/', naming_id, '_tstd.nii.gz']);
     tstd = [output_dir, '/', naming_id, '_tstd.nii.gz']; % standard deviation in time of subject. Can be helpful to look at
-    
+
     % now, to save space, we should delete the orig and compare data from
     % data dir
     if isfile(compare_file)
         delete(compare_file)
     end
-    
+
     if isfile(orig_file)
         delete(orig_file)
     end
@@ -719,7 +821,7 @@ for idx = 1:num_runs
             group_compare_qc_corrs_table = [group_compare_qc_corrs_table; compare_qc_corrs_table];
         end
     end
-   
+
     m = m+1; % increment successful counter
 end
 fprintf('\n Done with calculating subject data\n')
@@ -760,22 +862,22 @@ if cicada == 1
     % number of ICs (too swamped by noise) and it does not explain much of the data):
     Group_QC.low_ics_labeled_signal = (final_qc_table.number_kept_ics < 3); % If number kept ICs is less than 3, it cannot be good. And this is an extremely lenient cut off.
     Group_QC.low_fraction_signal_variance_kept = (isoutlier(final_qc_table.fraction_signal_variance_kept, "median")) & (final_qc_table.fraction_signal_variance_kept < mean(final_qc_table.fraction_signal_variance_kept));
-    
+
     % Signal (The kept ICs should contain a fair amount of GM/Signal region
     % overlap)
     Group_QC.low_GM = (isoutlier(final_qc_table.GM, "median")) & (final_qc_table.GM < mean(final_qc_table.GM));
-    
+
     % Smoothing
     Group_QC.low_Smoothing = (isoutlier(final_qc_table.Smoothing_Retention, "median")) & (final_qc_table.Smoothing_Retention < mean(final_qc_table.Smoothing_Retention));
 
     % BOLD freq / highfreq ratio
     Group_QC.low_boldfreq_highfreq_ratio = (isoutlier(boldfreq_highfreq, "median")) & (boldfreq_highfreq < mean(boldfreq_highfreq));
-    
+
     % Power/frequency Overlap
     % if task data, take into account task power overlap
     Group_QC.low_general_power_overlap = (isoutlier(final_qc_table.general_power_overlap, "median")) & ...
         (final_qc_table.general_power_overlap < mean(final_qc_table.general_power_overlap));
-    
+
     if sum(cell2mat(task_event_file_exist_list)) > 0 % so there are task event files!
         fprintf('Found task event files, so using best task power overlap.\n')
         Group_QC.low_besttask_power_overlap = (isoutlier(final_qc_table.besttask_power_overlap, "median")) & ...
@@ -790,11 +892,11 @@ if cicada == 1
         fprintf('No Task event files. Assumed to be resting state.\n')
         Group_QC.low_power_overlap = Group_QC.low_general_power_overlap;
     end
-    
-    
+
+
     % High DVARS_Corr
     Group_QC.high_DVARS_corr = (isoutlier(abs(final_qc_table.DVARS_GM_mean_abs_corr), "median")) & (abs(final_qc_table.DVARS_GM_mean_abs_corr) > median(abs(final_qc_table.DVARS_GM_mean_abs_corr)));
-    
+
     % High FD_Corr
     Group_QC.high_FD_corr = (isoutlier(abs(final_qc_table.FD_GM_mean_abs_corr), "median")) & (abs(final_qc_table.FD_GM_mean_abs_corr) > median(abs(final_qc_table.FD_GM_mean_abs_corr)));
 
@@ -807,8 +909,8 @@ if cicada == 1
     % GM_NotGM_mean_var_prop is GM temporal variance divided by
     % NotGM temporal variance
     Group_QC.low_GM_NotGM_mean_var_prop = (isoutlier(final_qc_table.GM_NotGM_mean_var_prop, "median")) & (final_qc_table.GM_NotGM_mean_var_prop < median(final_qc_table.GM_NotGM_mean_var_prop));
-    
-    
+
+
     % combine to get overall outliers
     %Group_QC.cicada_outliers = logical(Group_QC.low_number_total_ics + ...
     %    Group_QC.low_fraction_signal_variance_kept + Group_QC.low_GM + ...
@@ -833,21 +935,21 @@ if cicada == 1
 
     % record into data notes:
     for ico = 1:length(cicada_outliers)
-    
+
         if cicada_outliers(ico)
-    
+
             % Outlier indices correspond to rows of final_qc_table, not
             % necessarily the original input arrays because runs may have
             % been skipped before reaching Group QC.
             outlier_subject = ...
                 char(string(final_qc_table.subject(ico)));
-    
+
             outlier_session = ...
                 char(string(final_qc_table.session(ico)));
-    
+
             outlier_task = ...
                 char(string(final_qc_table.task(ico)));
-    
+
             data_notes{data_notes_iter, :} = { ...
                 outlier_subject, ...
                 outlier_session, ...
@@ -855,17 +957,17 @@ if cicada == 1
                 'CICADA Outlier', ...
                 ['Group CICADA automatically labeled this as an outlier ' ...
                  'compared to the other data.']};
-    
+
             data_notes_iter = data_notes_iter + 1;
-    
+
             fprintf([ ...
                 '%s %s %s: Group CICADA automatically labeled this as ' ...
                 'an outlier compared to the other data and removed it ' ...
                 'from group analyses.\n'], ...
                 outlier_subject, outlier_session, outlier_task);
-    
+
         end
-    
+
     end
 
     % add to final qc table
@@ -913,6 +1015,31 @@ end
 % save image_keep so it is easy in the future to know what images were left
 % out of MELODIC Group IC
 Group_QC.Images_Used = image_keep;
+
+
+%% Record final Group ICA input selections
+
+% Each provenance run must correspond to one successful QC run.
+n_processed = numel(image_keep);
+
+assert(n_processed == numel(Group_QC.Provenance.Runs) && ...
+       n_processed == numel(cleaned_data_list) && ...
+       n_processed == height(final_qc_table), ...
+    'Group ICA selections do not align with provenance/QC runs.');
+
+% Record selection without assuming MELODIC was rerun.
+for k = 1:n_processed
+    Group_QC.Provenance.Runs(k).SelectedForGroupICA = ...
+        logical(image_keep(k));
+end
+
+% Summary of selection and exclusion decisions.
+Group_QC.Provenance.GroupSelection = struct( ...
+    'ProcessedRunCount', n_processed, ...
+    'SelectedRunCount', sum(image_keep), ...
+    'ExcludedAfterQCCount', sum(~image_keep), ...
+    'UserPreexcludedRunIDs', {bad_data_prefixes});
+
 
 % add to final qc table
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
@@ -972,7 +1099,7 @@ for i = 1:height(cicada_outlier_combos)
     group_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_cleaned, :) = [];  % remove matching rows
     group_compare_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_compare, :) = [];  % remove matching rows
     group_orig_qc_corrs_cicada_outliers_removed_table(is_bad_cicada_orig, :) = [];  % remove matching rows
-    
+
 end
 
 
@@ -993,16 +1120,16 @@ ocorrt_cor = group_orig_qc_corrs_cicada_outliers_removed_table;
 % Don't plot if it is just original data
 % see if we have compare data to deal with here
 if ~isempty(group_compare_qc_corrs_table)
-    
+
     ccorrt = group_compare_qc_corrs_table;
     ccorrt_cor = group_compare_qc_corrs_cicada_outliers_removed_table; % cicada_outliers removed
 
-    
+
     % Set appropriate titles and destination
     title_string = ...
     ['Group_QC_', cleaned_file_tag, '_vs_', compare_tag];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
-    
+
     % now we can plot everyone
     plot_qc(cell2mat(dcorrt.Edge_Edge_Corr), cell2mat(dcorrt.FD_GM_Corr), ...
         cell2mat(dcorrt.DVARS_GM_Corr), cell2mat(dcorrt.Outbrain_Outbrain_Corr), ...
@@ -1020,13 +1147,13 @@ if ~isempty(group_compare_qc_corrs_table)
         cell2mat(ocorrt.Suscept_Suscept_Corr), ...
         [], [], [], title_string, qc_plots_dest, cleaned_file_tag)
 
-   
+
     % Set appropriate titles and destination
     title_string_cor = ...
     ['Group_QC_', cleaned_file_tag, ...
      '_vs_', compare_tag, '_cicada_outliers_removed'];
     qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
-    
+
     % now we can plot with cicada_outliers removed for comparison
     plot_qc(cell2mat(dcorrt_cor.Edge_Edge_Corr), cell2mat(dcorrt_cor.FD_GM_Corr), ...
         cell2mat(dcorrt_cor.DVARS_GM_Corr), cell2mat(dcorrt_cor.Outbrain_Outbrain_Corr), ...
@@ -1045,11 +1172,11 @@ if ~isempty(group_compare_qc_corrs_table)
         [], [], [], title_string_cor, qc_plots_dest_cor, cleaned_file_tag)
 
 elseif ~isempty(group_orig_qc_corrs_table)
-    
+
     % we can plot now! There is no compare data
     title_string = ['Group_QC_' cleaned_file_tag, '_vs_orig'];
     qc_plots_dest = [output_dir, '/', title_string, '_plots.jpg'];
-    
+
 
     plot_qc(cell2mat(dcorrt.Edge_Edge_Corr), cell2mat(dcorrt.FD_GM_Corr), ...
         cell2mat(dcorrt.DVARS_GM_Corr), cell2mat(dcorrt.Outbrain_Outbrain_Corr), ...
@@ -1067,7 +1194,7 @@ elseif ~isempty(group_orig_qc_corrs_table)
     % Set appropriate titles and destination
     title_string_cor = ['Group_QC_', cleaned_file_tag, '_vs_orig_cicada_outliers_removed'];
     qc_plots_dest_cor = [output_dir, '/', title_string_cor, '_plots.jpg'];
-    
+
     % now we can plot with cicada_outliers removed for comparison
     plot_qc(cell2mat(dcorrt_cor.Edge_Edge_Corr), cell2mat(dcorrt_cor.FD_GM_Corr), ...
         cell2mat(dcorrt_cor.DVARS_GM_Corr), cell2mat(dcorrt_cor.Outbrain_Outbrain_Corr), ...
@@ -1090,16 +1217,16 @@ if cicada == 1 && isfile(network_identifiability_file)
     network_identifiability_info = niftiinfo(network_identifiability_file);
     network_identifiability_info.ImageSize = [network_identifiability_info.ImageSize(1:3), (m-1)];
     network_identifiability_info.Datatype = 'single';
-    
+
     % denoised
     network_identifiability_info.Filename = [output_dir, '/network_identifiability_', cleaned_file_tag, '.nii.gz'];
     niftiwrite(single(denoised_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
-    
+
     % compare
     %compare_file_tag = extractAfter(compare_tag, '_vs_');
     network_identifiability_info.Filename = [output_dir, '/network_identifiability_', compare_tag, '.nii.gz'];
     niftiwrite(single(compare_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
-    
+
     % orig
     network_identifiability_info.Filename = [output_dir, '/network_identifiability_orig.nii.gz'];
     niftiwrite(single(orig_network_identifiability), network_identifiability_info.Filename, network_identifiability_info, 'Compressed', true);
@@ -1134,7 +1261,7 @@ funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ',
 if cicada == 1 && ~isempty(data_signal_mask_list)
     merge_funcmasks_signal_command = ['fslmerge -a ', output_dir, '/signal_funcmasks.nii.gz ', strjoin(data_signal_mask_list(image_keep))];
     [~, ~] = call_fsl(merge_funcmasks_signal_command);
-    
+
     % and calculate a Tmin of data masks (where there is funcmask overlap
     % across all subects)
     funcmask_signal_overlap_command = ['fslmaths ', output_dir, '/signal_funcmasks.nii.gz -Tmin ', output_dir, '/group_signal_funcmask.nii.gz'];
@@ -1174,6 +1301,9 @@ flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -ou
 % Vs.: let Melodic decide on number of ICs (preferred)
 Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m group_funcmask.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 
+% Track whether Group MELODIC was actually invoked this run.
+group_melodic_invoked = false;
+
 if redo_melodic == 0
     if ~isfile('./melodic/melodic_IC.nii.gz') 
         % if melodic clearly did not finish last time, re do it.
@@ -1181,6 +1311,7 @@ if redo_melodic == 0
             rmdir('melodic', 's')
         end
         fprintf(['Running: ', Group_ICA_command, '\n'])
+        group_melodic_invoked = true;
         [~, ~] = call_fsl(Group_ICA_command);
         fprintf('Done with Group ICA (Melodic)\n\n')
     end
@@ -1190,9 +1321,27 @@ elseif redo_melodic == 1
     end
 
     fprintf(['Running: ', Group_ICA_command, '\n'])
+    group_melodic_invoked = true;
     [~, ~] = call_fsl(Group_ICA_command);
     fprintf('Done with Group ICA (Melodic)\n\n')
 end
+
+
+%% Record Group MELODIC execution provenance
+
+group_melodic_output = fullfile( ...
+    output_dir, 'melodic', 'melodic_IC.nii.gz');
+
+Group_QC.Provenance.GroupMELODIC = struct( ...
+    'RequestedRedo', logical(redo_melodic == 1), ...
+    'CommandInvokedThisRun', group_melodic_invoked, ...
+    'ExistingOutputUsedWithoutRerun', ...
+        ~group_melodic_invoked && isfile(group_melodic_output), ...
+    'OutputExistsAfterDecision', isfile(group_melodic_output), ...
+    'InputImageList', fullfile(output_dir, 'image_names.txt'), ...
+    'InputImageCount', numel(data_files), ...
+    'OutputICMap', group_melodic_output, ...
+    'Command', Group_ICA_command);
 
 % create ICprobabilities combined in melodic folder (good for making masks
 % later at 100% probability, for example).
@@ -1217,7 +1366,7 @@ IC_3D_info = IC_probs_info;
 IC_3D_info.ImageSize = IC_3D_info.ImageSize(1:end-1);
 IC_3D_info.PixelDimensions = IC_3D_info.PixelDimensions(1:end-1);
 IC_3D_info.Datatype = 'single';
-   
+
 % Also go through melodic output and calculate overlap % of IC to each
 % network between the 7 networks, which can be useful
 networks_combined = niftiread(network_file);
@@ -1289,7 +1438,7 @@ for i1 = 1:length(data_files)
         kept_qc_table.subject{i1}, ...
         kept_qc_table.session{i1}, ...
         kept_qc_table.task{i1});
-    
+
     % grab notGM mask
     curr_notGM_mask = [curr_subj_home, '/region_masks/NotGM_mask.nii.gz'];
     notGM_all{end+1} = curr_notGM_mask;
@@ -1335,4 +1484,38 @@ T_results = rank_ICs_by_group_NSP(output_dir, IC_mel, group_funcmask_file, subj_
 
 writetable(T_results, 'group_ic_auto_selection.csv', 'Delimiter', ',')
 
-save('group_qc.mat', 'Group_QC', 'T_results')
+
+%% Finalize and save GroupCICADA provenance
+
+Group_QC.Provenance.CompletedAtLocal = char(datetime( ...
+    "now", "Format", "yyyyMMdd'T'HHmmss"));
+
+Group_QC.Provenance.Outputs = struct( ...
+    'GroupQCMAT', fullfile(output_dir, 'group_qc.mat'), ...
+    'GroupQCTable', fullfile(output_dir, 'group_qc_table.csv'), ...
+    'GroupICAInputList', fullfile(output_dir, 'image_names.txt'));
+
+% Serialize the compact provenance record, not the full Group_QC
+% structure, which also contains large imaging data.
+provenance_json_text = jsonencode(Group_QC.Provenance);
+
+% Preserve the original MATLAB output, now including provenance.
+save('group_qc.mat', 'Group_QC', 'T_results');
+
+% Write the standalone JSON provenance record.
+provenance_json_file = fullfile( ...
+    output_dir, 'group_qc_provenance.json');
+
+[fid, msg] = fopen(provenance_json_file, 'w');
+
+assert(fid ~= -1, ...
+    'Cannot create GroupCICADA provenance JSON: %s', msg);
+
+bytes_written = fprintf(fid, '%s\n', provenance_json_text);
+close_status = fclose(fid);
+
+assert(bytes_written > 0 && close_status == 0, ...
+    'Failed to write GroupCICADA provenance JSON.');
+
+fprintf('Saved GroupCICADA provenance: %s\n', ...
+    provenance_json_file);

@@ -40,7 +40,8 @@ cd(cleaned_dir)
 
 
 % Grab files, check if they exist
-orig_file_info = dir(fullfile(cleaned_dir, '*orig*.nii.gz')); % needs to be in cleaned_dir too
+orig_file_info = cicada_find_files( ...
+    fullfile(cleaned_dir, '*orig*.nii.gz'));
 
 if isempty(orig_file_info)
     fprintf(['ERROR, cannot find orig file matching *orig*.nii.gz in ', cleaned_dir, '\n'])

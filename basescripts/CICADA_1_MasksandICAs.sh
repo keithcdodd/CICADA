@@ -361,6 +361,24 @@ cp "${funcfile}" "${output_dir}/${funcfilename}_unmasked.nii.gz"
 cp "${funcmask}" "${output_dir}/funcmask_orig.nii.gz"
 cp "${confoundsfile}" "${output_dir}/confounds_timeseries.${confounds_extension}"
 
+# Preserve the JSON sidecar of the exact fMRIPrep
+# preprocessed BOLD image supplied through -F.
+preproc_json="${funcfile%.nii.gz}.json"
+saved_json="${output_dir}/funcfile_preproc_bold.json"
+
+if [[ "${funcfile}" == *_desc-preproc_bold.nii.gz ]] && \
+   [[ -f "${preproc_json}" ]]; then
+
+    cp "${preproc_json}" "${saved_json}"
+    echo "    Preserved fMRIPrep BOLD metadata: ${preproc_json}"
+
+else
+    # Do not retain stale metadata from an earlier run.
+    rm -f "${saved_json}"
+    echo "    No matching fMRIPrep preprocessed-BOLD JSON available."
+fi
+
+
 # remake task-specific regionmask folder, just in case
 if [ -d "${output_dir}/region_masks" ]
 then

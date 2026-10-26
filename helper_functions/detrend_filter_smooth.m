@@ -1,4 +1,4 @@
-function [cleaned_file] = detrend_filter_smooth(file, funcmask, output_dir, smoothing_kernel, fpass, detrend_degree)
+function [cleaned_file, temporal_info] = detrend_filter_smooth(file, funcmask, output_dir, smoothing_kernel, fpass, detrend_degree)
 % function to apply detrending (to 2nd polynomial by default), bandpass, and apply gaussian
 % smoothing kernel, then write file to output dir
 % fpass should be an array of two numbers, representing bounds of Hz to
