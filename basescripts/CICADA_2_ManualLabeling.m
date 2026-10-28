@@ -319,6 +319,7 @@ save('DecisionVariables_Manual.mat', 'output_dir', 'subject_id', 'session_id', .
     'task_id', 'ICs', 'Data', 'Tables', 'Results_Auto', 'Results')
 
 % And then move relevant files
+delete('._*') % delete hidden files that might be an issue ahead of time
 movefile manual* ic_manual_selection
 movefile *SignalIC* ic_manual_selection
 movefile *NoiseIC* ic_manual_selection
