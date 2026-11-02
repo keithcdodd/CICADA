@@ -43,3 +43,9 @@ The MNI template that is used in fMRIPrep is provided. This can be utilized for 
 # Citations
 Dodd K, McHugo M, Sarabia L, Wylie KP, Legget KT, Cornier MA, Tregellas JR. CICADA: An automated and flexible tool for comprehensive fMRI noise reduction. Imaging Neuroscience, 2025.
 
+# Questions?
+1. Please post issues through Github.
+2. Please consult UserGuide and try self-troubleshooting first.
+3. For further questions/suggestions, you can try emailing keith.dodd@cuanschutz.edu. Include "CICADA" in subject line.
+-- No guarentee I will see or be able to respond to a given email, but I will try when I can.
+
