@@ -1,4 +1,4 @@
-function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike)
+function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike, task_timing_options)
 % Make this into a function that does name=value, and specify what inputs
 % are required.
 % Necessary inputs: output_dir (e.g., cicada/subj-id/ses-id/task-id), funcfile, funcmask, and confoundsfile.
@@ -12,6 +12,12 @@ function Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, me
 % standard confound regressions for comparison.
 % despike 1 will do some light despiking of the data before diving into
 % CICADA, despike 0 (or left blank) will not
+% task_timing_options (optional): scalar struct controlling task HRF
+% sampling. Supported fields:
+%   PreprocBoldJSON       - path to preprocessed BOLD JSON metadata
+%   TaskSamplingReference - explicit reference time in seconds
+% If omitted, CICADA searches for the original fMRIPrep BOLD JSON.
+% Existing calls without this argument remain supported.
 
 % need to make sure CICADA folder and subfolders are added to path!
 Auto_CICADA_dir = fileparts(mfilename('fullpath')); % this gives current script path
@@ -63,6 +69,36 @@ end
 if ~exist('confoundsfile', 'var') || ~ischar(confoundsfile)
     fprintf('ERROR: Missing a confoundsfile or is not a character array!\n')
     return;
+end
+
+% Optional timing settings: backward compatible with old calls.
+if nargin < 16 || isempty(task_timing_options)
+    task_timing_options = struct();
+end
+
+assert(isstruct(task_timing_options) && isscalar(task_timing_options), ...
+    'CICADA:TimingOptions', ...
+    'task_timing_options must be a scalar struct.');
+
+% Discover the ORIGINAL preprocessed-BOLD JSON before despiking.
+has_reference = isfield(task_timing_options, ...
+    'TaskSamplingReference') && ...
+    ~isempty(task_timing_options.TaskSamplingReference);
+
+has_json = isfield(task_timing_options, ...
+    'PreprocBoldJSON') && ...
+    ~isempty(task_timing_options.PreprocBoldJSON);
+
+if ~has_reference && ~has_json && ...
+        endsWith(funcfile, '_desc-preproc_bold.nii.gz')
+
+    original_json = regexprep(funcfile, '\.nii\.gz$', '.json');
+
+    if isfile(original_json)
+        task_timing_options.PreprocBoldJSON = original_json;
+        fprintf('Found preprocessed-BOLD timing metadata: %s\n', ...
+            original_json);
+    end
 end
 
 % Now check for non-necessary variables
@@ -201,9 +237,9 @@ if ~exist('tolerance', 'var')
     tolerance = 5;
 end
 if isfile(compare_file)
-    cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, [], tolerance, mel_fol); % allow one to use another inbuilt compare file if desired, will still run 8p denoising regardless
+    cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, [], tolerance, mel_fol, task_timing_options); % allow one to use another inbuilt compare file if desired, will still run 8p denoising regardless
 else
-    cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, compare_tag, tolerance, mel_fol); % allow one to select to compare to any of the inbuilt comparisons if desired
+    cleaned_file = CICADA_2_AutoLabeling(output_dir, task_events_file, compare_tag, tolerance, mel_fol, task_timing_options); % allow one to select to compare to any of the inbuilt comparisons if desired
 end
 fprintf('Done with CICADA_2\n\n')
 

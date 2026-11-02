@@ -1,4 +1,4 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike, task_timing_options)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them.
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
@@ -35,6 +35,15 @@ end
 if ~exist('despike', 'var') || (despike ~= 0 && despike ~=1)
     despike = 0; % default is to not despike
 end
+
+% Optional timing options; old calls remain valid.
+if nargin < 13 || isempty(task_timing_options)
+    task_timing_options = struct();
+end
+
+assert(isstruct(task_timing_options) && isscalar(task_timing_options), ...
+    'CICADA:TimingOptions', ...
+    'task_timing_options must be a scalar struct.');
 
 if ~exist('compare_file', 'var') || ~ischar(compare_file) || isempty(compare_file)
     compare_file = '';
@@ -203,6 +212,6 @@ fprintf(['despike: ', num2str(despike), '\n'])
 % For melodic folder, we can just check if the melodic folder exists, does
 % it have one of the final inputs?
 
-Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike)
+Auto_CICADA(output_dir, funcfile, funcmask, confoundsfile, redo_mel, mel_fol, compare_file, task_events_file, anatfile, anatmask, gm_prob, wm_prob, csf_prob, tolerance, despike, task_timing_options)
 
 end
