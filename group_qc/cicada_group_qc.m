@@ -1,7 +1,7 @@
 function cicada_group_qc(cicada_home, group_qc_home, task_name, output_dirname, ...
     file_tag, voxelwise_scale_flag, smoothing_kernel, fpass, detrended_degree, ...
     redo_melodic, sub_ids, ses_ids, excludes, adjusteds, compare_tag, task_event_files, ...
-    subject_level_data_table, temporal_cleanup_mode)
+    subject_level_data_table, temporal_cleanup_mode, bids_root)
 % function to run group qc
 % cicada_home: is the cicada home directory, the general home input folder
 % group_qc_home: the general group qc output dir
@@ -1045,6 +1045,28 @@ Group_QC.Provenance.GroupSelection = struct( ...
 final_qc_table.liberal_outliers = Group_QC.liberal_outliers;
 final_qc_table.conservative_outliers = Group_QC.conservative_outliers;
 final_qc_table.image_keep = Group_QC.Images_Used; % All images except cicada_outliers
+
+% Optional BIDS metadata enrichment
+% Automatically detect the BIDS root from derivatives/cicada.
+% Does not affect imaging, QC metrics, or outlier decisions.
+
+bids_root = fileparts(fileparts(cicada_home));
+
+if isfile(fullfile(bids_root, 'dataset_description.json'))
+
+    [final_qc_table, bids_metadata_audit] = ...
+        cicada_group_bids_metadata(final_qc_table, bids_root);
+
+    Group_QC.Provenance.BIDSMetadata = bids_metadata_audit;
+
+    fprintf('\nBIDS metadata enrichment:\n');
+    fprintf('  Participant matches: %d\n', ...
+        bids_metadata_audit.ParticipantMatches);
+    fprintf('  Session matches: %d\n', ...
+        bids_metadata_audit.SessionMatches);
+    fprintf('  Scan matches: %d\n', ...
+        bids_metadata_audit.ScanMatches);
+end
 
 writetable(final_qc_table, 'group_qc_table.csv') % can use this and sort by gm_signal and signal_gm proportions and also number_kept_ics to help find the bad or adjustable data
 writetable(final_qc_corrs_table, 'group_qc_corrs_table.csv') % does have subject, session, and task recorded as column variables too!
