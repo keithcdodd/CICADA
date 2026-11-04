@@ -110,17 +110,17 @@ for i = 1:length(sub_ids)
     
     % grab functionals
     func_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/func'];
-    funcfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-preproc_bold.nii.gz'];
-    funcmask = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_space-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz'];
-    confoundsfile = [func_dir, '/sub-', sub_id, '_ses-01_task-rest_desc-confounds_timeseries.tsv'];
+    funcfile = [func_dir, '/sub-', sub_id, '_ses-', ses-id, '_task-', task_name, '_space-MNI152NLin2009cAsym_res-02_desc-preproc_bold.nii.gz'];
+    funcmask = [func_dir, '/sub-', sub_id, '_ses-', ses-id, '_task-', task_name, '_space-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz'];
+    confoundsfile = [func_dir, '/sub-', sub_id, '_ses', ses-id, '_task-', task_name, '_desc-confounds_timeseries.tsv'];
     
     % grab anatomicals
     anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/anat'];
-    anatfile = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_desc-preproc_T1w.nii.gz'];
-    anatmask = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz'];
-    gm_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-GM_probseg.nii.gz'];
-    wm_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-WM_probseg.nii.gz'];
-    csf_prob = [anat_dir, '/sub-', sub_id, '_ses-01_space-MNI152NLin6Asym_res-02_label-CSF_probseg.nii.gz'];
+    anatfile = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_desc-preproc_T1w.nii.gz'];
+    anatmask = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz'];
+    gm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-GM_probseg.nii.gz'];
+    wm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-WM_probseg.nii.gz'];
+    csf_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-CSF_probseg.nii.gz'];
 
     % default tolerance
     tolerance = 5;
