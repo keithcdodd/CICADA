@@ -1,6 +1,6 @@
 %% Example: run separate first-level CICADA task GLMs over several scans
 % Each scan gets its own output. This is not a second-level/group GLM.
-% Requires completed CICADA outputs and enough RAM for each 4-D BOLD.
+% Requires completed CICADA outputs and enough RAM for each 4-D BOLD individually.
 
 bidsRoot = '/path/to/bids_data';
 resultRoot = '/path/to/separate/task_glm_results';

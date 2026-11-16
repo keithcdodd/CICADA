@@ -3,14 +3,18 @@ function R = cicada_task_glm(cfg)
 %
 % R = cicada_task_glm(cfg)
 %
-% Single-run, original-BOLD joint task + selected ICA-noise GLM.
-% Reads ALREADY COMPLETED Auto/Manual CICADA scan products; never calls
-% CICADA denoising or changes its managed derivatives. No Group CICADA.
+% Single-run task GLM. Default: original-BOLD joint task + ICA-noise.
+% Experimental group_matched mode: verified unsmoothed Group BOLD with
+% rank-aware covariance. Group map export requires explicit opt-in and
+% remains scientifically provisional (no calibrated p/t/z inference).
+% Reads ALREADY COMPLETED data; never runs CICADA denoising or Group QC.
 % Requires CICADA hrf_conditions_raw.csv and matching TaskHRF provenance.
 % No inference-calibrated t/z/p/CI output is produced.
 %
-% Normal use: one call validates, fits the full processing mask,
-% and exports to a NEW, separate output directory (never overwrites).
+% Normal use: validate, fit, and export to a NEW independent directory.
+% By default fit the full processing mask. cfg.analysisMaskFile optionally
+% selects an aligned binary subset for the GLM only; it NEVER changes the
+% Group/ICA processing mask or the temporal cleaning operator.
 % Supply cfg.resultRoot for automatic subject/session/run/mode naming,
 % or cfg.outputDir for an explicitly chosen result directory.
 % Optional cfg.dryRun=true: validate/design only, with no writes.
@@ -20,7 +24,9 @@ function R = cicada_task_glm(cfg)
 %           cfg.resultRoot or cfg.outputDir,
 %           cfg.namedContrasts (or contrastNames+contrastTaskWeights).
 % Model: cfg.model='AR1' (default) or 'AR2'.
-% Input: original CICADA funcfile.nii.gz; NOT cleaned BOLD.
+% Input: cfg.inputMode='original_joint' (default) uses original CICADA
+% funcfile.nii.gz. cfg.inputMode='group_matched' uses a verified,
+% unsmoothed, unscaled Group-prepared BOLD and producer-time recipe.
 % Full-mask processing loads the entire 4D image into memory before
 % statistical batching; check available memory before use.
 %
@@ -54,6 +60,20 @@ end
 cfg=opt(cfg,'runAnalysis',false);
 cfg=opt(cfg,'writeOutputs',false);
 cfg=opt(cfg,'model','AR1');
+cfg=opt(cfg,'analysisMaskFile','');
+cfg=opt(cfg,'inputMode','original_joint');
+cfg=opt(cfg,'groupRecipe','');
+cfg.inputMode=lower(char(string(cfg.inputMode)));
+assert(ismember(cfg.inputMode,{'original_joint','group_matched'}), ...
+    'cfg.inputMode must be original_joint or group_matched');
+groupMode=strcmp(cfg.inputMode,'group_matched');
+if groupMode
+    assert(ischar(cfg.groupRecipe) || ...
+        (isstring(cfg.groupRecipe) && isscalar(cfg.groupRecipe)), ...
+        'groupRecipe must be a path string');
+    assert(isfile(char(cfg.groupRecipe)), ...
+        'group_matched requires an existing producer-time recipe');
+end
 cfg=opt(cfg,'resultRoot','');
 cfg=opt(cfg,'icSelection','auto');
 cfg=opt(cfg,'driftModel','cosine');
@@ -64,17 +84,23 @@ cfg=opt(cfg,'batchVoxels',64);
 cfg=opt(cfg,'allowAllVoxels',false);
 cfg=opt(cfg,'allowLargeRun',false);
 cfg=opt(cfg,'allowSparseTrial',false);
+cfg=opt(cfg,'allowGroupExport',false);
 cfg=opt(cfg,'returnBeta',false);
 cfg=opt(cfg,'maxCacheBytes',256*1024^2);
 
 for f={'runAnalysis','writeOutputs','allowAllVoxels','allowLargeRun', ...
-        'allowSparseTrial','returnBeta'}
+        'allowSparseTrial','allowGroupExport','returnBeta'}
     name=f{1};
     assert(islogical(cfg.(name)) && isscalar(cfg.(name)), ...
         'cfg.%s must be scalar logical true/false',name);
 end
 assert(~cfg.writeOutputs || cfg.runAnalysis, ...
     'writeOutputs=true requires runAnalysis=true');
+if groupMode && cfg.writeOutputs
+    assert(cfg.allowGroupExport, ...
+        ['Experimental Group map export requires explicit ', ...
+         'cfg.allowGroupExport=true; no p/t/z inference is available.']);
+end
 assert(ischar(cfg.model) || ...
     (isstring(cfg.model) && isscalar(cfg.model)), ...
     'cfg.model must be AR1 or AR2');
@@ -82,9 +108,8 @@ cfg.model=upper(char(string(cfg.model)));
 assert(ismember(cfg.model,{'AR1','AR2'}), ...
     'cfg.model must be AR1 or AR2');
 
-% Do not accept legacy FILM execution through this wrapper. The proven
-% FILM comparator remains separately available for explicitly requested
-% use; it has different execution/output semantics.
+% Never execute FILM through this wrapper. Historical FILM comparisons
+% are research validation, not a shipped alternate execution pathway.
 if isfield(cfg,'execute')
     assert(isequal(cfg.execute,false) || isequal(cfg.execute,0), ...
         ['Do not set cfg.execute=true here; use ', ...
@@ -125,6 +150,9 @@ if ~isempty(cfg.resultRoot)
             'Unsafe result-folder label: %s',folderLabels{ii});
     end
     outputLabel=strjoin(folderLabels,'_');
+    if groupMode
+        outputLabel=[outputLabel '_group_matched'];
+    end
     cfg.outputDir=fullfile(root,outputLabel);
     % Do not accidentally put analyses inside the CICADA source tree.
     repoRoot=char(java.io.File( ...
@@ -142,10 +170,11 @@ assert(isfield(cfg,'outputDir') && ...
 
 % Prevent misspelled execution options from silently doing a dry run.
 known={'runAnalysis','writeOutputs','dryRun','resultRoot', ...
-    'model','icSelection', ...
+    'model','icSelection','inputMode','groupRecipe','allowGroupExport', ...
     'driftModel','highPassHz','maxVoxels','voxelIndices', ...
     'batchVoxels','allowAllVoxels','allowLargeRun','allowSparseTrial', ...
     'returnBeta','maxCacheBytes','execute','outputDir','scanDir', ...
+    'analysisMaskFile', ...
     'bidsRoot','subject','session','runFolder','expectedTR', ...
     'contrastNames','contrastTaskWeights','namedContrasts', ...
     'outputRoot','driftDegree','referenceDesignMat', ...
@@ -163,19 +192,37 @@ assert(isfolder(helperDir), ...
 originalPath = path;
 restoreHelperPath = onCleanup(@()path(originalPath)); %#ok<NASGU>
 addpath(helperDir, '-begin');
+if groupMode
+    rootHelpers=fullfile(fileparts(fileparts(mfilename('fullpath'))), ...
+        'helper_functions');
+    assert(isfile(fullfile(rootHelpers,'cicada_group_producer_recipe_v01.m')) && ...
+        isfile(fullfile(rootHelpers,'cicada_temporal_transform.m')), ...
+        'Missing CICADA Group recipe and temporal processing helpers');
+    addpath(rootHelpers, '-begin');
+    addpath(helperDir, '-begin');
+    assert(strcmp(which('cicada_group_producer_recipe_v01'), ...
+        fullfile(rootHelpers,'cicada_group_producer_recipe_v01.m')) && ...
+        strcmp(which('cicada_temporal_transform'), ...
+        fullfile(rootHelpers,'cicada_temporal_transform.m')), ...
+        'Wrong Group producer/temporal helper version resolved');
+end
 
 % Reuse the validated preflight verbatim; force no execution.
 preCfg=cfg;
 preCfg.execute=false;
+preflightFunction='cicada_task_glm_preflight';
+if groupMode
+    preflightFunction='cicada_task_glm_group_preflight';
+end
 if cfg.runAnalysis
     % Save verbose preflight messages; do not print the helper's historical
     % FILM dry-run messages during an ordinary full analysis.
-    preflightLog=evalc('S=cicada_task_glm_option1_film_pilot(preCfg);');
+    preflightLog=evalc('S=feval(preflightFunction,preCfg);');
     fprintf('CICADA task GLM | %s | %d volumes | %s\n', ...
         S.scanDir,S.N,cfg.model);
 else
     preflightLog='';
-    S=cicada_task_glm_option1_film_pilot(preCfg);
+    S=feval(preflightFunction,preCfg);
 end
 assert(strcmp(S.status,'DRY_RUN') && ~S.executed, ...
     'Preflight unexpectedly attempted execution');
@@ -183,6 +230,9 @@ assert(strcmp(S.status,'DRY_RUN') && ~S.executed, ...
 R=struct();
 R.status='PREFLIGHT_ONLY';
 R.method='ORIGINAL_BOLD_JOINT_REML_FGLS';
+if groupMode
+    R.method='GROUP_MATCHED_REDUCED_REML_FGLS';
+end
 R.model=cfg.model;
 R.preflight=S;
 R.preflightLog=preflightLog;
@@ -232,6 +282,9 @@ W=cicada_task_glm_reml_wholerun_readonly(S,fitOpts);
 W.fileFingerprints=fileFingerprints;
 R.fit=W;
 R.status='IN_MEMORY_FIT_PROVISIONAL';
+if groupMode
+    R.status='IN_MEMORY_GROUP_FIT_PROVISIONAL';
+end
 
 % Run the same guarded exporter first in PREVIEW mode. This checks
 % source lineage, exact design, geometry, coverage, and path safety.

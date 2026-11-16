@@ -1,14 +1,15 @@
 function R = cicada_task_glm_reml_wholerun_readonly(S,opts)
 % CICADA_TASK_GLM_REML_WHOLERUN_READONLY  Guarded scan-level REML/FGLS driver.
 %
-% Uses the unchanged, successfully tested numerical functions:
+% Uses the shared, successfully tested numerical functions:
 %   cicada_task_glm_reml_prepare.m
 %   cicada_task_glm_reml_fit_batch.m
 % and the preflight output S from the external FILM utility, called with
 % cfg.execute=false. NO FSL command, image write, or other file write.
 %
-% IMPORTANT: Reads the pre-ICA-cleanup CICADA funcfile.nii.gz (NOT cleaned
-% CICADA or Group output). May contain earlier despiking/preprocessing.
+% Default reads original CICADA funcfile.nii.gz. A verified Group-mode
+% preflight may instead supply an unsmoothed Group BOLD and reduced-space
+% projection/covariance maps. Never use the original exporter on Group data.
 % This is fixed-ICA, model-conditional research code. Plug-in VARCOPE is
 % provisional; do NOT convert to publication-grade p/z/t/CI inference.
 %
@@ -80,13 +81,50 @@ assert(isfield(S,'N') && isnumeric(S.N) && isscalar(S.N), ...
     'Missing volume count');
 assert(isfile(S.files.original) && isfile(S.files.mask), ...
     'Original BOLD or scan mask no longer exists');
-assert(size(S.glm.X0,1)==S.N && ...
+analysisMaskFile=S.files.mask;
+if isfield(S.files,'analysisMask')
+    analysisMaskFile=S.files.analysisMask;
+end
+assert(isfile(analysisMaskFile), ...
+    'GLM analysis mask no longer exists: %s',analysisMaskFile);
+groupMode=isfield(S,'inputMode') && strcmp(S.inputMode,'group_matched');
+sourceFile=S.files.original;
+observedN=S.N;
+if groupMode
+    assert(isfield(S,'group') && isfield(S.group,'recipePath') && ...
+        isfile(S.group.recipePath), ...
+        'Missing producer-time Group recipe');
+    Q=cicada_group_producer_recipe_v01('verify',S.group.recipePath);
+    assert(isfield(S.files,'groupPrepared') && ...
+        strcmp(char(java.io.File(S.files.groupPrepared).getCanonicalPath()), ...
+        char(java.io.File(Q.PreparedBOLD.GroupPreparedCleanedBOLD.path).getCanonicalPath())), ...
+        'Group BOLD does not match the verified producer recipe');
+    sourceFile=S.files.groupPrepared;
+    assert(isfield(S.glm,'observationMap') && ...
+        isfield(S.glm,'covarianceMap'), ...
+        'Group preflight must supply observation/covariance maps');
+    observationMap=double(S.glm.observationMap);
+    covarianceMap=double(S.glm.covarianceMap);
+    observedN=size(observationMap,1);
+    assert(size(observationMap,2)==S.N && ...
+        size(covarianceMap,1)==observedN && ...
+        size(covarianceMap,2)==S.N && ...
+        rank(observationMap)==observedN && ...
+        rank(covarianceMap)==observedN && ...
+        all(isfinite(observationMap(:))) && ...
+        all(isfinite(covarianceMap(:))), ...
+        'Invalid Group supported-space matrices');
+else
+    observationMap=[];
+    covarianceMap=[];
+end
+assert(size(S.glm.X0,1)==observedN && ...
     size(S.glm.C0,2)==size(S.glm.X0,2) && ...
     numel(S.glm.sampleTimesSeconds)==S.N, ...
     'Incorrect complete-model dimensions');
 
-info=niftiinfo(S.files.original);
-maskInfo=niftiinfo(S.files.mask);
+info=niftiinfo(sourceFile);
+maskInfo=niftiinfo(analysisMaskFile);
 assert(numel(info.ImageSize)>=4 && double(info.ImageSize(4))==S.N, ...
     'Original BOLD volume count disagrees with preflight');
 spaceSize=double(info.ImageSize(1:3));
@@ -100,7 +138,7 @@ assert(numel(info.PixelDimensions)>=4 && ...
     abs(double(info.PixelDimensions(4))-S.glm.TR)<1e-5, ...
     'Input BOLD TR changed since preflight');
 
-mask=(niftiread(S.files.mask)>0);
+mask=(niftiread(analysisMaskFile)>0);
 assert(numel(mask)==prod(spaceSize), 'Mask image size mismatch');
 maskIndex=find(mask(:));
 assert(~isempty(maskIndex),'Empty CICADA mask');
@@ -138,12 +176,15 @@ assert(numel(candidateIdx)<=prod(spaceSize),'Invalid voxel count');
 cacheOpts=struct('model',model, ...
     'maxBatchVoxels',opts.batchVoxels, ...
     'maxCacheBytes',opts.maxCacheBytes);
+if groupMode
+    cacheOpts.covarianceMap=covarianceMap;
+end
 t0=tic;
 cache=cicada_task_glm_reml_prepare(S.glm.X0,S.glm.C0,cacheOpts);
 
 % MATLAB niftiread decompresses/loads the full 4D BOLD; reshape is a
 % logical view of the spatial voxel x time ordering (column-major).
-B=niftiread(S.files.original);
+B=niftiread(sourceFile);
 assert(size(B,4)==S.N && ...
     (size(B,1)*size(B,2)*size(B,3))==prod(spaceSize), ...
     'Loaded BOLD dimensions differ from header');
@@ -156,8 +197,15 @@ R=struct();
 R.status='READ_ONLY_PROVISIONAL_FIXED_ICA';
 R.model=model;
 R.scanDir=S.scanDir;
-R.sourceBOLD=S.files.original;
-R.maskFile=S.files.mask;
+R.sourceBOLD=sourceFile;
+R.inputMode='original_joint';
+if groupMode
+    R.inputMode='group_matched';
+    R.groupRecipePath=S.group.recipePath;
+    R.groupRank=observedN;
+end
+R.maskFile=analysisMaskFile;
+R.processingMaskFile=S.files.mask;
 R.noiseSelectionFile=S.files.noise;
 R.rawHRFFile=S.files.rawHRF;
 R.cleanedProvenanceJSON=S.files.cleanedJSON;
@@ -201,8 +249,8 @@ if opts.returnBeta
     R.beta=nan(cache.P,V);
 end
 
-fprintf('CICADA original-BOLD REML | %s | %d candidates | batch=%d\n', ...
-    model,V,opts.batchVoxels);
+fprintf('CICADA %s REML | %s | %d candidates | batch=%d\n', ...
+    R.inputMode,model,V,opts.batchVoxels);
 fprintf('Precomputed grid=%d, cache approximately %.1f MiB\n', ...
     cache.nGridCandidates,cache.approxCacheBytes/1024^2);
 fprintf('READ ONLY: image data held in memory, no FSL/ICA/NIfTI output.\n');
@@ -213,6 +261,12 @@ for first=1:opts.batchVoxels:V
     Y=double(Yall(candidateIdx(pos),:)).';
     finite=all(isfinite(Y),1);
     variable=(max(Y,[],1)>min(Y,[],1));
+    if groupMode
+        % Reduced coordinates of the ACTUAL saved Group BOLD.
+        Y=observationMap*Y;
+        finite=finite & all(isfinite(Y),1);
+        variable=variable & (max(Y,[],1)>min(Y,[],1));
+    end
     valid=finite & variable;
     R.nonfinite(pos)=~finite(:);
     R.constant(pos)=(finite & ~variable)';

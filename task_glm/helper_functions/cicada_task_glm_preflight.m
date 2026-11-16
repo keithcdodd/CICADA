@@ -1,28 +1,19 @@
-function S = cicada_task_glm_option1_film_pilot(cfg)
-% CICADA_TASK_GLM_OPTION1_FILM_PILOT  Guarded external task-GLM prototype.
+function S = cicada_task_glm_preflight(cfg)
+% CICADA_TASK_GLM_PREFLIGHT  Read-only original-BOLD task design preflight.
+% Builds the existing task HRF + drift + selected ICA-noise design, named
+% contrasts, run metadata and full-rank original-time model for REML/FGLS.
+% Does NOT run FILM, fit BOLD, create directories or write any files.
 %
-% Option 1: jointly fit original subject-level CICADA input BOLD, unscaled
-% task HRFs, centered drift, and the selected ICA noise time courses in
-% FSL FILM. Do NOT feed CICADA-cleaned or Group CICADA BOLD to this model.
+% This routine preserves the task-design mathematical recipe and output
+% fields of the November 13, 2026 legacy FILM dry-run preflight. Its default
+% execution mode is always nonexecuting. cfg.execute=true is rejected.
+% The former experimental FILM pilot is no longer included in the
+% task_glm companion; this preflight never invokes a FILM comparator.
 %
-% DRY RUN BY DEFAULT: reads input metadata/matrices; writes no files.
-% To execute, pass cfg.execute=true. All output goes to a NEW directory
-% outside CICADA-managed derivatives; existing output is never overwritten.
-% This is a fixed-ICA, provisional inferential workflow, NOT calibration
-% of task-informed ICA selection or evidence of valid whole-brain p-values.
-%
-% Examples:
-%   S = cicada_task_glm_option1_film_pilot;
-%   cfg = struct('execute',true);
-%   S = cicada_task_glm_option1_film_pilot(cfg);
-%   cfg = struct('subject','sub-135','execute',false);
-%   S = cicada_task_glm_option1_film_pilot(cfg);
-%
-% Copyright: standalone research prototype; review before CICADA integration.
+% For task GLM, use the public cicada_task_glm.m entry point.
 
 if nargin < 1 || isempty(cfg), cfg = struct(); end
 assert(isstruct(cfg) && isscalar(cfg), 'cfg must be a scalar struct');
-homeDir = getenv('HOME');
 
 cfg = default(cfg, 'bidsRoot', '');
 cfg = default(cfg, 'subject', '');
@@ -40,19 +31,17 @@ cfg = default(cfg, 'highPassHz', 0.008);
 cfg = default(cfg, 'execute', false);
 cfg = default(cfg, 'outputDir', '');
 cfg = default(cfg, 'referenceDesignMat', '');
-cfg = default(cfg, 'filmThreshold', 0);
-cfg = default(cfg, 'filmAcfSpatialSmoothing', true);
-cfg = default(cfg, 'filmAcfMaskSize', 5);
 cfg = default(cfg, 'icSelection', 'auto');
+cfg = default(cfg, 'analysisMaskFile', '');
 assert(isscalar(cfg.execute) && ...
     (islogical(cfg.execute) || ...
     (isnumeric(cfg.execute) && ...
     isfinite(cfg.execute) && ...
     ismember(cfg.execute,[0 1]))), ...
     'execute must be true/false or 0/1');
+assert(~logical(cfg.execute), ...
+    'Design preflight never executes FILM or a task GLM; set execute=false');
 assert(ismember(cfg.driftDegree, [0 1 2]), 'Use drift degree 0/1/2');
-assert(isfinite(cfg.filmThreshold) && isscalar(cfg.filmThreshold));
-assert(isfinite(cfg.filmAcfMaskSize) && cfg.filmAcfMaskSize > 0);
 assert(ischar(cfg.subject) || isstring(cfg.subject));
 assert(ischar(cfg.session) || isstring(cfg.session));
 assert(ischar(cfg.runFolder) || isstring(cfg.runFolder));
@@ -98,9 +87,13 @@ cleanedDir = fullfile(scanDir, 'cleaned');
 J = dir(fullfile(cleanedDir, ...
     sprintf('*CICADA_%s_nonagg_bold.json', selection)));
 
+% Ignore macOS AppleDouble metadata files.
+J = J(~startsWith(string({J.name}), "._"));
+
 assert(numel(J) == 1, ...
-    'Expected one Auto CICADA cleaned-BOLD JSON in %s; found %d', ...
-    cleanedDir, numel(J));
+    'Expected one %s CICADA cleaned-BOLD JSON in %s; found %d: %s', ...
+    selection, cleanedDir, numel(J), ...
+    strjoin({J.name}, ', '));
 
 files.cleanedJSON = fullfile(J(1).folder, J(1).name);
 files.cleaned = regexprep(files.cleanedJSON, ...
@@ -113,8 +106,24 @@ files.noise = fullfile(scanDir, ...
     sprintf('ic_%s_selection',selection), ...
     sprintf('%s_noise_dist_ICs.csv',selection));
 files.rawHRF = fullfile(scanDir,'hrf_conditions_raw.csv');
+% The Group/ICA processing mask is scientifically fixed by the producer
+% recipe. Never replace it when selecting voxels for the downstream GLM.
 files.mask = fullfile(scanDir,'funcmask.nii.gz');
-fields = {'original','mix','noise','rawHRF','mask','cleanedJSON'};
+files.analysisMask = files.mask;
+analysisMaskSelection = 'processing_default';
+if ~isempty(cfg.analysisMaskFile)
+    assert((ischar(cfg.analysisMaskFile) && isrow(cfg.analysisMaskFile)) || ...
+        (isstring(cfg.analysisMaskFile) && isscalar(cfg.analysisMaskFile)), ...
+        'cfg.analysisMaskFile must be a file path');
+    requested = char(cfg.analysisMaskFile);
+    assert(~isempty(strtrim(requested)) && ...
+        java.io.File(requested).isAbsolute(), ...
+        'cfg.analysisMaskFile must be an absolute path');
+    files.analysisMask = requested;
+    analysisMaskSelection = 'explicit_binary_subset';
+end
+fields = {'original','mix','noise','rawHRF','mask', ...
+    'analysisMask','cleanedJSON'};
 for k = 1:numel(fields)
     assert(isfile(files.(fields{k})), 'Missing %s: %s',fields{k},files.(fields{k}));
 end
@@ -128,6 +137,29 @@ assert(isequal(double(info.ImageSize(1:3)),double(maskInfo.ImageSize(1:3))), ...
     'BOLD/mask grids differ');
 assert(max(abs(double(info.Transform.T(:))-double(maskInfo.Transform.T(:)))) < 1e-3, ...
     'BOLD/mask affines differ');
+
+% Validate the independent GLM sampling mask before any fitting or writing.
+% No atlas resampling, threshold guessing, or modifying the ICA mask.
+analysisInfo = niftiinfo(files.analysisMask);
+assert(numel(analysisInfo.ImageSize)==3 && ...
+    isequal(double(analysisInfo.ImageSize(:)'), ...
+    double(info.ImageSize(1:3))), ...
+    'Analysis mask must be a 3D image on the exact BOLD grid');
+assert(max(abs(double(info.Transform.T(:))- ...
+    double(analysisInfo.Transform.T(:)))) < 1e-3, ...
+    'Analysis mask affine differs from BOLD');
+processingMaskData = double(niftiread(files.mask));
+analysisMaskData = double(niftiread(files.analysisMask));
+assert(all(isfinite(analysisMaskData(:))) && ...
+    all(analysisMaskData(:)==0 | analysisMaskData(:)==1), ...
+    'Analysis mask must contain only finite binary values 0 or 1');
+assert(any(analysisMaskData(:)>0), 'Analysis mask is empty');
+assert(~any(analysisMaskData(:)>0 & processingMaskData(:)<=0), ...
+    'Analysis mask extends outside CICADA processing mask');
+processingMaskVoxelCount = nnz(processingMaskData>0);
+analysisMaskVoxelCount = nnz(analysisMaskData>0);
+clear processingMaskData analysisMaskData
+
 if ~isempty(cfg.expectedTR)
     assert(numel(info.PixelDimensions)>=4, 'Missing NIfTI TR');
     assert(abs(double(info.PixelDimensions(4))-cfg.expectedTR)<1e-5, ...
@@ -195,8 +227,8 @@ assert(numel(unique(labels)) == nTask, ...
 
 assert(rank(M)==size(M,2), 'MELODIC matrix rank deficient');
 
-% FILM's original-data joint regression uses demeaned EVs, no explicit
-% intercept. Compare its baseline handling with the previous FILM benchmark.
+% Center the task, drift and selected-ICA columns while retaining an
+% explicit intercept in the REML design returned in S.glm.X0.
 
 X = H;
 evNames = labels;
@@ -303,7 +335,7 @@ C = [CW zeros(size(CW,1), p-nTask)];
 
 % Preflight design diagnostics.
 % Compare each task contrast with versus without ICA noise EVs.
-% These are unweighted design-only diagnostics, not FILM SEs.
+% These are unweighted design-only diagnostics, not REML standard errors.
 
 nBase = nTask + nDrift;
 
@@ -345,8 +377,7 @@ S.icSelection = selection;
 S.driftModel = driftModel;
 S.nDriftRegressors = nDrift;
 S.contrastDesignVarianceFactor = fullFactor;
-% Complete original-time model for independent REML/FGLS.
-% FILM itself continues using the existing demeaned X and C.
+% Complete original-time joint task and nuisance design for REML/FGLS.
 
 S.glm = struct();
 S.glm.X0 = [ones(N,1), X];
@@ -364,7 +395,7 @@ S.glm.residualDimension = N - r - 1;
 % Resolve analysis output directory without mislabeling custom scans.
 defaultOutputDir = fullfile(cfg.outputRoot, ...
     char(cfg.subject), char(cfg.session), ...
-    [char(cfg.runFolder) '_' selection '_joint_film']);
+    [char(cfg.runFolder) '_' selection '_joint_reml']);
 
 if ~isempty(cfg.outputDir)
 
@@ -427,12 +458,13 @@ end
 S.executed = false;
 S.status = 'DRY_RUN';
 S.referenceDesignMaxAbsError = NaN;
-cicadaMask = niftiread(files.mask) > 0;
-S.maskVoxelCount = nnz(cicadaMask);
+S.maskVoxelCount = analysisMaskVoxelCount;
+S.processingMaskVoxelCount = processingMaskVoxelCount;
+S.analysisMaskSelection = analysisMaskSelection;
 S.taskTimingSource = char(string(timing.timing_source));
 S.firstSampleSeconds = sampleTimes(1);
 
-% Optional reproducibility test against the existing successful FILM design.
+% Optional reproducibility comparison with a saved VEST design matrix.
 if ~isempty(cfg.referenceDesignMat)
     assert(isfile(cfg.referenceDesignMat),'Reference design missing');
     Xref = readVestMatrix(cfg.referenceDesignMat);
@@ -441,210 +473,23 @@ if ~isempty(cfg.referenceDesignMat)
     fprintf('Max difference vs reference FILM design: %.9g\n', ...
         S.referenceDesignMaxAbsError);
     assert(S.referenceDesignMaxAbsError < 1e-8, ...
-        'Generated design differs from the previously validated benchmark');
+        'Generated design differs from the reference design');
 end
 
-fprintf('Option 1 original-BOLD + ICA joint FILM | execute=%d\n',cfg.execute);
+fprintf('CICADA task GLM | design preflight only | no fitting or writes\n');
 fprintf('%s | N=%d, EVs=%d, rank=%d, residual=%d\n', ...
     scanDir,N,p,r,S.residualDimension);
-fprintf('CICADA mask nonzero voxels: %d (not directly supplied to FILM)\n',S.maskVoxelCount);
-fprintf('Output (only if execute=true): %s\n', S.outputDir);
-fprintf('CICADA inputs are never modified. No Group CICADA used.\n');
+fprintf('GLM analysis mask voxels: %d (processing mask: %d)\n', ...
+    S.maskVoxelCount,S.processingMaskVoxelCount);
+fprintf('Output location (not created): %s\n',S.outputDir);
+fprintf('PREFLIGHT ONLY: original inputs unchanged, no FILM invoked.\n');
 
-if ~cfg.execute
-    fprintf('DRY RUN complete. No files written; no FILM command invoked.\n');
-    return
-end
-
-% Guard against overwriting any previous analysis. Avoid quotes in paths.
-assert(~isfolder(S.outputDir) && ~isfile(S.outputDir), ...
-    'Output already exists; refusing to overwrite: %s',S.outputDir);
-assert(exist('call_fsl','file')==2, ...
-    'call_fsl not found on MATLAB path; load CICADA/FSL MATLAB startup');
-assert(~contains([files.original S.outputDir], '"'), ...
-    'Unsupported double-quote in input/output path');
-[ok,msg] = mkdir(S.outputDir);
-assert(ok,'Failed to create new analysis directory: %s',msg);
-matPath = fullfile(S.outputDir,'design.mat');
-conPath = fullfile(S.outputDir,'design.con');
-statsDir = fullfile(S.outputDir,'film_stats');
-writeVestMatrix(matPath,X);
-writeVestContrast(conPath,C);
-
-cmd = sprintf('film_gls --in="%s" --pd="%s" --con="%s" --rn="%s" --thr=%.8g', ...
-    files.original,matPath,conPath,statsDir,cfg.filmThreshold);
-if cfg.filmAcfSpatialSmoothing
-    cmd = sprintf('%s --sa --ms=%.8g',cmd,cfg.filmAcfMaskSize);
-end
-
-% Clear record of whether this run generated its output; keep logs/provenance
-% outside CICADA-managed derivatives. No statistical validation claimed.
-manifest = struct();
-manifest.schemaVersion = 'research_option1_film_pilot_0.1';
-manifest.method = 'original BOLD + HRF/drift/noise IC joint FILM';
-manifest.inputFiles = files;
-manifest.taskNames = labels;
-manifest.noiseIndices = noise;
-manifest.nTimepoints = N;
-manifest.nRegressors = p;
-manifest.modelRank = r;
-manifest.nominalResidualDOF = S.residualDimension;
-manifest.contrastNames = contrastNames;
-manifest.taskContrastWeights = CW;
-manifest.driftDegree = cfg.driftDegree;
-manifest.tr = info.PixelDimensions(4);
-manifest.taskTimingSource = S.taskTimingSource;
-manifest.firstSampleSeconds = S.firstSampleSeconds;
-manifest.taskTimingJSON = files.cleanedJSON;
-manifest.filmCommand = cmd;
-manifest.status = 'attempted';
-manifest.statisticalCaveat = ['ICA labels/mixing are data-adaptive. FILM ' ...
-    'variance/p-values are not yet end-to-end calibrated for CICADA.'];
-manifest.spatialCaveat = ['The mask is checked for geometry but is NOT ' ...
-    'passed as an explicit FILM mask; --thr=0 matches the benchmark.'];
-manifest.contrastVIF = contrastVIF;
-manifest.scaledDesignCondition = scaledCondition;
-manifest.icSelection = selection;
-manifest.driftModel = driftModel;
-manifest.nDriftRegressors = nDrift;
-manifest.contrastDesignVarianceFactor = fullFactor;
-
-if strcmp(driftModel,'cosine')
-    manifest.highPassHz = cfg.highPassHz;
-else
-    manifest.highPassHz = [];
-end
-writeJSON(fullfile(S.outputDir,'provenance.json'),manifest);
-
-[status,output] = call_fsl(cmd);
-logfile = fullfile(S.outputDir,'film_console.log');
-fid = fopen(logfile,'w');
-assert(fid>0,'Could not create FILM log');
-fprintf(fid,'FILM exit status: %d\n%s\n',status,output);
-fclose(fid);
-
-manifest.filmExitStatus = status;
-manifest.status = 'FAILED';
-
-nContrasts = size(C,1);
-validVoxelCounts = zeros(nContrasts,1);
-invalidInsideMaskCounts = zeros(nContrasts,1);
-validOutsideMaskCounts = zeros(nContrasts,1);
-outputsOK = (status == 0);
-
-if outputsOK
-    for j = 1:nContrasts
-
-        copeFile = fullfile(statsDir,sprintf('cope%d.nii.gz',j));
-        varFile = fullfile(statsDir,sprintf('varcope%d.nii.gz',j));
-
-        if ~isfile(copeFile)
-            copeFile = fullfile(statsDir,sprintf('cope%d.nii',j));
-        end
-        if ~isfile(varFile)
-            varFile = fullfile(statsDir,sprintf('varcope%d.nii',j));
-        end
-
-        if ~isfile(copeFile) || ~isfile(varFile)
-            outputsOK = false;
-            warning('Missing FILM outputs for contrast %d',j);
-            break
-        end
-
-        B = double(niftiread(copeFile));
-        V = double(niftiread(varFile));
-
-        
-        % Contrast, variance, and CICADA mask must share a voxel grid.
-        if ~isequal(size(B),size(V),size(cicadaMask))
-            outputsOK = false;
-            warning('Image size mismatch for contrast %d',j);
-            break
-        end
-        
-        % Check spatial alignment, not only array dimensions.
-        copeInfo = niftiinfo(copeFile);
-        varInfo = niftiinfo(varFile);
-        
-        copeAffineError = max(abs( ...
-            double(copeInfo.Transform.T(:)) - ...
-            double(maskInfo.Transform.T(:))));
-        
-        varAffineError = max(abs( ...
-            double(varInfo.Transform.T(:)) - ...
-            double(maskInfo.Transform.T(:))));
-        
-        if copeAffineError > 1e-3 || varAffineError > 1e-3
-            outputsOK = false;
-            warning('Spatial affine mismatch for contrast %d',j);
-            break
-        end
-
-
-        valid = isfinite(B) & isfinite(V) & V > 0;
-
-        validVoxelCounts(j) = nnz(valid);
-        
-        invalidInsideMaskCounts(j) = nnz(cicadaMask & ~valid);
-        validOutsideMaskCounts(j) = nnz(~cicadaMask & valid);
-
-        if validVoxelCounts(j) == 0
-            outputsOK = false;
-            warning('No valid voxels for contrast %d',j);
-            break
-        end
-    end
-end
-
-manifest.validVoxelCounts = validVoxelCounts;
-manifest.invalidInsideMaskCounts = invalidInsideMaskCounts;
-manifest.validOutsideMaskCounts = validOutsideMaskCounts;
-manifest.cicadaMaskVoxelCount = S.maskVoxelCount;
-
-if outputsOK
-    manifest.status = 'COMPLETED_PROVISIONAL';
-    S.executed = true;
-    S.status = manifest.status;
-    S.validVoxelCounts = validVoxelCounts;
-end
-
-writeJSON(fullfile(S.outputDir,'provenance.json'),manifest);
-fprintf('FILM exit status: %d; %s\n',status,manifest.status);
-assert(S.executed,'FILM did not complete; inspect film_console.log');
 end
 
 function cfg = default(cfg,name,value)
 if ~isfield(cfg,name) || isempty(cfg.(name))
     cfg.(name)=value;
 end
-end
-
-function writeVestMatrix(path,X)
-fid=fopen(path,'w');
-assert(fid>0,'Cannot write VEST design');
-cleanup=onCleanup(@() fclose(fid)); %#ok<NASGU>
-[n,p]=size(X);
-fprintf(fid,'/NumWaves %d\n/NumPoints %d\n',p,n);
-fprintf(fid,'/PPheights');
-fprintf(fid,' %.16g',max(X,[],1)-min(X,[],1));
-fprintf(fid,'\n/Matrix\n');
-format=[repmat('%.16g\t',1,p-1) '%.16g\n'];
-fprintf(fid,format,X.');
-end
-
-function writeVestContrast(path,C)
-fid=fopen(path,'w');
-assert(fid>0,'Cannot write VEST contrasts');
-cleanup=onCleanup(@() fclose(fid)); %#ok<NASGU>
-[q,p]=size(C);
-fprintf(fid,'/NumWaves %d\n/NumContrasts %d\n',p,q);
-fprintf(fid,'/PPheights');
-fprintf(fid,' %.16g',max(abs(C),[],2));
-fprintf(fid,'\n/RequiredEffect');
-fprintf(fid,' %d',ones(1,q));
-fprintf(fid,'\n/Matrix\n');
-format=[repmat('%.16g\t',1,p-1) '%.16g\n'];
-fprintf(fid,format,C.');
 end
 
 function X=readVestMatrix(path)
@@ -664,11 +509,4 @@ rows=cellfun(@(s)sscanf(s,'%f')',rowLines,'UniformOutput',false);
 assert(~isempty(rows) && all(cellfun(@numel,rows)==numel(rows{1})), ...
     'Invalid VEST rows');
 X=vertcat(rows{:});
-end
-
-function writeJSON(path,data)
-fid=fopen(path,'w');
-assert(fid>0,'Cannot write provenance JSON');
-cleanup=onCleanup(@() fclose(fid)); %#ok<NASGU>
-fprintf(fid,'%s\n',jsonencode(data,'PrettyPrint',true));
 end

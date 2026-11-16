@@ -4,10 +4,17 @@ function cache = cicada_task_glm_reml_prepare(X0,C0,opts)
 % cache = cicada_task_glm_reml_prepare(X0,C0,struct('model','AR1'));
 % cache = cicada_task_glm_reml_prepare(X0,C0,struct('model','AR2'));
 %
-% X0 = N x P original-time joint design, intercept in column 1.
+% X0 = N x P design in fitted time coordinates. For the default
+% original-BOLD path, its first column must be an all-ones intercept.
 % C0 = K x P contrast matrix, with zero intercept contrast weight if desired.
-% The design must include task HRFs, drift, and selected ICA nuisance EVs.
-% The BOLD passed to the subsequent fit must be ORIGINAL CICADA input BOLD.
+% Default original path uses task, drift and rejected IC nuisance EVs.
+% A reduced model instead uses the transformed task/mean design only.
+% For the default path the fitted BOLD must be ORIGINAL input BOLD.
+% Optional opts.covarianceMap (N x Noriginal) enables a PREVERIFIED
+% reduced-space model: fitting uses X0 and Y in N reduced coordinates,
+% while each original-time AR covariance is propagated as B*A*B'.
+% The caller must independently verify B, transformed design, source
+% identity and conditional fixed-ICA assumptions; this is NOT Group mode.
 %
 % This prepares covariance grid factorizations and GLS coefficient operators
 % ONCE, for reuse across batches of voxels. No I/O, FILM, ICA, smoothing,
@@ -32,6 +39,7 @@ opts=setDefault(opts,'r1Grid',-0.20:0.05:0.85);
 opts=setDefault(opts,'k2Grid',-0.40:0.10:0.40);
 opts=setDefault(opts,'maxBatchVoxels',64);
 opts=setDefault(opts,'maxCacheBytes',256*1024^2);
+opts=setDefault(opts,'covarianceMap',[]);
 assert(isscalar(opts.maxBatchVoxels) && ...
     isfinite(opts.maxBatchVoxels) && opts.maxBatchVoxels>=1 && ...
     opts.maxBatchVoxels==floor(opts.maxBatchVoxels), ...
@@ -50,8 +58,22 @@ assert(N>=8 && P>=2 && P<N && rank(X0)==P, ...
     'X0 must be N x P and full column rank with positive residual rank');
 assert(Pc==P && nc>=1 && all(any(C0~=0,2)), ...
     'Contrasts must be nonzero K x P rows');
-assert(max(abs(X0(:,1)-1))<1e-10, ...
-    'Expected explicit intercept in X0(:,1)');
+isReduced=~isempty(opts.covarianceMap);
+if isReduced
+    B=opts.covarianceMap;
+    assert(isnumeric(B) && ismatrix(B) && isreal(B), ...
+        'covarianceMap must be a real numeric matrix');
+    B=double(B);
+    originalN=size(B,2);
+    assert(size(B,1)==N && originalN>=N && ...
+        all(isfinite(B(:))) && rank(B)==N, ...
+        'covarianceMap must be finite, full row rank, N x Noriginal');
+else
+    B=[];
+    originalN=N;
+    assert(max(abs(X0(:,1)-1))<1e-10, ...
+        'Expected explicit intercept in original X0(:,1)');
+end
 
 rGrid=double(opts.r1Grid(:)');
 if strcmp(model,'AR1')
@@ -92,10 +114,19 @@ for a=1:numel(rGrid)
         r1=rGrid(a);
         k2=kGrid(b);
         params(g,:)=[r1 k2];
-        A=ar2Correlation(N,r1,k2);
+        if isReduced
+            Aoriginal=ar2Correlation(originalN,r1,k2);
+            [~,flagOriginal]=chol(Aoriginal,'lower');
+            assert(flagOriginal==0, ...
+                'Original-time covariance not positive definite at grid point %d',g);
+            A=B*Aoriginal*B';
+            A=(A+A')/2;
+        else
+            A=ar2Correlation(N,r1,k2);
+        end
         [LA,flagA]=chol(A,'lower');
         assert(flagA==0, ...
-            'Original-time covariance not positive definite at grid point %d',g);
+            'Fitted-coordinate covariance not positive definite at grid point %d',g);
 
         K=U'*A*U;
         K=(K+K')/2;
@@ -127,6 +158,8 @@ cache=struct();
 cache.status='PREPARED_FIXED_ICA_CONDITIONAL';
 cache.model=model;
 cache.N=N;
+cache.originalTimepoints=originalN;
+cache.usesCovarianceMap=isReduced;
 cache.P=P;
 cache.residualDimension=D;
 cache.nContrasts=nc;
@@ -144,9 +177,10 @@ cache.scaledCondition=scaledCondition;
 cache.rcondR=rcondR;
 cache.maxBatchVoxels=opts.maxBatchVoxels;
 cache.approxCacheBytes=cacheBytes;
-cache.notes=['Read-only scan-level numerical cache. Design, original-BOLD ' ...
-    'lineage, sample timing, ICA selection, and source provenance must be ' ...
-    'verified outside this function. No inferential calibration is claimed.'];
+cache.notes=['Read-only scan-level numerical cache. Input identity, ' ...
+    'design, ICA selection, covariance-map construction and provenance ' ...
+    'must be verified outside this function. No inferential calibration ' ...
+    'is claimed.'];
 end
 
 function A=ar2Correlation(N,r1,k2)

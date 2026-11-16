@@ -33,6 +33,20 @@ The v0.3.2-rc1 MATLAB smoke and the documentation/scope review are complete. **S
 - [ ] Validate a prespecified inferential uncertainty/calibration method; no p/t/z or CI maps before this gate.
 - [ ] Different task/TR and run-boundary/censoring features require new science and software tests before claiming support.
 
+## 2026-11-16 integration addendum (not a release)
+
+- [x] Experimental `group_matched` source branch, matching unsmoothed/unscaled
+  producer recipe, reduced-space AR(1)/AR(2) fitting and complete broad-mask
+  NIfTI COPE/provisional VARCOPE export were tested on `foodpics` sub-135.
+- [x] Independent `cfg.analysisMaskFile` supports selecting GLM voxels without
+  changing the ICA/Group processing mask (bounded test; additional real QC open).
+- [ ] Update historical `SHA256SUMS.txt` only **after** the complete source
+  changes are final. Its deleted FILM pilot entry and older hashes are stale.
+- [ ] Clean-install and old-workflow compatibility tests, Group output
+  non-destruction and recipe portability, owner review of final source/commit.
+- [ ] No t/z/p, calibrated intervals, or claims of general false-positive
+  validity until dedicated end-to-end inferential calibration.
+
 ## Release decision
 
 This package remains **unreleased** until the repository owner chooses to commit, push, or tag it. A user-approved experimental companion release may state the validated foodpics scope, with **no inferential significance output** and explicit limitations. General task support and fully calibrated inference are separate future work.
