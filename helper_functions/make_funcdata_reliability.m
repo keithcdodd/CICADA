@@ -43,14 +43,77 @@ products.RobustTSNRNormalized = fullfile(out_dir, 'funcdata_robust_tsnr_normaliz
 products.DirectReliabilityMask = fullfile(out_dir, 'funcmask_direct_reliability.nii.gz');
 products.Provenance = fullfile(out_dir, 'funcdata_reliability_provenance.tsv');
 
+% Unified constrained masks already include direct-data reliability screening.
+% Resolve the canonical alias and check for conflicting old duplicates BEFORE
+% running FSL or writing any support product. Never delete pre-existing files.
+hasUnifiedMask = isfile(fullfile(task_dir, 'funcmask_constrained_provenance.tsv'));
+if hasUnifiedMask
+    resolved = cicada_locate_support_products(task_dir, 'auto');
+    cicada_assert_nifti_geometry(funcmask_constrained, resolved.FuncMaskConstrained);
+    if ~isequal(niftiread(funcmask_constrained) > 0, ...
+            niftiread(resolved.FuncMaskConstrained) > 0)
+        error('CICADA:ConstrainedMaskInputMismatch', ...
+            'Supplied constrained mask differs from task-folder canonical mask.');
+    end
+    products.DirectReliabilityMask = resolved.DirectReliabilityMask;
+end
+
+% These are outputs produced by THIS function, not the canonical unified
+% mask (which is an upstream input and must never be rewritten here).
 required = {products.TemporalMean, products.TemporalStd, products.TemporalMedian, ...
     products.TemporalMAD, products.RobustTSNR, products.MeanNormalized, ...
-    products.RobustTSNRNormalized, products.DirectReliabilityMask, products.Provenance};
+    products.RobustTSNRNormalized, products.Provenance};
+if ~hasUnifiedMask
+    required{end+1} = products.DirectReliabilityMask; %#ok<AGROW>
+end
 if options.WriteStandardTSNR
     required{end+1} = products.StandardTSNR; %#ok<AGROW>
 end
-if ~options.Overwrite && all(cellfun(@isfile, required))
-    return
+
+% Never overwrite only some existing support products when Overwrite=false.
+% Reuse a complete set after inexpensive provenance/geometry checks;
+% refuse a partial set rather than silently mixing different generations.
+% This cannot prove source *content* identity (legacy provenance has no hashes).
+if ~options.Overwrite
+    existsNow = cellfun(@isfile, required);
+    if any(existsNow)
+        if ~all(existsNow)
+            error('CICADA:PartialReliabilityProducts', ...
+                ['Some direct-data support products already exist in %s, ' ...
+                 'but the requested set is incomplete. No files were rewritten. ' ...
+                 'Inspect the products before explicitly allowing overwrite.'], out_dir);
+        end
+        P = readtable(products.Provenance, 'FileType','text', 'Delimiter','\t');
+        provenanceFields = {'FunctionalFile','ConstrainedMask','MADScale', ...
+            'UsedLowOutlierExclusion'};
+        if height(P) == 1 && all(ismember(provenanceFields, ...
+                P.Properties.VariableNames))
+            savedScale = str2double(string(P.MADScale(1)));
+            savedOutlier = lower(string(P.UsedLowOutlierExclusion(1)));
+            savedOutlierValid = ismember(savedOutlier, ...
+                ["true","false","1","0"]);
+            savedOutlierOn = ismember(savedOutlier,["true","1"]);
+        else
+            savedScale = NaN;
+            savedOutlierValid = false;
+            savedOutlierOn = false;
+        end
+        if height(P) ~= 1 || ~all(ismember(provenanceFields, ...
+                P.Properties.VariableNames)) || ...
+                ~strcmp(string(P.FunctionalFile(1)),string(funcfile)) || ...
+                ~strcmp(string(P.ConstrainedMask(1)),string(funcmask_constrained)) || ...
+                ~isequal(savedScale,double(options.RobustSigmaScale)) || ...
+                ~savedOutlierValid || ...
+                ~isequal(savedOutlierOn, ...
+                    logical(options.UseLowRobustTSNROutlierExclusion))
+            error('CICADA:ReliabilityProvenanceMismatch', ...
+                ['Existing direct-data support products have incompatible ' ...
+                 'source paths or reliability settings; no files were rewritten.']);
+        end
+        geometryProducts = required(~strcmp(required,products.Provenance));
+        cicada_assert_nifti_geometry(funcmask_constrained, geometryProducts{:});
+        return
+    end
 end
 
 q = @(p) ['"', char(p), '"'];
@@ -81,11 +144,10 @@ if options.WriteStandardTSNR
     cicada_write_nifti_like(standard_tsnr, funcmask_constrained, products.StandardTSNR, 'single');
 end
 
-robust_sigma = options.RobustSigmaScale .* tmad;
-robust_tsnr = zeros(size(tmedian), 'single');
-valid_robust = mask & isfinite(tmedian) & isfinite(robust_sigma) & robust_sigma > 0;
-robust_tsnr(valid_robust) = tmedian(valid_robust) ./ robust_sigma(valid_robust);
-robust_tsnr(~isfinite(robust_tsnr) | robust_tsnr < 0) = 0;
+[reliable_mask, robust_tsnr, valid_robust, ...
+    outlier_cutoff, fixed_cutoff, final_cutoff] = ...
+    cicada_robust_tsnr_selection( ...
+        mask, tmedian, tmad, options);
 cicada_write_nifti_like(robust_tsnr, funcmask_constrained, products.RobustTSNR, 'single');
 
 valid_mean_vals = double(tmean(mask & isfinite(tmean) & tmean > 0));
@@ -108,21 +170,53 @@ rtsnr_normalized(mask) = robust_tsnr(mask) ./ max(single(median_rtsnr), eps('sin
 rtsnr_normalized(~isfinite(rtsnr_normalized) | rtsnr_normalized < 0) = 0;
 cicada_write_nifti_like(rtsnr_normalized, funcmask_constrained, products.RobustTSNRNormalized, 'single');
 
-outlier_cutoff = 0;
-if options.UseLowRobustTSNROutlierExclusion
-    log_vals = log1p(valid_rtsnr_vals);
-    low_flags = isoutlier(log_vals, 'median') & log_vals < median(log_vals, 'omitnan');
-    if any(low_flags)
-        outlier_cutoff = max(valid_rtsnr_vals(low_flags));
-    end
+%% Unified constrained-mask compatibility
+
+unifiedProvFile = fullfile( ...
+    task_dir, 'funcmask_constrained_provenance.tsv');
+
+if hasUnifiedMask
+
+    % The constrained mask has already undergone
+    % mean-intensity, temporal, and robust-tSNR screening.
+    upstream = readtable(unifiedProvFile, ...
+        'FileType', 'text', 'Delimiter', '\t');
+
+    assert(height(upstream) == 1 && ...
+        upstream.FinalVoxels(1) == nnz(mask), ...
+        'Constrained-mask provenance does not match the mask.');
+
+    % Every retained voxel must have valid robust-tSNR data.
+    assert(~any(mask(:) & ~valid_robust(:)) && ...
+           ~any(mask(:) & robust_tsnr(:) <= 0), ...
+        'Unified constrained mask contains invalid robust-tSNR voxels.');
+
+    % Do not apply another adaptive exclusion.
+    reliable_mask = mask;
+
+    % Report the cutoff actually applied upstream.
+    outlier_cutoff = upstream.LowRobustTSNRCutoff(1);
+    fixed_cutoff = upstream.FixedRobustTSNRCutoff(1);
+    final_cutoff = upstream.AppliedRobustTSNRCutoff(1);
+
+    mask_semantics = ...
+        "identical_to_unified_constrained_mask_screened_upstream";
+
+else
+
+    % Backward compatibility with older constrained masks.
+    mask_semantics = ...
+        "constrained_mask_plus_finite_nonconstant_timeseries_plus_optional_low_robust_tSNR_exclusion";
+
 end
-fixed_cutoff = 0;
-if ~isempty(options.MinimumRobustTSNR)
-    fixed_cutoff = options.MinimumRobustTSNR;
+
+% In unified runs, DirectReliabilityMask resolves to the canonical file.
+% Do not overwrite that source NIfTI or write a redundant physical duplicate.
+% Older distinct masks continue to be written as before.
+if ~hasUnifiedMask
+    cicada_write_nifti_like(uint8(reliable_mask), funcmask_constrained, ...
+        products.DirectReliabilityMask, 'uint8');
 end
-final_cutoff = max(outlier_cutoff, fixed_cutoff);
-reliable_mask = valid_robust & robust_tsnr > final_cutoff;
-cicada_write_nifti_like(uint8(reliable_mask), funcmask_constrained, products.DirectReliabilityMask, 'uint8');
 
 n_constrained = nnz(mask);
 n_valid = nnz(valid_robust);
@@ -135,7 +229,7 @@ provenance = table(string(release_info.ReleaseTag), ...
     median_mean, median_rtsnr, outlier_cutoff, fixed_cutoff, final_cutoff, ...
     options.RobustSigmaScale, options.UseLowRobustTSNROutlierExclusion, ...
     "temporal_median/(MADScale*temporal_MAD)", ...
-    "constrained_mask_plus_finite_nonconstant_timeseries_plus_optional_low_robust_tSNR_exclusion", ...
+    mask_semantics, ...
     'VariableNames', {'SupportRelease','BaselineRepository','BaselineCommit', ...
     'FunctionalFile','ConstrainedMask','ConstrainedVoxels', ...
     'ValidRobustTSNRVoxels','ReliableVoxels','ReliableFractionOfConstrained', ...

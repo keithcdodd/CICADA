@@ -3,6 +3,11 @@ function [new_GM_probseg_file, new_WM_probseg_file, new_CSF_probseg_file, func_G
 % Refine TPMs (GM, WM, CSF) using T1 intensity + priors (Stage 1),
 % then optionally refine TPMs in functional space with an added
 % susceptibility class (Stage 2).
+% Probably only really helpful if GM, WM, CSF comes from a template space
+% instead of subject specific space, but you have a subject anatomy file
+% T1.
+% Likely not helpful if you are already using subject specific GM, WM, CSF
+% files, like from FSL FAST
 %
 % Inputs:
 %   T1file       = path to T1 NIfTI
@@ -24,11 +29,44 @@ function [new_GM_probseg_file, new_WM_probseg_file, new_CSF_probseg_file, func_G
 %    derived from inverse intensity, and (iii) the Stage-1 TPMs resampled to
 %    functional space as priors. Then a 4-class GMM is fit on the functional mean.
 
-if nargin < 7 || isempty(maxIter)
+if nargin < 8 || isempty(maxIter)
     maxIter = 1;
 end
 
+validateattributes(maxIter, {'numeric'}, ...
+    {'scalar', 'integer', 'positive', 'finite'}, ...
+    mfilename, 'maxIter');
+
 % === Stage 1: Structural refinement (unchanged logic) ====================
+% Verify all structural inputs share the T1 voxel grid.
+infoT1 = niftiinfo(T1file);
+
+assert(numel(infoT1.ImageSize) == 3, ...
+    'T1 must be a 3D image.');
+
+if nargin < 7 || isempty(outPrefix)
+    outPrefix = 'refined';
+end
+
+outPrefix = char(outPrefix);
+
+structuralFiles = {anatMaskFile, GMfile, WMfile, CSFfile};
+
+for k = 1:numel(structuralFiles)
+    thisInfo = niftiinfo(structuralFiles{k});
+
+    assert(isequal(thisInfo.ImageSize, infoT1.ImageSize), ...
+        'Image dimensions do not match T1: %s', structuralFiles{k});
+
+    assert(max(abs(thisInfo.Transform.T(:) - ...
+                   infoT1.Transform.T(:))) < 1e-4, ...
+        'Spatial affine does not match T1: %s', structuralFiles{k});
+
+    assert(strcmpi(string(thisInfo.SpaceUnits), ...
+                   string(infoT1.SpaceUnits)), ...
+        'Spatial units do not match T1: %s', structuralFiles{k});
+end
+
 [GMfilepath, ~]  = fileparts(GMfile);
 [WMfilepath, ~]  = fileparts(WMfile);
 [CSFfilepath, ~] = fileparts(CSFfile);
@@ -57,9 +95,13 @@ prevGM = GM0; prevWM = WM0; prevCSF = CSF0;
 tol = 1e-4;
 
 % Vectorize masked data for GMM fitting
-maskData = mask(:) > 0;
-dataFit  = T1(maskData);
+maskData = mask & isfinite(T1) & ...
+           ((GM0 + WM0 + CSF0) > 0);
 
+assert(nnz(maskData) >= 100, ...
+    'Insufficient valid anatomical voxels for GMM fitting.');
+
+dataFit = T1(maskData);
 for it = 1:maxIter
     % --- Component stats on masked voxels ---
     [muGM, varGM]   = componentStats(dataFit, prevGM(maskData));
@@ -77,8 +119,15 @@ for it = 1:maxIter
                        'Options', statset('MaxIter',200));
 
     % Posteriors over the whole volume (unmasked)
-    P = posterior(gmDist, T1(:));
-    P = reshape(P, [size(T1,1), size(T1,2), size(T1,3), 3]);
+    P = zeros([size(T1), 3]);
+
+    Pmat = posterior(gmDist, dataFit);
+
+    for c = 1:3
+        tmp = zeros(size(T1));
+        tmp(maskData) = Pmat(:,c);
+        P(:,:,:,c) = tmp;
+    end
 
     GM  = P(:,:,:,1) .* prevGM;
     WM  = P(:,:,:,2) .* prevWM;
@@ -90,9 +139,9 @@ for it = 1:maxIter
     CSF = CSF ./ sumAll;
 
     % Convergence
-    delta = mean(abs(GM(:)-prevGM(:))) + ...
-            mean(abs(WM(:)-prevWM(:))) + ...
-            mean(abs(CSF(:)-prevCSF(:)));
+    delta = mean(abs(GM(maskData) - prevGM(maskData))) + ...
+        mean(abs(WM(maskData) - prevWM(maskData))) + ...
+        mean(abs(CSF(maskData) - prevCSF(maskData)));
 
     if delta < tol
         fprintf('Stage 1 converged after %d iterations.\n', it);
@@ -103,7 +152,8 @@ for it = 1:maxIter
 end
 
 % Save Stage 1 outputs
-infoT1 = niftiinfo(T1file);
+infoT1.Datatype = 'single';
+infoT1.BitsPerPixel = 32;
 infoT1.MultiplicativeScaling = 1;
 infoT1.AdditiveOffset = 0;
 
@@ -117,31 +167,40 @@ niftiwrite(single(CSF), strip_ext(fullfile(CSFfilepath, [outPrefix '_CSF_probseg
 
 % === Stage 2: Functional refinement (optional) ===========================
 func_GM_file = ''; func_WM_file = ''; func_CSF_file = ''; func_SUSC_file = '';
-if nargin < 8 || isempty(funcFile)
+if nargin < 6 || isempty(funcFile)
     fprintf('No functional file provided: skipping Stage 2 functional refinement.\n');
     return;
 end
 
 % Load functional (mean image) + mask to func space
 funcInfo = niftiinfo(funcFile);
-funcVol  = double(niftiread(funcInfo));
+funcVol = load_nii_scaled(funcFile);
 if ndims(funcVol) ~= 4
     error('funcFile should be 4D (x,y,z,t).');
 end
 funcMean = mean(funcVol, 4);
 
 % resample structural-refined TPMs + anatomical mask to functional space if needed
-GM_s  = maybe_resample_like(funcMean, funcInfo, GM,  infoT1);
-WM_s  = maybe_resample_like(funcMean, funcInfo, WM,  infoT1);
-CSF_s = maybe_resample_like(funcMean, funcInfo, CSF, infoT1);
-mask_f = maybe_resample_like(funcMean, funcInfo, mask, niftiinfo(anatMaskFile)) > 0.5;
+GM_s = cicada_resample_to_grid( ...
+    GM, infoT1, funcInfo, 'linear');
+
+WM_s = cicada_resample_to_grid( ...
+    WM, infoT1, funcInfo, 'linear');
+
+CSF_s = cicada_resample_to_grid( ...
+    CSF, infoT1, funcInfo, 'linear');
+
+mask_f = cicada_resample_to_grid( ...
+    double(mask), infoT1, funcInfo, 'nearest') > 0.5;
 
 % Clean zeros; mask functional mean
-funcMean = funcMean .* mask_f;
+validF = mask_f & isfinite(funcMean) & (funcMean > 0);
+
+funcMean(~isfinite(funcMean) | ~mask_f) = 0;
 
 % --- Build graded susceptibility prior from inverse intensity -------------
 % Exclude zeros/outside; robust percentile mapping (p5->1, p25->0, linear)
-vals = funcMean(mask_f & funcMean > 0);
+vals = funcMean(validF);
 if isempty(vals)
     error('Functional mean has no positive voxels inside mask.');
 end
@@ -150,7 +209,7 @@ p25 = prctile(vals, 25);
 den = max(p25 - p5, eps);
 suscPrior = (p25 - funcMean) ./ den;         % linear map
 suscPrior = min(max(suscPrior, 0), 1);       % clamp 0..1
-suscPrior(~mask_f) = 0;
+suscPrior(~validF) = 0;
 
 % optional light smoothing to avoid harsh edges
 try
@@ -159,6 +218,7 @@ catch
     % if Image Processing Toolbox absent, skip smoothing
 end
 suscPrior = min(max(suscPrior, 0), 1);
+suscPrior(~validF) = 0;
 
 % --- Assemble 4-class priors and normalize --------------------------------
 sum4 = GM_s + WM_s + CSF_s + suscPrior + eps;
@@ -168,7 +228,7 @@ CSF_p  = CSF_s  ./ sum4;
 SUSC_p = suscPrior ./ sum4;
 
 % --- Fit 4-class univariate GMM on funcMean (masked) ----------------------
-maskDataF = mask_f(:) & (funcMean(:) > 0);
+maskDataF = validF(:);
 dataFitF  = funcMean(maskDataF);
 
 % Component stats seeded from priors within func space
@@ -212,7 +272,7 @@ funcInfo.AdditiveOffset = 0;
 funcInfo.ImageSize = funcInfo.ImageSize(1:3);
 funcInfo.PixelDimensions = funcInfo.PixelDimensions(1:3);
 funcInfo.Datatype = 'single';
-funcInfo.BitsPerPixel = 16;
+funcInfo.BitsPerPixel = 32;
 
 func_GM_file   = fullfile(funcOutDir, [outPrefix '_func_GM_probseg.nii.gz']);
 func_WM_file   = fullfile(funcOutDir, [outPrefix '_func_WM_probseg.nii.gz']);
@@ -254,38 +314,23 @@ end
 
 %% --- Helper: load and scale NIfTI ---------------------------------------
 function V = load_nii_scaled(filename)
+
     info = niftiinfo(filename);
     V = double(niftiread(info));
-    if isfield(info, 'MultiplicativeScaling') && ~isempty(info.MultiplicativeScaling) && info.MultiplicativeScaling ~= 0
-        V = V * info.MultiplicativeScaling;
-    end
-    if isfield(info, 'AdditiveOffset') && ~isempty(info.AdditiveOffset) && info.AdditiveOffset ~= 0
-        V = V + info.AdditiveOffset;
-    end
-end
 
-%% --- Helper: maybe resample source volume to match target geometry -------
-function Vout = maybe_resample_like(targetVol, targetInfo, sourceVol, sourceInfo)
-    % If size already matches, return as-is
-    if isequal(size(targetVol,1), size(sourceVol,1)) && ...
-       isequal(size(targetVol,2), size(sourceVol,2)) && ...
-       isequal(size(targetVol,3), size(sourceVol,3))
-        Vout = sourceVol;
-        return;
-    end
-    % Simple trilinear resize (assumes roughly aligned axes)
-    try
-        Vout = imresize3(sourceVol, size(targetVol), 'linear');
-    catch
-        % Fallback if imresize3 not available
-        [X,Y,Z] = ndgrid( linspace(1,size(sourceVol,1),size(targetVol,1)), ...
-                          linspace(1,size(sourceVol,2),size(targetVol,2)), ...
-                          linspace(1,size(sourceVol,3),size(targetVol,3)) );
-        Vout = interpn(sourceVol, X, Y, Z, 'linear', 0);
-    end
-    % Clamp probabilities if it is TPM-like
-    if max(Vout(:)) <= 1.5 && min(Vout(:)) >= -0.5
-        Vout = min(max(Vout, 0), 1);
+    if isfield(info, 'MultiplicativeScaling')
+
+        slope = double(info.MultiplicativeScaling);
+
+        if isfinite(slope) && slope ~= 0
+
+            offset = double(info.AdditiveOffset);
+
+            assert(isfinite(offset), ...
+                'Invalid NIfTI scaling offset: %s', filename);
+
+            V = slope .* V + offset;
+        end
     end
 end
 
@@ -295,7 +340,7 @@ function pathNoExt = strip_ext(pathIn)
     if endsWith(pathIn, '.nii.gz')
         pathNoExt = extractBefore(pathIn, strlength(pathIn)-6);
     elseif endsWith(pathIn, '.nii')
-        pathNoExt = extractBefore(pathIn, strlength(pathIn)-4);
+        pathNoExt = extractBefore(pathIn, strlength(pathIn)-3);
     else
         pathNoExt = pathIn;
     end

@@ -1,4 +1,5 @@
-function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, use_outliers, percent)
+function funcmask_constrained = make_constrained_funcmask( ...
+    output_dir, funcfile, funcmask, use_outliers, percent, support_options)
 % This will make a constrained smaller funcmask then what is used in
 % CICADA. The purpose is to use this constrained funcmask to help with
 % group funcmask generation. This is needed because CICADA funcmask needs a
@@ -18,6 +19,13 @@ function funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, 
 % (so the user can easily change how the group_funcmask is calculated after
 % CICADA is run).
 % using isoutlier method will remove minimal amount of voxels
+% Optional robust-reliability settings.
+% Existing calls without this argument use CICADA defaults.
+if nargin < 6 || isempty(support_options)
+    support_options = struct();
+end
+
+reliability_options = cicada_support_options(support_options);
 
 % get path to templates
 helper_function_dir = fileparts(mfilename('fullpath')); % this gives current script path
@@ -156,11 +164,142 @@ else
 end
 
 funcmask_constrained_data = single(tmean_funcfile_data > voxel_val_cutoff);
+%% Require nonzero BOLD samples throughout the acquisition.
+% Evaluate pre-denoising functional data, not cleaned or detrended data.
+% This is an observed-data check, not a transform-derived extents mask.
+
+tmpTemporalMask = [tempname(output_dir), '.nii.gz'];
+
+cmd = sprintf( ...
+    'fslmaths "%s" -nan -abs -bin -Tmin "%s"', ...
+    funcfile, tmpTemporalMask);
+
+[status, msg] = call_fsl(cmd);
+
+if status ~= 0 || ~isfile(tmpTemporalMask)
+    error('CICADA:TemporalValidityFailure', ...
+        'Could not evaluate temporal completeness: %s', msg);
+end
+
+temporal_complete = niftiread(tmpTemporalMask) > 0;
+delete(tmpTemporalMask);
+
+assert(isequal(size(temporal_complete), ...
+    size(funcmask_constrained_data)), ...
+    'Temporal-validity mask dimensions do not match.');
+
+n_temporal_excluded = nnz( ...
+    (funcmask_constrained_data > 0) & ~temporal_complete);
+
+funcmask_constrained_data = single( ...
+    (funcmask_constrained_data > 0) & temporal_complete);
+
+fprintf('Excluded %d voxels for incomplete temporal data.\n', ...
+    n_temporal_excluded);
+
+
+%% ---- Robust temporal signal-quality screening ----
+% Use the same pre-denoising funcfile as direct reliability.
+% Apply CICADA's existing conservative robust-tSNR criterion.
+
+% Temporary temporal-statistics images.
+statsDir = tempname(output_dir);
+mkdir(statsDir);
+cleanupStats = onCleanup(@() rmdir(statsDir, 's'));
+
+medianFile = fullfile(statsDir, 'tmedian.nii.gz');
+madFile = fullfile(statsDir, 'tmad.nii.gz');
+
+q = @(p) ['"', char(p), '"'];
+
+% Temporal median.
+cmd = sprintf('fslmaths %s -Tmedian %s', ...
+    q(funcfile), q(medianFile));
+
+[status, msg] = call_fsl(cmd);
+
+if status ~= 0 || ~isfile(medianFile)
+    error('CICADA:TemporalMedianFailure', '%s', msg);
+end
+
+% Temporal median absolute deviation.
+cmd = sprintf('fslmaths %s -sub %s -abs -Tmedian %s', ...
+    q(funcfile), q(medianFile), q(madFile));
+
+[status, msg] = call_fsl(cmd);
+
+if status ~= 0 || ~isfile(madFile)
+    error('CICADA:TemporalMADFailure', '%s', msg);
+end
+
+% Check geometry before using voxelwise data.
+cicada_assert_nifti_geometry( ...
+    funcmask, medianFile, madFile);
+
+tmedian = single(niftiread(medianFile));
+tmad = single(niftiread(madFile));
+
+% Apply the existing validated robust-tSNR selection rule.
+maskBeforeTSNR = funcmask_constrained_data > 0;
+
+[robustKeep, ~, validRobust, ...
+    lowCut, fixedCut, finalCut] = ...
+    cicada_robust_tsnr_selection( ...
+        maskBeforeTSNR, tmedian, tmad, reliability_options);
+
+funcmask_constrained_data = single( ...
+    maskBeforeTSNR & robustKeep);
+
+fprintf('\n=== Constrained mask reliability ===\n');
+fprintf('Before robust tSNR: %d voxels\n', nnz(maskBeforeTSNR));
+fprintf('Valid robust tSNR: %d voxels\n', nnz(validRobust));
+fprintf('Final constrained mask: %d voxels\n', ...
+    nnz(funcmask_constrained_data));
+fprintf('Excluded by robust screening: %d voxels\n', ...
+    nnz(maskBeforeTSNR & ~robustKeep));
+fprintf('Low-outlier cutoff: %.4f\n', lowCut);
+fprintf('Fixed cutoff: %.4f\n', fixedCut);
+fprintf('Applied cutoff: %.4f\n', finalCut);
 
 % The constrained funcmask will just be the opposite of min_voxels, you can
 % write it out
 funcmask_data_info = niftiinfo(funcmask);
 niftiwrite(funcmask_constrained_data, 'funcmask_constrained', funcmask_data_info, 'Compressed', true)
+
+%% Record constrained-mask construction and exclusions
+
+if use_outliers
+    meanMethod = "low_intensity_isoutlier";
+else
+    meanMethod = "lower_intensity_percentile";
+end
+
+nPositiveMean = nnz(tmean_funcfile_data > 0);
+nAfterMean = nnz(tmean_funcfile_data > voxel_val_cutoff);
+nAfterTemporal = nnz(maskBeforeTSNR);
+nFinal = nnz(funcmask_constrained_data);
+
+provenance = table( ...
+    string(funcfile), string(funcmask), meanMethod, ...
+    voxel_val_cutoff, ...
+    nPositiveMean, nAfterMean, n_temporal_excluded, ...
+    nAfterTemporal, nnz(validRobust), ...
+    nnz(maskBeforeTSNR & ~robustKeep), nFinal, ...
+    lowCut, fixedCut, finalCut, ...
+    reliability_options.RobustSigmaScale, ...
+    'VariableNames', { ...
+    'FunctionalFile', 'ProcessingMask', 'MeanIntensityMethod', ...
+    'MeanIntensityCutoff', ...
+    'PositiveMeanVoxels', 'AfterMeanIntensityVoxels', ...
+    'TemporalExcludedVoxels', 'AfterTemporalVoxels', ...
+    'ValidRobustTSNRVoxels', 'RobustTSNRExcludedVoxels', ...
+    'FinalVoxels', 'LowRobustTSNRCutoff', ...
+    'FixedRobustTSNRCutoff', 'AppliedRobustTSNRCutoff', ...
+    'RobustSigmaScale'});
+
+writetable(provenance, ...
+    fullfile(output_dir, 'funcmask_constrained_provenance.tsv'), ...
+    'FileType', 'text', 'Delimiter', '\t');
 
 funcmask_constrained = [output_dir, '/funcmask_constrained.nii.gz'];
 
