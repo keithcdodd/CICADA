@@ -18,6 +18,10 @@ ses_id = '01'; % which scan has the functional scan
 anat_ses_id = '01'; % which session has the anatomical scan of interest
 task_name = 'rest';
 fmriprep_dir = [base_dir, '/bids_data/derivatives/fmriprep'];
+template_space = 'MNI152NLin6Asym';
+template_res = '';  % Automatic if exactly one resolution matches.
+               % Or specify '02', '2', '1', etc.
+task_timing_options = struct();
 
 % to compare to your own data, you can set compare_files to a different
 % full filepath for each subject you want to compare (same length as
@@ -94,6 +98,9 @@ for i = 1:length(sub_ids)
     % default tolerance
     tolerance = 5;
 
-    fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike)
+    fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, ...
+        task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, ...
+        compare_file, tolerance, despike, task_timing_options, ...
+        template_space, template_res)
 end
 

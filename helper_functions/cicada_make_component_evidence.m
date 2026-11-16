@@ -66,7 +66,13 @@ if options.WriteFixedThresholdExtendedMask
         options.ExtendedSmoothingFWHMmm, ...
         local_probability_label(options.FixedThresholdExtendedProbability))); %#ok<AGROW>
 end
-if ~options.Overwrite && all(cellfun(@isfile, expected))
+
+% Rebuild mask-dependent IC evidence for unified constrained masks.
+hasUnifiedMask = isfile(fullfile( ...
+    task_dir, 'funcmask_constrained_provenance.tsv'));
+
+if ~options.Overwrite && ~hasUnifiedMask && ...
+        all(cellfun(@isfile, expected))
     products = cicada_locate_support_products(task_dir, cicada_type);
     return
 end

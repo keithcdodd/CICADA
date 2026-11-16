@@ -22,7 +22,8 @@
 CICADA_script_path = '/Users/keithdodd/GitHub/CICADA';
 addpath(genpath(CICADA_script_path))
 base_dir = '/Users/keithdodd/test_CICADA';
-
+template_space = 'MNI152NLin6Asym';
+res = '2'; % depending on your BIDS naming for res
 
 redo_mel = 0; % don't redo melodic if previously done:
 mel_fol = [];
@@ -110,17 +111,17 @@ for i = 1:length(sub_ids)
     
     % grab functionals
     func_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/func'];
-    funcfile = [func_dir, '/sub-', sub_id, '_ses-', ses-id, '_task-', task_name, '_space-MNI152NLin2009cAsym_res-02_desc-preproc_bold.nii.gz'];
-    funcmask = [func_dir, '/sub-', sub_id, '_ses-', ses-id, '_task-', task_name, '_space-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz'];
-    confoundsfile = [func_dir, '/sub-', sub_id, '_ses', ses-id, '_task-', task_name, '_desc-confounds_timeseries.tsv'];
+    funcfile = [func_dir, '/sub-', sub_id, '_ses-', ses_id, '_task-', task_name, '_space-', template_space, '_res-', res, '_desc-preproc_bold.nii.gz'];
+    funcmask = [func_dir, '/sub-', sub_id, '_ses-', ses_id, '_task-', task_name, '_space-', template_space, '_res-', res, '_desc-brain_mask.nii.gz'];
+    confoundsfile = [func_dir, '/sub-', sub_id, '_ses-', ses_id, '_task-', task_name, '_desc-confounds_timeseries.tsv'];
     
     % grab anatomicals
     anat_dir = [fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id, '/anat'];
-    anatfile = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_desc-preproc_T1w.nii.gz'];
-    anatmask = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz'];
-    gm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-GM_probseg.nii.gz'];
-    wm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-WM_probseg.nii.gz'];
-    csf_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-MNI152NLin2009cAsym_res-02_label-CSF_probseg.nii.gz'];
+    anatfile = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-', template_space, '_res-', res, '_desc-preproc_T1w.nii.gz'];
+    anatmask = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-', template_space, '_res-', res, '_desc-brain_mask.nii.gz'];
+    gm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-', template_space, '_res-', res, '_label-GM_probseg.nii.gz'];
+    wm_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-', template_space, '_res-', res, '_label-WM_probseg.nii.gz'];
+    csf_prob = [anat_dir, '/sub-', sub_id, '_ses-', ses_id, '_space-', template_space, '_res-', res, '_label-CSF_probseg.nii.gz'];
 
     % default tolerance
     tolerance = 5;

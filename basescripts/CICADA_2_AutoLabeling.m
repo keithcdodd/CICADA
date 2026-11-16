@@ -131,7 +131,7 @@ anatmask = [anatmask_info.folder, '/', anatmask_info.name];
 % and direct-data reliability. The default method removes unusually low
 % temporal-mean functional-data outliers while preserving the broader
 % funcmask used for subject-level MELODIC/IC classification.
-funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, 1, []);
+funcmask_constrained = make_constrained_funcmask(output_dir, funcfile, funcmask, 1, [], support_options);
 
 % Direct-data reliability is intentionally separate from IC-derived evidence.
 try

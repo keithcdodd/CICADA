@@ -1,4 +1,5 @@
-function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, task_events_file, compare_file, tolerance, despike, task_timing_options)
+function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_name, anat_ses_id, redo_mel, mel_fol, ...
+    task_events_file, compare_file, tolerance, despike, task_timing_options, template_space, template_res)
 % A wrapper script to make it easier to work with fmriprep datasets and run
 % CICADA on them.
 % fmriprep_dir: home directory for fmriprep folder: e.g. /path/fmriprep
@@ -17,13 +18,41 @@ function fmriprep_auto_CICADA(fmriprep_dir, cicada_dir, sub_id, ses_id, task_nam
 % for you, but if you already have a MELODIC folder you insist on using,
 % you can supply that here
 
+% Optional spatial template.
+if nargin < 14 || isempty(template_space)
+    template_space = 'MNI152NLin6Asym';
+end
 
-% check if fmriprep has sessions or not (if only one session, might not!)
-if isfolder([fmriprep_dir, '/sub-', sub_id, '/ses-', ses_id])
-    has_ses = 1; % this is the expected structure, with multiple sessions
+% Optional functional resolution label.
+% Empty means automatically accept a unique matching resolution.
+% Examples: '2', '02', '1', 'native'.
+if nargin < 15 || isempty(template_res)
+    template_res = '';
+end
+
+% Anatomical and functional files must use the same template,
+% but need not have identical spatial sampling resolutions.
+space_pattern = ['space-' template_space '_*'];
+
+if isempty(template_res)
+    func_space_pattern = space_pattern;
 else
-    has_ses = 0;
-    ses_id = ''; % then give empty ses_id
+    template_res = char(string(template_res));
+    func_space_pattern = ...
+        ['space-' template_space '_res-' template_res '_*'];
+end
+
+sub_dir = fullfile(fmriprep_dir, ['sub-' sub_id]);
+
+if ~isempty(ses_id)
+    session_dir = fullfile(sub_dir, ['ses-' ses_id]);
+
+    assert(isfolder(session_dir), ...
+        'Requested session directory not found: %s', session_dir);
+
+    has_ses = true;
+else
+    has_ses = false;
     anat_ses_id = '';
 end
 
@@ -108,81 +137,145 @@ else
     fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/anat'];
 end
 
+% Anatomical derivatives may be stored at subject level.
+if ~isfolder(fmriprep_anat_dir)
+    fallback_anat_dir = fullfile(fmriprep_dir, ...
+        ['sub-' sub_id], 'anat');
+
+    if isfolder(fallback_anat_dir)
+        fmriprep_anat_dir = fallback_anat_dir;
+    end
+end
 
 if ~isfolder(fmriprep_func_dir)
-    fprintf(['Cannot find fmriprep func dir at ', fmriprep_func_dir, '\n'])
-    return;
-elseif ~isfolder(fmriprep_anat_dir)
-    fprintf(['Cannot find fmriprep anat dir at ', fmriprep_anat_dir, '\n'])
+    fprintf('Cannot find fMRIPrep functional directory: %s\n', ...
+        fmriprep_func_dir);
     return;
 else
     % first grab things from func folder
     cd(fmriprep_func_dir)
-    % s* is to make sure it does not pull/find a temp file on accident and
-    % makes sure it starts with sub
-    funcfile_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*2009c*preproc_bold.nii.gz']);
-    funcfile = [funcfile_info.folder, '/', funcfile_info.name];
-    if ~isfile(funcfile)
-        fprintf(['Cannot find fmriprep funcfile at ', funcfile, '\n'])
-        return;
+
+    % Construct the exact subject/session/task prefix.
+    if has_ses
+        run_prefix = ['sub-' sub_id '_ses-' ses_id ...
+            '_task-' task_name];
+    else
+        run_prefix = ['sub-' sub_id '_task-' task_name];
     end
 
-    funcmask_info = dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'space-MNI*2009c*brain_mask.nii.gz']);
-    funcmask = [funcmask_info.folder, '/', funcmask_info.name];
-    confounds_info =  dir(['s*', sub_id, '*-', ses_id, '*', task_name, '*', 'desc-confounds_*.tsv']);
-    confoundsfile = [confounds_info.folder, '/', confounds_info.name];
+    % Match the selected template and optional resolution.
+    funcfile_info = dir(fullfile(fmriprep_func_dir, ...
+        [run_prefix '_*' func_space_pattern ...
+        'desc-preproc_bold.nii.gz']));
+
+    assert(numel(funcfile_info) == 1, ...
+        ['Expected exactly one preprocessed BOLD file. ' ...
+         'Check task_name, mni_space, and mni_res.']);
+
+    funcfile = fullfile(funcfile_info.folder, ...
+        funcfile_info.name);
+
+    % Derive the corresponding mask from the exact BOLD filename.
+    funcmask = strrep(funcfile, ...
+        'desc-preproc_bold.nii.gz', ...
+        'desc-brain_mask.nii.gz');
+
+    assert(isfile(funcmask), ...
+        'Missing functional brain mask: %s', funcmask);
+
+    % Confounds must correspond to this acquisition.
+    bold_name = string(funcfile_info.name);
+    assert(contains(bold_name, "_space-"), ...
+        'Cannot identify BIDS space entity.');
+
+    confounds_prefix = extractBefore(bold_name, "_space-");
+
+    confounds_info = dir(fullfile(fmriprep_func_dir, ...
+        char(confounds_prefix + "_desc-confounds_*.tsv")));
+
+    assert(numel(confounds_info) == 1, ...
+        'Expected exactly one matching confounds TSV.');
+
+    confoundsfile = fullfile(confounds_info.folder, ...
+        confounds_info.name);
 
     if ~isfile(confoundsfile)
         fprintf(['Cannot find confounds_file at ', confoundsfile, '\n'])
         return;
     end
-    % and now grab from best anat folder
-    % Note, if you use a different structural other than T1w, you may need
-    % to change that below
-    cd(fmriprep_anat_dir)
-    anatfile_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*2009c*preproc_T1w.nii.gz']);
-    anatfile = [anatfile_info.folder, '/', anatfile_info.name];
-    if ~isfile(anatfile)
-        % it is possible anat file is actually not in a session folder, but
-        % one level up. Try that
-        fmriprep_anat_dir = [fmriprep_dir, '/sub-', sub_id, '/anat'];
 
-        % if this is not a folder, we are out of luck
-        if ~isfolder(fmriprep_anat_dir)
-            fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
-            return;
+    % Search session-level anatomy first, then subject-level anatomy.
+    anat_dirs = unique({ ...
+        fmriprep_anat_dir, ...
+        fullfile(fmriprep_dir, ['sub-' sub_id], 'anat')}, ...
+        'stable');
+
+    anatfile_info = [];
+
+    for d = 1:numel(anat_dirs)
+
+        this_dir = anat_dirs{d};
+
+        if ~isfolder(this_dir)
+            continue;
         end
 
-        cd(fmriprep_anat_dir)
-        anatfile_info = dir(['s*', sub_id, '*space-MNI*2009c*preproc_T1w.nii.gz']);
-        anatfile = [anatfile_info.folder, '/', anatfile_info.name];
+        % Prefer anatomy associated with the requested session.
+        if ~isempty(anat_ses_id)
+            candidate = dir(fullfile(this_dir, ...
+                ['sub-' sub_id '_ses-' anat_ses_id '_' ...
+                space_pattern 'desc-preproc_T1w.nii.gz']));
 
-        if ~isfile(anatfile)
-            fprintf(['Cannot find fmriprep anatfile at ', anatfile, '\n'])
-            return;
+            if ~isempty(candidate)
+                assert(numel(candidate) == 1, ...
+                    'Multiple matching session-level T1 images.');
+                anatfile_info = candidate;
+                break;
+            end
         end
 
-        % there will be no ses_id in anatomy stuff then
-        anatmask_info = dir(['s*', sub_id, '*space-MNI*2009c*desc-brain_mask.nii.gz']);
-        anatmask = [anatmask_info.folder, '/', anatmask_info.name];
-        gm_prob_info = dir(['s*', sub_id, '*space-MNI*2009c*label-GM_probseg.nii.gz']);
-        gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
-        wm_prob_info = dir(['s*', sub_id, '*space-MNI*2009c*label-WM_probseg.nii.gz']);
-        wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
-        csf_prob_info = dir(['s*', sub_id, '*space-MNI*2009c*label-CSF_probseg.nii.gz']);
-        csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
+        % Otherwise look for subject-level T1 without ses- entity.
+        candidate = dir(fullfile(this_dir, ...
+            ['sub-' sub_id '_' space_pattern ...
+            'desc-preproc_T1w.nii.gz']));
 
-    else
-        anatmask_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*2009c*desc-brain_mask.nii.gz']);
-        anatmask = [anatmask_info.folder, '/', anatmask_info.name];
-        gm_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*2009c*label-GM_probseg.nii.gz']);
-        gm_prob = [gm_prob_info.folder, '/', gm_prob_info.name];
-        wm_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*2009c*label-WM_probseg.nii.gz']);
-        wm_prob = [wm_prob_info.folder, '/', wm_prob_info.name];
-        csf_prob_info = dir(['s*', sub_id, '*-', anat_ses_id, '*', 'space-MNI*2009c*label-CSF_probseg.nii.gz']);
-        csf_prob = [csf_prob_info.folder, '/', csf_prob_info.name];
+        if ~isempty(candidate)
+            assert(numel(candidate) == 1, ...
+                'Multiple matching subject-level T1 images.');
+            anatfile_info = candidate;
+            break;
+        end
     end
 
+    assert(numel(anatfile_info) == 1, ...
+        'Could not uniquely identify T1 in the requested space.');
+
+    fmriprep_anat_dir = anatfile_info.folder;
+
+    anatfile = fullfile(fmriprep_anat_dir, ...
+        anatfile_info.name);
+
+    anat_prefix = strrep(anatfile_info.name, ...
+        'desc-preproc_T1w.nii.gz', '');
+
+    anatmask = fullfile(fmriprep_anat_dir, ...
+        [anat_prefix 'desc-brain_mask.nii.gz']);
+
+    gm_prob = fullfile(fmriprep_anat_dir, ...
+        [anat_prefix 'label-GM_probseg.nii.gz']);
+
+    wm_prob = fullfile(fmriprep_anat_dir, ...
+        [anat_prefix 'label-WM_probseg.nii.gz']);
+
+    csf_prob = fullfile(fmriprep_anat_dir, ...
+        [anat_prefix 'label-CSF_probseg.nii.gz']);
+
+    required_anat = {anatfile, anatmask, gm_prob, wm_prob, csf_prob};
+
+    for k = 1:numel(required_anat)
+        assert(isfile(required_anat{k}), ...
+            'Missing anatomical derivative: %s', required_anat{k});
+    end
 end
 
 if has_ses == 1
