@@ -11,6 +11,22 @@ CICADA can be broken down into three parts:
 
 Some details on installation and use can be seen below. More details can be found in the word document "CICADA_UserGuide". Examples and more details on executing CICADA can also be found in the "example_CICADA_flow" directory.
 
+# Optional downstream analysis companions (experimental)
+
+CICADA's core workflow is **Automatic CICADA -> optional Manual CICADA -> Group CICADA** for denoising, organization, and quality control. The optional, independent companions below help prepare scan-level outputs for downstream analyses. They do **not** replace external group-level statistics software.
+
+| Goal | Start with this editable example | Public MATLAB function |
+| --- | --- | --- |
+| Automatic denoising | [`example_Auto_CICADA.m`](example_CICADA_flow/example_code/example_Auto_CICADA.m) or [`example_fmriprep_auto_CICADA.m`](example_CICADA_flow/example_code/example_fmriprep_auto_CICADA.m) | `Auto_CICADA.m` / `fmriprep_auto_CICADA.m` |
+| Group processing and QC | [`example_Group_CICADA.m`](example_CICADA_flow/example_code/example_Group_CICADA.m) | `group_qc/cicada_group_qc.m` |
+| Task contrast from the original scan with jointly modeled ICA-noise terms | [`example_cicada_task_glm_single.m`](task_glm/examples/example_cicada_task_glm_single.m) | `task_glm/cicada_task_glm.m` |
+| Task contrast from a **verified, unsmoothed/unscaled matched Group** scan | [`example_cicada_task_glm_group_matched.m`](task_glm/examples/example_cicada_task_glm_group_matched.m) | `task_glm/cicada_task_glm.m` |
+| Atlas-independent ROI mean BOLD time series and coverage QC | [`example_ROI_CICADA.m`](example_CICADA_flow/example_code/example_ROI_CICADA.m) | `roi/cicada_roi_timeseries.m` |
+
+For an overview, see [`README_optional_companions.md`](example_CICADA_flow/example_code/README_optional_companions.md), [`task_glm/README.md`](task_glm/README.md), and [`roi/README.md`](roi/README.md). The task GLM and ROI tools deliberately retain their own `helper_functions/` directories; use the **public entry points** and their editable examples rather than calling internal helpers directly. No additional wrapper is required.
+
+**Scientific and operational scope:** The optional task GLM produces scan-level contrast estimates (**COPE / contrast-beta maps**), **provisional** contrast-variance maps (**VARCOPE**), masks, and provenance; it does not provide calibrated t/z/p significance maps or population inference. The `group_matched` input mode requires producer-verified matched temporal processing and currently refuses spatially smoothed or voxelwise-scaled Group data. The ROI extractor reports descriptive time-series, coverage, and provenance, not GLM inference; it supports binary masks, labeled atlases, and weighted/4-D ROI definitions with strict geometry matching. Prefer unsmoothed BOLD for small ROI analyses. Both companions use explicit guarded output paths; start with each example's read-only/dry-run configuration.
+
 # Installation
 CICADA requires FSL (tested on 6.0) and Matlab (tested on 2022a). They must be configured to work together (e.g., call_fsl() in matlab calls fsl functions appropriately). Otherwise, this can be cloned and downloaded (e.g., in terminal: git clone https://github.com/keithcdodd/CICADA.git), and the whole folder should be added to the Matlab path (e.g., addpath(genpath()) to include all folders. See included word document for more installation and testing details. You can also find more information on workflow and testing the functions in the "example_CICADA_flow" directory.
 

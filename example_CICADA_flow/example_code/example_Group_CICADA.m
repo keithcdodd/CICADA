@@ -1,4 +1,9 @@
 % After running example_Auto_CICADA, you can try running Group CICADA:
+% Optional NEW first-level task GLM on Group output: see
+% task_glm/examples/example_cicada_task_glm_group_matched.m. That pathway
+% requires a freshly producer-attested 'matched' Group run, degree-2
+% detrending, smoothing_kernel=0 and voxelwise_scale_flag=0. The resting-
+% state example below is for Group QC and is NOT a task-GLM input example.
 
 % Note: You will have to make sure the base directory is the example_CICADA
 % directory, and that the path to the CICADA scripts is correct (and/or
