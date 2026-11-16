@@ -80,6 +80,12 @@ aggregate_modes = {'both','median','median','median','median','median','fraction
 % Everything else remains available, but is classified as QC/sensitivity.
 core_fields = {'DirectReliabilityMask','SignalICOverlapRaw'};
 
+% Step 9: suppress a Group direct-mask duplicate only after verifying the
+% retained per-scan masks AND the ordered canonical Group 4-D stack.
+% Failure to prove equality takes the legacy path (write direct products).
+omit_duplicate_direct = local_group_direct_masks_duplicate(retained, output_dir);
+direct_group_status = "not_written_missing_sources";
+
 
 %% Manifest
 
@@ -129,6 +135,13 @@ for f = 1:numel(fields)
     end
 
     manifest.(fields{f}) = paths;
+
+    if strcmp(fields{f}, 'DirectReliabilityMask') && omit_duplicate_direct
+        direct_group_status = "omitted_verified_duplicate";
+        fprintf(['Skipping the three redundant Group direct-reliability ', ...
+            'outputs: canonical Group masks verified identical.\n']);
+        continue
+    end
 
     valid = strlength(paths) > 0 & cellfun(@isfile, cellstr(paths));
 
@@ -202,8 +215,16 @@ for f = 1:numel(fields)
 
     end
 
+    if strcmp(fields{f}, 'DirectReliabilityMask')
+        direct_group_status = "written";
+    end
+
 end
 
+% This column describes group outputs; the DirectReliabilityMask column
+% above always records retained per-scan source paths, even if omitted.
+manifest.GroupDirectReliabilityOutputs = repmat( ...
+    direct_group_status, numel(retained), 1);
 
 %% Write provenance manifest
 
@@ -215,23 +236,14 @@ writetable(manifest, ...
 
 %% Write a simple human-readable guide
 
-local_write_output_guide(stage_root);
+local_write_output_guide(stage_root, direct_group_status);
 
 
 %% Finalize support-products directory
 
-% Only replace the canonical directory after all products, aggregates,
-% provenance, and documentation have been generated successfully.
-if isfolder(support_root)
-    rmdir(support_root, 's');
-end
-
-[status, msg] = movefile(stage_root, support_root);
-
-if ~status
-    error('CICADA:SupportOutputMoveFailure', ...
-        'Could not finalize group support-products directory: %s', msg);
-end
+% Regenerate by replacement, with restoration of the previous successful
+% tree on an ordinary promotion failure. This does not alter output contents.
+cicada_group_finalize_support_products(stage_root, support_root);
 
 
 %% Console guidance
@@ -247,6 +259,128 @@ fprintf('\n');
 end
 
 
+function yes = local_group_direct_masks_duplicate(retained, output_dir)
+% Confirm exact binary equivalence in manifest/Group 4-D order. Use fslroi
+% to read one Group volume at a time; never load the entire 4-D stack.
+yes = false;
+stack_path = fullfile(output_dir, 'funcmasks.nii.gz');
+if ~isfile(stack_path)
+    return
+end
+
+try
+    info = niftiinfo(stack_path);
+    n_volumes = 1;
+    if numel(info.ImageSize) >= 4
+        n_volumes = double(info.ImageSize(4));
+    end
+    strict_path = fullfile(output_dir, 'group_funcmask.nii.gz');
+    fraction_path = fullfile(output_dir, 'group_funcmask_fraction.nii.gz');
+    if n_volumes ~= numel(retained) || ...
+            ~isfile(strict_path) || ~isfile(fraction_path)
+        return
+    end
+    expected_strict = [];
+    expected_fraction_sum = [];
+
+    % Keep temporary extraction outside all CICADA output trees.
+    temporary_dir = tempname;
+    mkdir(temporary_dir);
+    temporary_cleanup = onCleanup(@() local_remove_temp_dir(temporary_dir)); %#ok<NASGU>
+
+    for i = 1:numel(retained)
+        p = retained{i};
+        if ~isstruct(p) || ~isfield(p, 'TaskDirectory') || ...
+                ~isfield(p, 'FuncMaskConstrained') || ...
+                ~isfield(p, 'DirectReliabilityMask')
+            return
+        end
+        task_dir = char(string(p.TaskDirectory));
+        constrained_path = char(string(p.FuncMaskConstrained));
+        direct_path = char(string(p.DirectReliabilityMask));
+        if isempty(task_dir) || isempty(constrained_path) || ...
+                isempty(direct_path) || ~isfile(constrained_path) || ...
+                ~isfile(direct_path)
+            return
+        end
+        % Unified provenance is required; its voxel count must agree.
+        provenance_path = fullfile(task_dir, ...
+            'funcmask_constrained_provenance.tsv');
+        if ~isfile(provenance_path)
+            return
+        end
+        P = readtable(provenance_path, 'FileType', 'text', ...
+            'Delimiter', '\t');
+        if height(P) ~= 1 || ...
+                ~ismember('FinalVoxels', P.Properties.VariableNames)
+            return
+        end
+
+        % Extract the actual canonical volume. Its index must correspond to
+        % RetainedIndex=i, not the original pre-exclusion scan number.
+        extracted_path = fullfile(temporary_dir, ...
+            sprintf('canonical_%04d.nii.gz', i));
+        [status, ~] = call_fsl(sprintf('fslroi "%s" "%s" %d 1', ...
+            stack_path, extracted_path, i-1));
+        if status ~= 0 || ~isfile(extracted_path)
+            return
+        end
+        cicada_assert_nifti_geometry(constrained_path, ...
+            direct_path, stack_path, extracted_path, ...
+            strict_path, fraction_path);
+        constrained = double(niftiread(constrained_path));
+        direct = double(niftiread(direct_path));
+        group_volume = double(niftiread(extracted_path));
+        if ~isequal(size(constrained), size(direct), size(group_volume)) || ...
+                ~all(isfinite(constrained(:))) || ...
+                ~all(isfinite(direct(:))) || ...
+                ~all(isfinite(group_volume(:))) || ...
+                ~all(constrained(:)==0 | constrained(:)==1) || ...
+                ~all(direct(:)==0 | direct(:)==1) || ...
+                ~all(group_volume(:)==0 | group_volume(:)==1) || ...
+                ~isequal(constrained, direct, group_volume) || ...
+                ~isnumeric(P.FinalVoxels) || ...
+                P.FinalVoxels(1) ~= nnz(constrained)
+            return
+        end
+        if i == 1
+            expected_strict = logical(constrained);
+            expected_fraction_sum = constrained;
+        else
+            expected_strict = expected_strict & logical(constrained);
+            expected_fraction_sum = expected_fraction_sum + constrained;
+        end
+    end
+
+    % Check that the retained 3-D canonical summaries actually match the
+    % same ordered stack, not just that files with those names exist.
+    actual_strict = double(niftiread(strict_path));
+    actual_fraction = double(niftiread(fraction_path));
+    if ~isequal(size(actual_strict), size(expected_strict)) || ...
+            ~isequal(size(actual_fraction), size(expected_strict)) || ...
+            ~all(isfinite(actual_strict(:))) || ...
+            ~all(isfinite(actual_fraction(:))) || ...
+            ~isequal(actual_strict, double(expected_strict)) || ...
+            any(abs(actual_fraction(:) - ...
+                expected_fraction_sum(:) / numel(retained)) > 1e-6)
+        return
+    end
+    yes = true;
+catch ME
+    % A verification error must not silently drop a potentially distinct
+    % legacy product. The old Group-direct output remains the default.
+    warning('CICADA:GroupDirectMaskVerification', ...
+        'Cannot prove duplicate Group masks; retaining legacy outputs: %s', ...
+        ME.message);
+end
+end
+
+function local_remove_temp_dir(path)
+if isfolder(path)
+    rmdir(path, 's');
+end
+end
+
 function local_fslmaths(input_path, operation, output_path)
 
 [status, msg] = call_fsl(sprintf( ...
@@ -261,7 +395,7 @@ end
 end
 
 
-function local_write_output_guide(support_root)
+function local_write_output_guide(support_root, direct_group_status)
 
 readme_path = fullfile(support_root, 'README_OUTPUTS.txt');
 
@@ -283,17 +417,27 @@ fprintf(fid, '=============================\n\n');
 fprintf(fid, 'START HERE\n');
 fprintf(fid, '----------\n\n');
 
-fprintf(fid, 'core/direct_reliability_masks.nii.gz\n');
-fprintf(fid, ['  4-D binary stack, one volume per retained image. Indicates where\n' ...
-    '  direct functional data passed CICADA reliability criteria.\n\n']);
-
-fprintf(fid, 'core/group_direct_reliability_masks_fraction.nii.gz\n');
-fprintf(fid, ['  3-D group map. Each voxel gives the fraction of retained images\n' ...
-    '  with directly reliable functional data at that voxel.\n\n']);
-
-fprintf(fid, 'core/group_direct_reliability_masks_intersection.nii.gz\n');
-fprintf(fid, ['  3-D strict intersection. A voxel survives only if direct functional\n' ...
-    '  data were reliable in every retained image.\n\n']);
+if direct_group_status == "omitted_verified_duplicate"
+    fprintf(fid, 'VERIFIED EQUIVALENT GROUP MASKS (no duplicate direct products)\n');
+    fprintf(fid, ['  funcmasks.nii.gz (4-D retained-order stack)\n' ...
+        '  group_funcmask.nii.gz (3-D strict intersection)\n' ...
+        '  group_funcmask_fraction.nii.gz (3-D retained-scan fraction)\n' ...
+        '  These canonical files are in the parent Group directory.\n' ...
+        '  They were checked against every retained direct mask.\n\n']);
+elseif direct_group_status == "written"
+    fprintf(fid, 'core/direct_reliability_masks.nii.gz\n');
+    fprintf(fid, ['  4-D binary stack, one volume per retained image. Indicates where\n' ...
+        '  direct functional data passed CICADA reliability criteria.\n\n']);
+    fprintf(fid, 'core/group_direct_reliability_masks_fraction.nii.gz\n');
+    fprintf(fid, ['  3-D group map. Each voxel gives the fraction of retained images\n' ...
+        '  with directly reliable functional data at that voxel.\n\n']);
+    fprintf(fid, 'core/group_direct_reliability_masks_intersection.nii.gz\n');
+    fprintf(fid, ['  3-D strict intersection. A voxel survives only if direct functional\n' ...
+        '  data were reliable in every retained image.\n\n']);
+else
+    fprintf(fid, ['Group direct-reliability maps were not written because not all\n' ...
+        '  retained direct-mask source files were available.\n\n']);
+end
 
 fprintf(fid, 'core/signal_ic_overlap_raw_maps.nii.gz\n');
 fprintf(fid, ['  4-D continuous retained-signal IC spatial-evidence stack.\n' ...

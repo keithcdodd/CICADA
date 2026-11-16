@@ -22,7 +22,7 @@ funcfile = fullfile(task_dir, 'funcfile.nii.gz');
 funcmask = fullfile(task_dir, 'funcmask.nii.gz');
 constrained = fullfile(task_dir, 'funcmask_constrained.nii.gz');
 if ~isfile(constrained)
-    constrained = make_constrained_funcmask(task_dir, funcfile, funcmask, 1, []);
+    constrained = make_constrained_funcmask(task_dir, funcfile, funcmask, 1, [], support_options);
 end
 
 make_funcdata_reliability(task_dir, funcfile, constrained, options);

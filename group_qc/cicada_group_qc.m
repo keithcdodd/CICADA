@@ -183,8 +183,20 @@ end
 % set up folders for outputs:
 % Create output_dir, if it does not already exist:
 output_dir = fullfile(group_qc_home, task_name, output_dirname); % because they should ALL be the same, and specified to task
-if not(isfolder(output_dir))
-    mkdir(output_dir)
+% Fail closed BEFORE any existing Group folders or products are modified.
+% Reuse/replacement can be added later only with explicit safeguards.
+if isfolder(output_dir)
+    existing = dir(output_dir);
+    existing = existing(~ismember({existing.name}, {'.','..'}));
+    if ~isempty(existing)
+        error('CICADA:GroupOutputExists', ...
+            ['Refusing to modify nonempty Group output: %s\n', ...
+             'Choose a new output_dirname; existing outputs remain untouched.'], ...
+            output_dir);
+    end
+else
+    [made, mkdirMsg] = mkdir(output_dir);
+    assert(made, 'Cannot create Group output directory: %s', mkdirMsg);
 end
 
 % Preserve the historical double-pair filter input contract, while making
@@ -321,10 +333,8 @@ mkdir(data_dir)
 % files or not
 first_cleaned_dir = [first_task_dir, '/cleaned'];
 
-% a fail safe for funcmasks that could be lurking inside
-if ~isempty(dir([first_cleaned_dir, '/funcmask*']))
-    movefile([first_cleaned_dir, '/funcmask*'], [first_cleaned_dir, '/..'])
-end
+% Do not relocate masks from subject-level cleaned/ folders.
+% File selection below is tag-specific; Group QC must not mutate inputs.
 
 first_image_info = cicada_find_files( ...
     fullfile(first_cleaned_dir, ['*', file_tag, '*.nii.gz']));
@@ -465,10 +475,8 @@ for idx = 1:num_runs
         continue;
     end
 
-    % a fail safe for funcmasks
-    if ~isempty(dir([cleaned_dir, '/funcmask*']))
-        movefile([cleaned_dir, '/funcmask*'], [cleaned_dir, '/..'])
-    end
+    % Do not relocate masks from subject-level cleaned/ folders.
+    % Source products are read-only inputs to Group QC.
 
     % if manually adjusted, will need to pull from manual for this task
     % instance
@@ -577,6 +585,9 @@ for idx = 1:num_runs
     % smoothing kernel is FWHM mm, as this is then properly converted
     % within the detrend_filter_smooth function
     %% Prepare CICADA cleaned data for Group analysis
+    % Only the matched branch currently supports producer-attested recipes.
+    producer_ticket = [];
+    producer_recipe_file = '';
     fprintf('Detrending, Filtering, & Smoothing Cleaned Data and Copying to Group Data Folder...\n')
     temporal_transform_requested = ...
         ~isempty(fpass) || ...
@@ -591,6 +602,56 @@ for idx = 1:num_runs
         fprintf([ ...
             'Preparing CICADA cleaned data with MATCHED temporal/ICA ', ...
             'processing...\n']);
+
+        % Validate the processing mask's geometry, not just its dimensions.
+        cicada_assert_nifti_geometry(orig_file, funcmask);
+        source_header = niftiinfo(orig_file);
+        assert(numel(source_header.ImageSize) >= 4, ...
+            'Expected a 4D Group source BOLD.');
+
+        % Producer-time fingerprints MUST precede the matched transform.
+        recipe_dir = fullfile(output_dir, 'preparation_recipes');
+        if ~isfolder(recipe_dir)
+            [made, mkdirMsg] = mkdir(recipe_dir);
+            assert(made, 'Cannot create recipe directory: %s', mkdirMsg);
+        end
+        recipe_name = sprintf( ...
+            'sub-%s_ses-%s_task-%s_matched_recipe.json', ...
+            sub_id, ses_id, task_name);
+        recipe_cfg = struct();
+        recipe_cfg.recipePath = fullfile(recipe_dir, recipe_name);
+        recipe_cfg.preparationOutputDir = data_dir;
+        recipe_cfg.run = struct( ...
+            'Subject', sub_id, 'Session', ses_id, ...
+            'Task', task_name, 'ProcessedRunIndex', m, ...
+            'SourceImageSize', source_header.ImageSize, ...
+            'SourceTRSec', source_header.PixelDimensions(4), ...
+            'SourceVoxelSizeMM', source_header.PixelDimensions(1:3), ...
+            'SourceAffineT', source_header.Transform.T);
+        recipe_cfg.inputs = struct( ...
+            'OriginalCopyBOLD', orig_file, ...
+            'FullMelodicMix', fullfile(task_dir, 'melodic', 'melodic_mix'), ...
+            'NoiseSelection', IC_selection_file, ...
+            'FunctionalMask', funcmask);
+        recipe_cfg.codeFiles = struct( ...
+            'GroupDriver', which('cicada_group_qc'), ...
+            'MatchedCleaner', which('cicada_matched_temporal_cleanup'), ...
+            'TemporalTransform', which('cicada_temporal_transform'), ...
+            'SpatialSmoothing', which('cicada_spatial_smooth_write'), ...
+            'GeometryValidator', which('cicada_assert_nifti_geometry'), ...
+            'SmoothingConversion', which('cicada_fwhm_mm_to_sigma_vox'), ...
+            'HashingHelper', which('cicada_task_glm_sha256'));
+        if voxelwise_scale_flag == 1
+            recipe_cfg.codeFiles.VoxelwiseScale = which('voxelwise_scale');
+        end
+        recipe_cfg.requestedProcessing = struct( ...
+            'EffectiveProcessingPath', 'matched_temporal_ica', ...
+            'DetrendDegree', detrended_degree, ...
+            'RequestedFrequencyRangeHz', fpass, ...
+            'GaussianFWHMmm', smoothing_kernel, ...
+            'VoxelwiseScalingEnabled', logical(voxelwise_scale_flag), ...
+            'ProcessingMaskRole', 'broad_funcmask_not_analysis_quality');
+        producer_ticket = cicada_group_producer_recipe_v01('begin',recipe_cfg);
 
         [cleaned_file, cleaned_temporal_info] = ...
             cicada_matched_temporal_cleanup( ...
@@ -712,6 +773,14 @@ for idx = 1:num_runs
         'MaskNormalizedSmoothing', smoothing_kernel ~= 0, ...
         'SmoothingImplementation', 'MATLAB imgaussfilt3');
 
+    if ~isempty(producer_ticket)
+        actual_spatial = spatial_info;
+        actual_spatial.VoxelwiseScalingEnabled = logical(voxelwise_scale_flag);
+        producer_recipe_file = cicada_group_producer_recipe_v01( ...
+            'finish', producer_ticket, cleaned_file, ...
+            cleaned_temporal_info, actual_spatial);
+    end
+
     % Index m corresponds to successfully processed QC acquisitions.
     Group_QC.Provenance.Runs(m) = struct( ...
         'Subject', sub_id, ...
@@ -722,6 +791,7 @@ for idx = 1:num_runs
         'OriginalComparisonBOLD', fullfile( ...
             orig_file_info.folder, orig_file_info.name), ...
         'GroupPreparedCleanedBOLD', cleaned_file, ...
+        'ProducerRecipeFile', producer_recipe_file, ...
         'ICSelectionFile', selection_source, ...
         'EffectiveProcessingPath', processing_path, ...
         'TemporalTransformRequested', ...
@@ -1272,12 +1342,35 @@ delete([output_dir, '/sub*ses*task*tstd.nii.gz'])
 
 % merge func masks as well!
 merge_funcmasks_command = ['fslmerge -a ', output_dir, '/funcmasks.nii.gz ', strjoin(data_mask_list(image_keep))];
-[~, ~] = call_fsl(merge_funcmasks_command);
+[status, msg] = call_fsl(merge_funcmasks_command);
+
+if status ~= 0
+    error('CICADA:GroupMaskMergeFailure', ...
+        'Failed to generate funcmasks.nii.gz: %s', ...
+        char(string(msg)));
+end
 
 % and calculate a Tmin of data masks (where there is funcmask overlap
 % across all subects)
 funcmask_overlap_command = ['fslmaths ', output_dir, '/funcmasks.nii.gz -Tmin ', output_dir, '/group_funcmask.nii.gz'];
-[~, ~] = call_fsl(funcmask_overlap_command);
+[status, msg] = call_fsl(funcmask_overlap_command);
+
+if status ~= 0
+    error('CICADA:GroupMaskIntersectionFailure', ...
+        'Failed to generate group_funcmask.nii.gz: %s', ...
+        char(string(msg)));
+end
+
+group_fraction_command = ...
+    ['fslmaths "', output_dir, ...
+     '/funcmasks.nii.gz" -Tmean "', ...
+     output_dir, '/group_funcmask_fraction.nii.gz"'];
+
+[status, msg] = call_fsl(group_fraction_command);
+
+if status ~= 0
+    error('CICADA:GroupMaskFractionFailure', '%s', msg);
+end
 
 % do the same thing, but for the data_signal_mask_list (if it exists)
 if cicada == 1 && ~isempty(data_signal_mask_list)
@@ -1323,6 +1416,54 @@ flirt_command = ['flirt -ref group_funcmask.nii.gz -in ', background_file, ' -ou
 % Vs.: let Melodic decide on number of ICs (preferred)
 Group_ICA_command = ['melodic --in=$(cat image_names.txt) --outdir=melodic --Ostats -m group_funcmask.nii.gz --bgimage=mni_resampled.nii.gz --nobet --mmthresh=0.5 --report --tr=', num2str(tr)];
 
+%% Record inputs that determine Group MELODIC reuse.
+% This record is saved only after a successful MELODIC run.
+
+GroupICAInputs = struct();
+
+GroupICAInputs.Mask = ...
+    niftiread(group_funcmask_file) > 0;
+
+GroupICAInputs.DataFiles = string(data_files(:));
+
+GroupICAInputs.SmoothingKernel = smoothing_kernel;
+GroupICAInputs.Fpass = fpass;
+GroupICAInputs.DetrendDegree = detrended_degree;
+GroupICAInputs.VoxelwiseScaleFlag = voxelwise_scale_flag;
+GroupICAInputs.TemporalCleanupMode = string(temporal_cleanup_mode);
+
+GroupICAInputs.Command = string(Group_ICA_command);
+
+icaInputsFile = fullfile( ...
+    output_dir, 'melodic', 'cicada_group_ica_inputs.mat');
+
+%% Prevent reuse of Group MELODIC with changed inputs.
+
+existingICA = fullfile( ...
+    output_dir, 'melodic', 'melodic_IC.nii.gz');
+
+if redo_melodic == 0 && isfile(existingICA)
+
+    if ~isfile(icaInputsFile)
+        error('CICADA:UnverifiedGroupMELODIC', ...
+            ['Existing Group MELODIC has no saved input record. ' ...
+             'Run once with redo_melodic = 1.']);
+    end
+
+    previous = load(icaInputsFile, 'GroupICAInputs');
+
+    if ~isfield(previous, 'GroupICAInputs') || ...
+            ~isequaln(previous.GroupICAInputs, GroupICAInputs)
+
+        error('CICADA:StaleGroupMELODIC', ...
+            ['Group ICA mask, scan selection, or recorded ' ...
+             'processing settings have changed. ' ...
+             'Rerun with redo_melodic = 1.']);
+    end
+
+    fprintf('Existing Group MELODIC inputs verified.\n');
+end
+
 % Track whether Group MELODIC was actually invoked this run.
 group_melodic_invoked = false;
 
@@ -1334,7 +1475,13 @@ if redo_melodic == 0
         end
         fprintf(['Running: ', Group_ICA_command, '\n'])
         group_melodic_invoked = true;
-        [~, ~] = call_fsl(Group_ICA_command);
+        [status, msg] = call_fsl(Group_ICA_command);
+
+        if status ~= 0
+            error('CICADA:GroupMELODICFailed', ...
+                'Group MELODIC failed: %s', msg);
+        end
+
         fprintf('Done with Group ICA (Melodic)\n\n')
     end
 elseif redo_melodic == 1
@@ -1344,7 +1491,13 @@ elseif redo_melodic == 1
 
     fprintf(['Running: ', Group_ICA_command, '\n'])
     group_melodic_invoked = true;
-    [~, ~] = call_fsl(Group_ICA_command);
+    [status, msg] = call_fsl(Group_ICA_command);
+
+    if status ~= 0
+        error('CICADA:GroupMELODICFailed', ...
+            'Group MELODIC failed: %s', msg);
+    end
+
     fprintf('Done with Group ICA (Melodic)\n\n')
 end
 
@@ -1353,6 +1506,18 @@ end
 
 group_melodic_output = fullfile( ...
     output_dir, 'melodic', 'melodic_IC.nii.gz');
+
+%% Save input record after successful Group ICA execution.
+
+if group_melodic_invoked
+
+    if ~isfile(group_melodic_output)
+        error('CICADA:MissingGroupMELODIC', ...
+            'Group MELODIC did not produce melodic_IC.nii.gz.');
+    end
+
+    save(icaInputsFile, 'GroupICAInputs', '-v7');
+end
 
 Group_QC.Provenance.GroupMELODIC = struct( ...
     'RequestedRedo', logical(redo_melodic == 1), ...

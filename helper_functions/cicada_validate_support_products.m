@@ -19,6 +19,29 @@ cicada_assert_nifti_geometry(products.FuncMaskConstrained, geometry_paths{:});
 
 base = niftiread(products.FuncMaskConstrained) > 0;
 direct = niftiread(products.DirectReliabilityMask) > 0;
+%% Validate unified analysis-mask consistency.
+
+unifiedProvFile = fullfile( ...
+    task_dir, 'funcmask_constrained_provenance.tsv');
+
+if isfile(unifiedProvFile)
+
+    U = readtable(unifiedProvFile, ...
+        'FileType', 'text', 'Delimiter', '\t');
+
+    if height(U) ~= 1 || U.FinalVoxels(1) ~= nnz(base)
+        error('CICADA:UnifiedMaskProvenanceMismatch', ...
+            'Unified mask and provenance disagree.');
+    end
+
+    if ~isequal(base, direct)
+        error('CICADA:UnifiedMaskMismatch', ...
+            ['The direct-reliability mask differs from the ' ...
+             'unified constrained mask. Regenerate support products.']);
+    end
+
+end
+
 rtsnr = single(niftiread(products.RobustTSNR));
 signal = single(niftiread(products.SignalICOverlapRaw));
 noise = single(niftiread(products.NoiseICOverlapRaw));

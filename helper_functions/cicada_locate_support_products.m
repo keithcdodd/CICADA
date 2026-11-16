@@ -6,7 +6,45 @@ products.CICADAType = char(lower(string(cicada_type)));
 
 products.FuncMaskConstrained = local_existing(fullfile(task_dir, 'funcmask_constrained.nii.gz'));
 direct_dir = fullfile(task_dir, 'support_products', 'direct_data');
-products.DirectReliabilityMask = local_existing(fullfile(direct_dir, 'funcmask_direct_reliability.nii.gz'));
+% One canonical analysis-quality mask for verified unified runs. Preserve
+% genuinely distinct legacy direct masks. If a physical duplicate remains
+% in a unified run, refuse contradictory contents rather than hiding them.
+physical_direct = local_existing(fullfile(direct_dir, 'funcmask_direct_reliability.nii.gz'));
+products.DirectReliabilityMask = physical_direct;
+unified_provenance = fullfile(task_dir, 'funcmask_constrained_provenance.tsv');
+if isfile(unified_provenance)
+    if isempty(products.FuncMaskConstrained)
+        error('CICADA:MissingConstrainedMask', ...
+            'Unified-mask provenance exists but its canonical NIfTI is missing: %s', task_dir);
+    end
+    U = readtable(unified_provenance, 'FileType', 'text', 'Delimiter', '\t');
+    canonical = niftiread(products.FuncMaskConstrained);
+    if ~all(isfinite(double(canonical(:)))) || ...
+            ~all(canonical(:) == 0 | canonical(:) == 1)
+        error('CICADA:InvalidUnifiedMask', ...
+            'Canonical unified mask must contain only finite binary values: %s', task_dir);
+    end
+    if height(U) ~= 1 || ...
+            ~ismember('FinalVoxels', U.Properties.VariableNames) || ...
+            ~isnumeric(U.FinalVoxels) || ~isscalar(U.FinalVoxels) || ...
+            ~isfinite(U.FinalVoxels(1)) || ...
+            U.FinalVoxels(1) ~= nnz(canonical > 0)
+        error('CICADA:UnifiedMaskProvenanceMismatch', ...
+            'Unified constrained mask and FinalVoxels provenance disagree: %s', task_dir);
+    end
+    if ~isempty(physical_direct)
+        cicada_assert_nifti_geometry(products.FuncMaskConstrained, physical_direct);
+        direct = niftiread(physical_direct);
+        if ~all(isfinite(double(direct(:)))) || ...
+                ~all(direct(:) == 0 | direct(:) == 1) || ...
+                ~isequal(canonical > 0, direct > 0)
+            error('CICADA:UnifiedMaskMismatch', ...
+                ['Existing direct-reliability mask conflicts with the unified ', ...
+                 'constrained mask; preserving both files for review: %s'], task_dir);
+        end
+    end
+    products.DirectReliabilityMask = products.FuncMaskConstrained;
+end
 products.RobustTSNR = local_existing(fullfile(direct_dir, 'funcdata_robust_tsnr.nii.gz'));
 products.RobustTSNRNormalized = local_existing(fullfile(direct_dir, 'funcdata_robust_tsnr_normalized.nii.gz'));
 products.MeanNormalized = local_existing(fullfile(direct_dir, 'funcdata_mean_normalized.nii.gz'));

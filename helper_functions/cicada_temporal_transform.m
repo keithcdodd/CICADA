@@ -129,6 +129,8 @@ end
 
 bp = 0;
 data_temporal = data_detrended;
+filter_numerator_b = [];
+filter_denominator_a = [];
 
 requested_fpass = [];
 effective_fpass = [];
@@ -253,6 +255,8 @@ if filter_requested
                 low_hz, high_hz, filter_mode)
 
             bp = 1;
+            filter_numerator_b = double(b(:).');
+            filter_denominator_a = double(a(:).');
             data_temporal = filtfilt(b, a, double(data_detrended));
         end
     end
@@ -281,6 +285,8 @@ temporal_info.filter_requested = filter_requested;
 temporal_info.requested_fpass_hz = requested_fpass;
 temporal_info.effective_fpass_hz = effective_fpass;
 temporal_info.filter_mode = filter_mode;
+temporal_info.filter_numerator_b = filter_numerator_b;
+temporal_info.filter_denominator_a = filter_denominator_a;
 temporal_info.filter_skipped_reason = filter_skipped_reason;
 temporal_info.cutoff_clamped_low = cutoff_clamped_low;
 temporal_info.cutoff_clamped_high = cutoff_clamped_high;
